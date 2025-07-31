@@ -1,0 +1,23 @@
+[project]
+name = "storyline-app"
+version = "0.1.0"
+description = "Interactive CLI NPC agent using CrewAI framework"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "crewai",
+    "click",
+    "colorama"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-mock",
+    "pytest-cov"
+]
+
+[dependency-groups]
+dev = [
+    "python-lsp-server>=1.13.0",
+]
