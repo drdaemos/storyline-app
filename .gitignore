@@ -11,3 +11,6 @@ wheels/
 
 # User-specific files
 .env
+golden_dataset/**
+characters/**
+!characters/eldric.yaml

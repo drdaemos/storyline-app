@@ -1,0 +1,3 @@
+- When adding new functionality or changing the existing one, make sure to cover it with some basic tests and run to validate the test execution
+- Always add correct python types if they cannot be inferred (run ruff to validate them)
+- Avoid using Any type of possible
