@@ -1,14 +1,15 @@
 from pathlib import Path
-from typing import Any
 
 import yaml
+
+from .models.character import Character
 
 
 class CharacterLoader:
     def __init__(self, characters_dir: str = "characters") -> None:
         self.characters_dir = Path(characters_dir)
 
-    def load_character(self, character_name: str) -> dict[str, Any]:
+    def load_character(self, character_name: str) -> Character:
         character_file = self.characters_dir / f"{character_name}.yaml"
 
         if not character_file.exists():
@@ -18,14 +19,9 @@ class CharacterLoader:
             character_data = yaml.safe_load(file)
 
         if character_data is None:
-            character_data = {}
+            raise ValueError(f"Missing charater definition in {character_file}")
 
-        required_fields = ["name", "role", "backstory"]
-        for field in required_fields:
-            if field not in character_data:
-                raise ValueError(f"Missing required field '{field}' in {character_file}")
-
-        return character_data
+        return Character.from_dict(character_data)
 
     def list_characters(self) -> list[str]:
         if not self.characters_dir.exists():
@@ -33,7 +29,7 @@ class CharacterLoader:
 
         return [file.stem for file in self.characters_dir.glob("*.yaml") if file.is_file()]
 
-    def get_character_info(self, character_name: str) -> dict[str, Any] | None:
+    def get_character_info(self, character_name: str) -> Character | None:
         try:
             return self.load_character(character_name)
         except (FileNotFoundError, ValueError):

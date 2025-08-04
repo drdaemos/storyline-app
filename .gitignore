@@ -13,4 +13,5 @@ wheels/
 .env
 golden_dataset/**
 characters/**
+logs/**
 !characters/eldric.yaml
