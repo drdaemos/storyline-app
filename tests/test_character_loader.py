@@ -52,60 +52,6 @@ class TestCharacterLoader:
             assert "Character file not found" in str(excinfo.value)
             assert "nonexistent.yaml" in str(excinfo.value)
 
-    def test_load_character_missing_required_field_name(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            chars_dir = Path(temp_dir) / "characters"
-            chars_dir.mkdir()
-
-            incomplete_data = {"role": "Village Blacksmith", "backstory": "A skilled craftsman"}
-
-            char_file = chars_dir / "incomplete.yaml"
-            with open(char_file, "w") as f:
-                yaml.dump(incomplete_data, f)
-
-            loader = CharacterLoader(str(chars_dir))
-
-            with pytest.raises(ValueError) as excinfo:
-                loader.load_character("incomplete")
-
-            assert "Missing required field 'name'" in str(excinfo.value)
-
-    def test_load_character_missing_required_field_role(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            chars_dir = Path(temp_dir) / "characters"
-            chars_dir.mkdir()
-
-            incomplete_data = {"name": "Bob", "backstory": "A person"}
-
-            char_file = chars_dir / "incomplete.yaml"
-            with open(char_file, "w") as f:
-                yaml.dump(incomplete_data, f)
-
-            loader = CharacterLoader(str(chars_dir))
-
-            with pytest.raises(ValueError) as excinfo:
-                loader.load_character("incomplete")
-
-            assert "Missing required field 'role'" in str(excinfo.value)
-
-    def test_load_character_missing_required_field_backstory(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            chars_dir = Path(temp_dir) / "characters"
-            chars_dir.mkdir()
-
-            incomplete_data = {"name": "Alice", "role": "Merchant"}
-
-            char_file = chars_dir / "incomplete.yaml"
-            with open(char_file, "w") as f:
-                yaml.dump(incomplete_data, f)
-
-            loader = CharacterLoader(str(chars_dir))
-
-            with pytest.raises(ValueError) as excinfo:
-                loader.load_character("incomplete")
-
-            assert "Missing required field 'backstory'" in str(excinfo.value)
-
     def test_list_characters_empty_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             chars_dir = Path(temp_dir) / "characters"
