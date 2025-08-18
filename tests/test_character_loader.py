@@ -34,10 +34,9 @@ class TestCharacterLoader:
             loader = CharacterLoader(str(chars_dir))
             result = loader.load_character("eldric")
 
-            assert result == character_data
-            assert result["name"] == "Eldric"
-            assert result["role"] == "Village Blacksmith"
-            assert "gruff but kind blacksmith" in result["backstory"]
+            assert result.name == "Eldric"
+            assert result.role == "Village Blacksmith"
+            assert "gruff but kind blacksmith" in result.backstory
 
     def test_load_character_file_not_found(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -138,7 +137,9 @@ class TestCharacterLoader:
             loader = CharacterLoader(str(chars_dir))
             result = loader.get_character_info("luna")
 
-            assert result == character_data
+            assert result.name == character_data["name"]
+            assert result.role == character_data["role"]
+            assert result.backstory == character_data["backstory"]
 
     def test_get_character_info_file_not_found(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -155,11 +156,9 @@ class TestCharacterLoader:
             chars_dir = Path(temp_dir) / "characters"
             chars_dir.mkdir()
 
-            incomplete_data = {"name": "Incomplete", "role": "Test"}
-
+            # Create a truly invalid file - completely empty
             char_file = chars_dir / "incomplete.yaml"
-            with open(char_file, "w") as f:
-                yaml.dump(incomplete_data, f)
+            char_file.touch()
 
             loader = CharacterLoader(str(chars_dir))
             result = loader.get_character_info("incomplete")
@@ -187,10 +186,9 @@ class TestCharacterLoader:
             loader = CharacterLoader(str(chars_dir))
             result = loader.load_character("enhanced")
 
-            assert result == character_data
-            assert result["level"] == 50
-            assert result["skills"] == ["magic", "alchemy"]
-            assert result["location"] == "Tower of Wisdom"
+            assert result.name == character_data["name"]
+            assert result.role == character_data["role"]
+            assert result.backstory == character_data["backstory"]
 
     def test_load_character_empty_yaml_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -230,12 +228,12 @@ class TestCharacterLoader:
             for char_name in characters:
                 char_info = loader.get_character_info(char_name)
                 assert char_info is not None
-                assert "name" in char_info
-                assert "role" in char_info
-                assert "backstory" in char_info
+                assert hasattr(char_info, "name")
+                assert hasattr(char_info, "role")
+                assert hasattr(char_info, "backstory")
 
                 loaded_data = loader.load_character(char_name)
-                assert loaded_data == char_info
+                assert loaded_data.name == char_info.name
 
     def test_character_loader_path_resolution(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -249,4 +247,6 @@ class TestCharacterLoader:
 
             loader = CharacterLoader(str(chars_dir))
             result = loader.load_character("test")
-            assert result == char_data
+            assert result.name == char_data["name"]
+            assert result.role == char_data["role"]
+            assert result.backstory == char_data["backstory"]

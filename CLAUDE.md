@@ -1,4 +1,5 @@
 - When adding new functionality or changing the existing one, make sure to cover it with some basic tests and run to validate the test execution
 - Always add correct python types if they cannot be inferred (run `ruff` to validate them)
-- Avoid using Any type of possible
+- Avoid using Any type if possible
 - Do not add dependencies directly editing the pyproject.toml, use `uv add <dependencies>` command
+- When writing tests for the files that contain LLM prompts, avoid checking for specific text of the prompt, it gets rephrased often.

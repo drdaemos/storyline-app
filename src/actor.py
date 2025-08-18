@@ -1,19 +1,16 @@
 from collections.abc import Callable
-import json
 from typing import Any
 
 from haystack import Pipeline
 from haystack.components.builders import PromptBuilder
 from haystack.components.generators import OpenAIGenerator
 from haystack.components.generators.utils import StreamingChunk
-from haystack.components.validators import JsonSchemaValidator
 from haystack_experimental.chat_message_stores.in_memory import InMemoryChatMessageStore
 from haystack_experimental.components.retrievers import ChatMessageRetriever
 from haystack_experimental.components.writers import ChatMessageWriter
 
 from src.components.action_plan_extractor import ActionPlanExtractor
 from src.components.memory_organizer import MemoryOrganizer
-from src.models.action_plan import ActionPlan
 from src.models.character import Character
 
 
@@ -246,35 +243,35 @@ Generate the character's response now:
 
         # Action plan schema
         json_schema = {
-            'name': 'ActionPlan',
-            'schema': {
+            "name": "ActionPlan",
+            "schema": {
                 "type": "object",
-                'properties': {
-                    'user_action': {'type': 'string'},
-                    'user_intent': {'type': 'string'},
-                    'previous_action_outcome': {'type': 'string'},
-                    'character_action': {'type': 'string'},
-                    'reasoning': {'type': 'string'},
-                    'state_update': {
-                        'type': 'object',
-                        'properties': {
-                            'mood': {'type': 'string'},
-                            'stress_level': {'type': 'string'},
-                            'energy_level': {'type': 'string'},
+                "properties": {
+                    "user_action": {"type": "string"},
+                    "user_intent": {"type": "string"},
+                    "previous_action_outcome": {"type": "string"},
+                    "character_action": {"type": "string"},
+                    "reasoning": {"type": "string"},
+                    "state_update": {
+                        "type": "object",
+                        "properties": {
+                            "mood": {"type": "string"},
+                            "stress_level": {"type": "string"},
+                            "energy_level": {"type": "string"},
                         },
-                        'required': ['mood', 'stress_level', 'energy_level'],
-                        'additionalProperties': False,
+                        "required": ["mood", "stress_level", "energy_level"],
+                        "additionalProperties": False,
                     },
-                    'followup_action': {'type': 'string'},
+                    "followup_action": {"type": "string"},
                 },
-                'required': ['user_action', 'user_intent', 'previous_action_outcome', 'character_action', 'reasoning', 'state_update','followup_action'],
-                'additionalProperties': False,
+                "required": ["user_action", "user_intent", "previous_action_outcome", "character_action", "reasoning", "state_update", "followup_action"],
+                "additionalProperties": False,
             },
-            'strict': True,
+            "strict": True,
         }
 
         # Create LLM generators
-        planning_llm = OpenAIGenerator(model="gpt-4.1", generation_kwargs={"response_format": {"type": "json_schema", "json_schema": json_schema }})
+        planning_llm = OpenAIGenerator(model="gpt-4.1", generation_kwargs={"response_format": {"type": "json_schema", "json_schema": json_schema}})
         response_llm = OpenAIGenerator(model="gpt-4.1", streaming_callback=self._streaming_callback)
         memory_store = InMemoryChatMessageStore()
         memory_retriever = ChatMessageRetriever(memory_store)
@@ -310,13 +307,7 @@ Generate the character's response now:
 
     def respond(self, user_message: str, streaming_callback: Callable[[str], None] | None = None) -> str:
         self.external_streaming_callback = streaming_callback
-        result = self.pipeline.run(
-            {
-                "user_message": user_message,
-                **self.character.__dict__
-            },
-            include_outputs_from="response_llm"
-        )
+        result = self.pipeline.run({"user_message": user_message, **self.character.__dict__}, include_outputs_from="response_llm")
 
         return result["response_llm"]["replies"][0]
 

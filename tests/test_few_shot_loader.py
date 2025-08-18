@@ -1,4 +1,3 @@
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -76,10 +75,8 @@ class TestFewShotLoader:
             test_file = Path(temp_dir) / "test.txt"
             test_file.write_text("Valid content", encoding="utf-8")
 
-            # Make file unreadable
-            os.chmod(test_file, 0o000)
-
-            try:
+            # Mock open to simulate a read error
+            with patch("builtins.open", side_effect=PermissionError("Mocked permission error")):
                 with patch("builtins.print") as mock_print:
                     loader = FewShotLoader(dataset_path=temp_dir)
 
@@ -87,9 +84,6 @@ class TestFewShotLoader:
                     # Check that error was printed
                     error_calls = [call for call in mock_print.call_args_list if "Error loading" in str(call)]
                     assert len(error_calls) > 0
-            finally:
-                # Restore permissions for cleanup
-                os.chmod(test_file, 0o644)
 
     def test_get_style_context_with_examples(self):
         """Test style context formatting with examples."""
