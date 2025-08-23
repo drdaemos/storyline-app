@@ -6,7 +6,11 @@
       "Bash(python -m pytest tests/ -v)",
       "Bash(python -m pytest tests/test_cli.py -v)",
       "Bash(python -m pytest tests/test_cli.py::TestInteractiveChatCLI::test_get_ai_response -v)",
-      "Bash(python -m pytest tests/test_text_analyzer.py tests/test_cli.py::TestCLICommands -v)"
+      "Bash(python -m pytest tests/test_text_analyzer.py tests/test_cli.py::TestCLICommands -v)",
+      "Bash(python -m pytest tests/test_prompt_processor.py -v)",
+      "Bash(python -m pytest tests/test_character_responder.py -v)",
+      "Bash(python -m pytest tests/test_cli.py::TestInteractiveChatCLI -v)",
+      "Bash(python:*)"
     ],
     "deny": []
   }

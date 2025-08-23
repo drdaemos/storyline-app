@@ -5,10 +5,13 @@ description = "Interactive CLI NPC agent using CrewAI framework"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.64.0",
     "click",
     "dotenv>=0.9.9",
     "haystack-ai>=2.16.1",
+    "openai>=1.98.0",
     "pydantic>=2.11.7",
+    "pytest>=8.4.1",
     "pyyaml",
     "rich>=14.1.0",
 ]

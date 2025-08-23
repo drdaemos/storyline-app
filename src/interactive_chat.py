@@ -7,8 +7,8 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.text import Text
 
-from .actor import Actor
 from .character_loader import CharacterLoader
+from .character_responder import CharacterResponder
 from .models.character import Character
 
 
@@ -17,7 +17,7 @@ class InteractiveChatCLI:
         self.console = Console()
         self.loader = CharacterLoader()
         self.current_character: Character | None = None
-        self.actor: Actor | None = None
+        self.responder: CharacterResponder | None = None
 
     def display_welcome(self) -> None:
         welcome_text = """
@@ -68,11 +68,11 @@ Select a character to start chatting with them!
         self.console.print(Panel(Markdown(info_text), title=f"Character: {character.name}", border_style="green"))
 
     def get_ai_response(self, user_message: str, streaming_callback: Callable[[str], None] | None = None) -> str:
-        if not self.actor:
-            return f"[No actor available for {self.current_character.name}]"
+        if not self.responder:
+            return f"[No responder available for {self.current_character.name}]"
 
         try:
-            character_response = self.actor.respond(user_message, streaming_callback)
+            character_response = self.responder.respond(user_message, streaming_callback)
 
             return character_response
         except Exception as e:
@@ -121,6 +121,6 @@ Select a character to start chatting with them!
         self.current_character = self.select_character()
 
         if self.current_character:
-            self.actor = Actor(self.current_character)
+            self.responder = CharacterResponder(self.current_character)
             self.display_character_info(self.current_character)
             self.chat_loop()

@@ -40,9 +40,9 @@ class TestInteractiveChatCLI:
             mood="neutral",
         )
 
-        # Test without actor (should return no actor message)
+        # Test without responder (should return no responder message)
         response = cli.get_ai_response("Hello")
-        assert "No actor available" in response
+        assert "No responder available" in response
         assert "Test Character" in response
 
     @patch("src.interactive_chat.Prompt.ask")
