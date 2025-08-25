@@ -28,3 +28,15 @@ Solution 2: Add a document store and a separate system to analyze (or search for
 **Problem**: Character repeats the same phrases over and over again (which fit stylistically, but in a real interaction they won't happen multiple times)
 
 Solution 1: Add a document store (embedding-based?) to store last character responses and validate if the next response matches it too closely (at least partially) + rerun the query if detects repetition. How to score the similarity and set up the threshold?
+
+------
+
+Ideas:
+- Use cache_control attr to optimize token spending
+- Summarize every 2-3 roundtrips
+- Long term memory - with the same summarization prompt
+    - store as embeddings and provide MCP to search over it?
+    - https://github.com/asg017/sqlite-vec
+    - https://github.com/asg017/sqlite-rembed
+- Do not summarize separately, extract part of the response and accumulate + remove first added if context size overflows?
+

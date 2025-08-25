@@ -121,6 +121,67 @@ Select a character to start chatting with them!
         self.current_character = self.select_character()
 
         if self.current_character:
-            self.responder = CharacterResponder(self.current_character)
+            self.responder = self._setup_character_session(self.current_character)
             self.display_character_info(self.current_character)
             self.chat_loop()
+
+    def _setup_character_session(self, character: Character) -> CharacterResponder:
+        """Set up character session, checking for existing sessions and prompting user choice."""
+        # Create a temporary responder to check for existing sessions
+        temp_responder = CharacterResponder(character, use_persistent_memory=True)
+        session_history = temp_responder.get_session_history()
+
+        if session_history and len(session_history) > 0:
+            self._display_session_history(session_history)
+            choice = self._prompt_session_choice()
+
+            if choice == "continue":
+                # Load the most recent session
+                most_recent_session = session_history[0]
+                responder = CharacterResponder(
+                    character,
+                    session_id=most_recent_session["session_id"],
+                    use_persistent_memory=True
+                )
+                self.console.print(f"[green]Continuing previous session with {len(responder.memory)} messages loaded.[/green]")
+                return responder
+            elif choice == "new":
+                # Clear all existing sessions for this character and start fresh
+                temp_responder.persistent_memory.clear_character_memory(character.name)
+                responder = CharacterResponder(character, use_persistent_memory=True)
+                self.console.print("[green]Started fresh conversation (previous sessions cleared).[/green]")
+                return responder
+
+        # No existing sessions, create new one
+        responder = CharacterResponder(character, use_persistent_memory=True)
+        self.console.print("[green]Started new conversation.[/green]")
+        return responder
+
+    def _display_session_history(self, session_history: list[dict[str, str]]) -> None:
+        """Display existing sessions for the character."""
+        self.console.print("\n[bold yellow]Found existing conversations:[/bold yellow]")
+
+        for i, session in enumerate(session_history[:3], 1):  # Show up to 3 recent sessions
+            message_count = session.get("message_count", 0)
+            last_time = session.get("last_message_time", "Unknown")
+            self.console.print(f"  {i}. Session with {message_count} messages (last: {last_time})")
+
+        if len(session_history) > 3:
+            self.console.print(f"  ... and {len(session_history) - 3} more sessions")
+
+    def _prompt_session_choice(self) -> str:
+        """Prompt user to choose between continuing existing session or starting new."""
+        self.console.print("\n[bold cyan]What would you like to do?[/bold cyan]")
+        self.console.print("1. [green]Continue[/green] from the most recent conversation")
+        self.console.print("2. [red]Start new[/red] conversation (clears all previous sessions)")
+
+        choice = Prompt.ask(
+            "Choose an option",
+            choices=["1", "2", "continue", "new", "c", "n"],
+            default="1"
+        )
+
+        if choice in ["1", "continue", "c"]:
+            return "continue"
+        else:
+            return "new"

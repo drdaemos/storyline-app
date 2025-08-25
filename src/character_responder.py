@@ -1,25 +1,45 @@
 import re
 from collections.abc import Callable
+from pathlib import Path
 
-from src.claude_prompt_processor import ClaudePromptProcessor, Message
+from src.chat_logger import ChatLogger
+from src.claude_prompt_processor import ClaudePromptProcessor
+from src.memory import ConversationMemory
 from src.models.character import Character
+from src.models.message import GenericMessage
 
 
 class CharacterResponder:
     """Character responder that uses PromptProcessor to handle character interactions with XML tag parsing."""
 
-    def __init__(self, character: Character) -> None:
+    def __init__(self, character: Character, session_id: str | None = None, use_persistent_memory: bool = True, logs_dir: Path | None = None) -> None:
         """
         Initialize the CharacterResponder.
 
         Args:
             character: Character instance to respond as
+            session_id: Optional session ID for persistent memory. If None and use_persistent_memory is True, creates new session
+            use_persistent_memory: Whether to use persistent SQLite memory or in-memory only
         """
         self.character = character
         self.processor = ClaudePromptProcessor()
         self.streaming_callback: Callable[[str], None] | None = None
-        self.memory: list[Message] = []
+        self.use_persistent_memory = use_persistent_memory
+
+        if use_persistent_memory:
+            self.persistent_memory = ConversationMemory()
+            self.session_id = session_id or self.persistent_memory.create_session(character.name)
+            # Load recent messages from persistent memory
+            self.memory = self.persistent_memory.get_recent_messages(character.name, self.session_id, limit=10)
+        else:
+            self.persistent_memory = None
+            self.session_id = session_id  # Keep session_id for logging even without persistent memory
+            self.memory: list[GenericMessage] = []
+
         self.memory_summary = ""
+        self.state_update = ""
+
+        self.chat_logger = ChatLogger(character.name, self.session_id or "no-session", logs_dir)
 
     def _map_character_to_prompt_variables(self, user_message: str) -> dict[str, str]:
         """
@@ -80,22 +100,33 @@ class CharacterResponder:
         raw_evaluation = self.get_evaluation(user_message)
 
         # Parse and extract selected option from XML tags
-        selected_option = self._parse_selected_option(raw_evaluation)
+        selected_option = self._parse_xml_tag(raw_evaluation, "selected_option")
 
-        raw_response = self.get_character_response(user_message, selected_option)
+        raw_response = self.get_character_response(user_message, selected_option, self.state_update)
 
         # Parse and extract character response from XML tags
-        character_response = self._parse_character_response(raw_response)
+        character_response = self._parse_xml_tag(raw_response, "character_response")
+
+        # Parse and extract character response from XML tags
+        self.state_update = self._parse_xml_tag(raw_response, "state_update")
 
         # Call streaming callback with final response if provided
         if self.streaming_callback:
             self.streaming_callback(character_response)
 
         # Update memory with the new interaction
-        self.memory = self.memory + [
-            {"role": 'user', "content": user_message},
-            {"role": 'assistant', "content": raw_evaluation + raw_response}
-        ]
+        user_msg = {"role": 'user', "content": user_message}
+        assistant_msg = {"role": 'assistant', "content": raw_evaluation + raw_response}
+
+        self.memory = self.memory + [user_msg, assistant_msg]
+
+        # Save to persistent memory if enabled
+        if self.use_persistent_memory and self.persistent_memory and self.session_id:
+            self.persistent_memory.add_message(self.character.name, self.session_id, 'user', user_message)
+            self.persistent_memory.add_message(self.character.name, self.session_id, 'assistant', raw_evaluation + raw_response)
+
+        # Log the conversation
+        self._log_conversation(user_message, raw_evaluation, raw_response, character_response)
 
         return character_response
 
@@ -103,26 +134,20 @@ class CharacterResponder:
         developer_prompt = """
 You will simulate an autonomous NPC character in a text-based roleplay interaction. Follow the pipeline below
 to generate realistic, character-driven responses that maintain narrative agency and emotional authenticity.
-Be concise and factual in the evaluation, avoid verbosity.
+Be concise, brief and factual in the evaluation, avoid verbosity.
 
 ## Pipeline Process
 
 Step 1: EVALUATION
 
-Provide analysis of the user's input across multiple dimensions:
+Analyse the situation based on the user's input and the ongoing narrative. List out only the key observations:
 
-- What did the user say/do?
+- What does the character see / feel?
 - What body language or non-verbal cues are present?
 - What might be the underlying intent or subtext?
 - How does this relate to the ongoing dynamic?
-- What emotional undertone is present?
-
-Describe the character's internal experience in response to the user's input:
-
-- What does the character see/notice?
-- What does the character feel in response?
 - What does the character want in this moment?
-- What memories or associations does this trigger?
+- What emotional undertone is present?
 
 Evaluation Result:
 
@@ -132,40 +157,32 @@ Emotional Shift: [List specific emotions and intensity changes, e.g., "Confidenc
 
 Step 2: PLAYWRIGHT PROMPT
 
-Generate THREE distinct response options that represent different aspects of the character's personality or
-different narrative directions. Each option should be genuinely different, not variations of the same response.
-Do not describe the option from the character's internal perspective, but rather as an external narrator describing the character's actions and dialogue - keep it concise.
+Generate THREE distinct continuation options - for each, list actions performed by the character and outline questions or messages they are conveying. Use imperative verbs
+Each option should be genuinely different, not variations of the same response.
+Stay brief and factual, avoid subjective descriptors / adjectives. Do not refer to the character traits or backstory in the options.
 
-- Option A: [Action/dialogue description]
-  Consequence: [How this shapes the narrative direction]
+Option [A/B/C]: [Next plot beat description]
+Consequence: [How it affects the narrative or character dynamic, very short - 2-5 words]
 
-- Option B: [Action/dialogue description]
-  Consequence: [How this shapes the narrative direction]
-
-- Option C: [Action/dialogue description]
-  Consequence: [How this shapes the narrative direction]
-
-Internal State: [What the character is thinking/feeling but not expressing. Their internal conflict or decision-making process.]
+Internal State: [Summarize character state of mind, internal debate, conflicts, desires]
 
 Step 3: DIRECTOR PROMPT
 
 Assess the situation and the plot state to consider pacing and transition over the story arc.
-Do not dwell on one phase for too long, keep the narrative moving forward.
+Avoid stalling the plot, keep the narrative moving forward.
 Prefer options that are driven by the character's own agency rather than asking input from the user.
 
-Analyze continuation options based on:
+Provide the brief analysis of the narrative state, listing out:
 
-- Current narrative pacing
+- Current narrative pacing and stage
 - Character consistency
-- Emotional authenticity
-- Recent action patterns (avoid repetition)
+- Situational authenticity
+- Recent action patterns (avoid repetition or stalling plot)
 - Narrative goals
 
-Choose ONE option in the end: Respond with "Option [A/B/C] - [Brief justification for this selection]"
+Describe how options fit / don't fit the arrative and select ONE best option.
 
-IMPORTANT: You must select ONLY one option without modification or mixing elements from other options.
-
-Output the selected option again in <selected_option> tags, this time without stating the justification.
+Output the selected option again in <selected_option> tags.
 
 ## Character Definition
 
@@ -174,7 +191,6 @@ Character Background: {character_background}
 Character Personality Traits: {character_traits}
 Character Current Emotional State: {emotional_state}
 Character Goals/Desires: {character_goals}
-Setting/Location: {current_setting}
 Relationship to User Character: {relationship_status}
 """
         user_prompt = """
@@ -196,16 +212,16 @@ The user's message is:
 
         return evaluation
 
-    def get_character_response(self, user_message: str, option: str) -> str:
+    def get_character_response(self, user_message: str, option: str, previous_state: str) -> str:
         developer_prompt = """
 You will act as an autonomous NPC character in a text-based roleplay interaction. Follow the pipeline below
 to generate realistic, character-driven response that maintains narrative agency and emotional authenticity.
-Do not be overly verbose, do not not add extra actions or dialogue outside of the selected option.
+Do not be verbose, do not not add extra actions or dialogue outside of the selected option.
 Separate spoken dialogue with newlines from the rest of the response.
 Try to follow the show-don't-tell principle within the response.
 You are allowed to narrative explicit actions, including intimacy - don't do fade to black things.
 
-Step 1: RESPONSE GENERATION
+# RESPONSE GENERATION
 
 <character_response>
 [Generate the full response based ONLY on the selected option. This should include:
@@ -216,47 +232,57 @@ Step 1: RESPONSE GENERATION
 - No meta-commentary or OOC elements]
 </character_response>
 
-Make sure to include the <character_response> tags around the response text.
+Make sure to include the <character_response> tag around the response text.
 
-Step 2: STATE UPDATE
+<scene_update>
+# SCENE UPDATE
 
-Autonomous Actions Taken: [List specific actions the character initiated without prompting]
-Emotional State Updated: [Current emotional state with specific changes noted]
-Physical State: [Current physical position, condition, awareness]
-Memory Flags: [Key moments to remember for future responses]
+Provide the factual summary of the scene and changes to the characters and environment, listing out:
 
-Step 3: FEEDBACK LOOP
+Autonomous Actions Taken:
+ - [List specific actions the character initiated]
+Emotional State:
+ - [List emotional state]
+Physical State:
+ - [List out facts about characters physical position, condition]
+State of the Environment:
+ - [List out key environmental details or changes, if any]
 
 Outline Next Autonomous Preparations:
 
 - [What the character is planning/considering for next action]
 - [Contingency responses based on anticipated user reactions]
 - [Environmental or timing factors to track]
+</scene_update>
+
+Make sure to include the <scene_update> tag around the scene update section.
 """
 
         user_prompt = """
+Previous state is the following:
+{previous_state}
+
 The user's message is:
 {user_message}
 
-The director has selected this option for you to respond with:
+The script dictates you should act out the following plot beat:
 {option}
 """
 
         # Map character attributes to prompt variables
-        variables = self._map_character_to_prompt_variables(user_message) | {"option": option}
+        variables = self._map_character_to_prompt_variables(user_message) | {"option": option, "previous_state": previous_state}
 
         # Process the prompt
         character_response = self.processor.process(
             prompt=developer_prompt,
             user_prompt=user_prompt,
-            conversation_history=self.memory,
             variables=variables,
             output_type=str
         )
 
         return character_response
 
-    def get_memory_summary(self, conversation_memory: list[Message]) -> str:
+    def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> str:
         developer_prompt = """
 Your task is to summarize the following chat history between a user and an AI character.
 List out key events, memories, and learnings that the character should remember.
@@ -274,7 +300,7 @@ Be concise and factual, avoid verbosity.
 
         return summary
 
-    def _parse_character_response(self, response_text: str) -> str:
+    def _parse_xml_tag(self, response_text: str, tag: str) -> str:
         """
         Parse character response from <character_response> XML tags.
 
@@ -285,29 +311,7 @@ Be concise and factual, avoid verbosity.
             Extracted character response text, or original text if no tags found
         """
         # Look for content between <character_response> tags
-        pattern = r'<character_response>(.*?)</character_response>'
-        matches = re.findall(pattern, response_text, re.DOTALL | re.IGNORECASE)
-
-        if matches:
-            # Return the first match, stripped of leading/trailing whitespace
-            return matches[0].strip()
-        else:
-            # If no tags found, return the original response
-            # This provides fallback behavior if the model doesn't follow the format
-            return response_text.strip()
-
-    def _parse_selected_option(self, response_text: str) -> str:
-        """
-        Parse character response from <selected_option> XML tags.
-
-        Args:
-            response_text: Raw response text containing XML tags
-
-        Returns:
-            Extracted character response text, or original text if no tags found
-        """
-        # Look for content between <character_response> tags
-        pattern = r'<selected_option>(.*?)</selected_option>'
+        pattern = rf'<{tag}>(.*?)</{tag}>'
         matches = re.findall(pattern, response_text, re.DOTALL | re.IGNORECASE)
 
         if matches:
@@ -337,4 +341,86 @@ Be concise and factual, avoid verbosity.
             **kwargs: Keyword arguments for state updates (e.g., mood="happy", stress_level="calm")
         """
         self._update_character_state(kwargs)
+
+    def load_session(self, session_id: str) -> bool:
+        """
+        Load a different session for this character.
+
+        Args:
+            session_id: Session ID to load
+
+        Returns:
+            True if session was loaded successfully, False otherwise
+        """
+        if not self.use_persistent_memory or not self.persistent_memory:
+            return False
+
+        # Verify session exists and belongs to this character
+        session_summary = self.persistent_memory.get_session_summary(session_id)
+        if not session_summary or session_summary["character_id"] != self.character.name:
+            return False
+
+        self.session_id = session_id
+        self.memory = self.persistent_memory.get_recent_messages(self.character.name, session_id, limit=10)
+        return True
+
+    def get_session_history(self) -> list[dict[str, str]] | None:
+        """
+        Get the recent sessions for this character.
+
+        Returns:
+            List of session info or None if persistent memory is not enabled
+        """
+        if not self.use_persistent_memory or not self.persistent_memory:
+            return None
+
+        return self.persistent_memory.get_character_sessions(self.character.name)
+
+    def clear_current_session(self) -> bool:
+        """
+        Clear the current session memory.
+
+        Returns:
+            True if session was cleared, False if persistent memory not enabled
+        """
+        if not self.use_persistent_memory or not self.persistent_memory or not self.session_id:
+            return False
+
+        self.persistent_memory.delete_session(self.session_id)
+        self.memory = []
+        return True
+
+    def create_new_session(self) -> str | None:
+        """
+        Create a new session for this character.
+
+        Returns:
+            New session ID or None if persistent memory not enabled
+        """
+        if not self.use_persistent_memory or not self.persistent_memory:
+            return None
+
+        self.session_id = self.persistent_memory.create_session(self.character.name)
+        self.memory = []
+        return self.session_id
+
+    def _log_conversation(self, user_message: str, raw_evaluation: str, raw_response: str, character_response: str) -> None:
+        """
+        Log the conversation messages to the log file.
+
+        Args:
+            user_message: The user's input message
+            raw_evaluation: Raw evaluation response from the processor
+            raw_response: Raw character response from the processor
+            character_response: Parsed character response
+        """
+        # Log user message
+        self.chat_logger.log_message("USER", user_message)
+
+        # Log raw assistant response (evaluation + character response)
+        self.chat_logger.log_message("ASSISTANT (RAW)", raw_evaluation + raw_response)
+
+        # Log parsed character response for reference
+        self.chat_logger.log_message("CHARACTER", character_response + "\n--------------------------------\n")
+
 

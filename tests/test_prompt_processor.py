@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import BaseModel
 
-from src.prompt_processor import Message, PromptProcessor
+from src.models.message import GenericMessage
+from src.prompt_processor import PromptProcessor
 
 
 class MockResponse(BaseModel):
@@ -135,7 +136,7 @@ class TestPromptProcessor:
         mock_openai.return_value.responses.create.return_value = mock_response
 
         processor = PromptProcessor(api_key='test-key')
-        conversation_history: list[Message] = [
+        conversation_history: list[GenericMessage] = [
             {"role": "user", "content": "Previous message"},
             {"role": "assistant", "content": "Previous response"}
         ]

@@ -1,14 +1,13 @@
 import os
-from typing import Any, TypedDict, TypeVar
+from typing import Any, TypeVar
 
 import anthropic
 from pydantic import BaseModel
 
+from src.models.message import ClaudeContent, ClaudeMessage, GenericMessage
+
 T = TypeVar('T', bound=BaseModel)
 
-class Message(TypedDict):
-    role: str
-    content: str
 
 class ClaudePromptProcessor:
     """
@@ -35,7 +34,7 @@ class ClaudePromptProcessor:
         self,
         prompt: str,
         user_prompt: str,
-        conversation_history: list[Message] | None = None,
+        conversation_history: list[GenericMessage] | None = None,
         variables: dict[str, Any] | None = None,
         output_type: type[str | BaseModel] = str,
         max_tokens: int | None = None
@@ -62,18 +61,34 @@ class ClaudePromptProcessor:
         messages = []
         if conversation_history:
             messages.extend(conversation_history)
+
         messages.append({
             "role": "user",
-            "content": rendered_prompt
+            "content": [{
+                "type": "text",
+                "text": rendered_prompt,
+                "cache_control": {
+                    "type": "ephemeral",
+                }
+            }],
         })
+
+        system_prompt = [{
+            "type": "text",
+            "text": prompt,
+            "cache_control": {
+                "type": "ephemeral",
+                "ttl": "1h",
+            }
+        }]
 
         # Check if output_type is a Pydantic model
         if (isinstance(output_type, type) and
             issubclass(output_type, BaseModel) and
             output_type is not BaseModel):
-            return self._process_structured(prompt, messages, output_type, max_tokens)
+            return self._process_structured(system_prompt, messages, output_type, max_tokens)
         else:
-            return self._process_string(prompt, messages, max_tokens)
+            return self._process_string(system_prompt, messages, max_tokens)
 
     def _render_prompt(self, prompt: str, variables: dict[str, Any]) -> str:
         """Render prompt template with provided variables."""
@@ -85,8 +100,8 @@ class ClaudePromptProcessor:
 
     def _process_structured(
         self,
-        system_prompt: str,
-        messages: list[Message],
+        system_prompt: ClaudeContent,
+        messages: list[ClaudeMessage],
         output_type: type[T],
         max_tokens: int | None
     ) -> T:
@@ -125,8 +140,8 @@ class ClaudePromptProcessor:
 
     def _process_string(
         self,
-        system_prompt: str,
-        messages: list[Message],
+        system_prompt: ClaudeContent,
+        messages: list[ClaudeMessage],
         max_tokens: int | None
     ) -> str:
         """Process prompt and return string response."""

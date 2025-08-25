@@ -1,14 +1,12 @@
 import os
-from typing import Any, TypedDict, TypeVar
+from typing import Any, TypeVar
 
 from openai import OpenAI
 from pydantic import BaseModel
 
-T = TypeVar('T', bound=BaseModel)
+from src.models.message import GenericMessage
 
-class Message(TypedDict):
-    role: str
-    content: str
+T = TypeVar('T', bound=BaseModel)
 
 class PromptProcessor:
     """
@@ -35,7 +33,7 @@ class PromptProcessor:
         self,
         prompt: str,
         user_prompt: str,
-        conversation_history: list[Message] | None = None,
+        conversation_history: list[GenericMessage] | None = None,
         variables: dict[str, Any] | None = None,
         output_type: type[str | BaseModel] = str,
         max_tokens: int | None = None
@@ -81,7 +79,7 @@ class PromptProcessor:
 
     def _process_structured(
         self,
-        input: list[Message],
+        input: list[GenericMessage],
         output_type: type[T],
         max_tokens: int | None
     ) -> T:
@@ -100,7 +98,7 @@ class PromptProcessor:
 
     def _process_string(
         self,
-        input: list[Message],
+        input: list[GenericMessage],
         max_tokens: int | None
     ) -> str:
         """Process prompt and return string response."""

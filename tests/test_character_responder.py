@@ -1,3 +1,5 @@
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.character_responder import CharacterResponder
@@ -424,4 +426,294 @@ class TestCharacterResponder:
         assert responder.memory[1]["role"] == "assistant"
         # The full response is stored, not just the parsed part
         assert "<character_response>Test response</character_response>" in responder.memory[1]["content"]
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_init_with_persistent_memory_enabled(self, mock_memory_class, mock_processor_class):
+        """Test initialization with persistent memory enabled."""
+        mock_memory = Mock()
+        mock_memory.create_session.return_value = "test-session-123"
+        mock_memory.get_recent_messages.return_value = []
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+
+        assert responder.use_persistent_memory is True
+        assert responder.persistent_memory == mock_memory
+        assert responder.session_id == "test-session-123"
+        mock_memory.create_session.assert_called_once_with("Alice")
+        mock_memory.get_recent_messages.assert_called_once_with("Alice", "test-session-123", limit=10)
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    def test_init_with_persistent_memory_disabled(self, mock_processor_class):
+        """Test initialization with persistent memory disabled."""
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=False)
+
+        assert responder.use_persistent_memory is False
+        assert responder.persistent_memory is None
+        assert responder.session_id is None
+        assert responder.memory == []
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_init_with_existing_session_id(self, mock_memory_class, mock_processor_class):
+        """Test initialization with existing session ID."""
+        mock_memory = Mock()
+        mock_memory.get_recent_messages.return_value = [
+            {"role": "user", "content": "Previous message"}
+        ]
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, session_id="existing-session", use_persistent_memory=True)
+
+        assert responder.session_id == "existing-session"
+        assert len(responder.memory) == 1
+        mock_memory.get_recent_messages.assert_called_once_with("Alice", "existing-session", limit=10)
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_respond_saves_to_persistent_memory(self, mock_memory_class, mock_processor_class):
+        """Test that respond method saves messages to persistent memory."""
+        mock_memory = Mock()
+        mock_memory.create_session.return_value = "test-session"
+        mock_memory.get_recent_messages.return_value = []
+        mock_memory_class.return_value = mock_memory
+
+        mock_processor = Mock()
+        mock_processor.process.side_effect = [
+            "<selected_option>Option A</selected_option>",
+            "<character_response>Test response</character_response>"
+        ]
+        mock_processor_class.return_value = mock_processor
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+        responder.respond("Hello!")
+
+        # Verify messages were saved to persistent memory
+        assert mock_memory.add_message.call_count == 2
+        mock_memory.add_message.assert_any_call("Alice", "test-session", "user", "Hello!")
+        # Second call should have the combined evaluation + response
+        second_call_args = mock_memory.add_message.call_args_list[1]
+        assert second_call_args[0][2] == "assistant"  # role
+        assert "<selected_option>Option A</selected_option>" in second_call_args[0][3]  # content
+        assert "<character_response>Test response</character_response>" in second_call_args[0][3]
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_load_session(self, mock_memory_class, mock_processor_class):
+        """Test loading a different session."""
+        mock_memory = Mock()
+        mock_memory.create_session.return_value = "initial-session"
+        mock_memory.get_recent_messages.side_effect = [
+            [],  # Initial session (empty)
+            [{"role": "user", "content": "Loaded message"}]  # Loaded session
+        ]
+        mock_memory.get_session_summary.return_value = {
+            "character_id": "Alice",
+            "session_id": "target-session"
+        }
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+
+        result = responder.load_session("target-session")
+
+        assert result is True
+        assert responder.session_id == "target-session"
+        assert len(responder.memory) == 1
+        assert responder.memory[0]["content"] == "Loaded message"
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_load_session_wrong_character(self, mock_memory_class, mock_processor_class):
+        """Test loading session that belongs to different character."""
+        mock_memory = Mock()
+        mock_memory.create_session.return_value = "initial-session"
+        mock_memory.get_recent_messages.return_value = []
+        mock_memory.get_session_summary.return_value = {
+            "character_id": "Bob",  # Different character
+            "session_id": "target-session"
+        }
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+
+        result = responder.load_session("target-session")
+
+        assert result is False
+        assert responder.session_id == "initial-session"  # Unchanged
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    def test_load_session_without_persistent_memory(self, mock_processor_class):
+        """Test loading session when persistent memory is disabled."""
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=False)
+
+        result = responder.load_session("some-session")
+
+        assert result is False
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_get_session_history(self, mock_memory_class, mock_processor_class):
+        """Test getting session history."""
+        mock_memory = Mock()
+        mock_memory.create_session.return_value = "test-session"
+        mock_memory.get_recent_messages.return_value = []
+        mock_memory.get_character_sessions.return_value = [
+            {"session_id": "session1", "message_count": 5},
+            {"session_id": "session2", "message_count": 3}
+        ]
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+
+        history = responder.get_session_history()
+
+        assert history is not None
+        assert len(history) == 2
+        assert history[0]["session_id"] == "session1"
+        mock_memory.get_character_sessions.assert_called_once_with("Alice")
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    def test_get_session_history_without_persistent_memory(self, mock_processor_class):
+        """Test getting session history when persistent memory is disabled."""
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=False)
+
+        history = responder.get_session_history()
+
+        assert history is None
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_clear_current_session(self, mock_memory_class, mock_processor_class):
+        """Test clearing current session."""
+        mock_memory = Mock()
+        mock_memory.create_session.return_value = "test-session"
+        mock_memory.get_recent_messages.return_value = []
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+        # Add some memory
+        responder.memory = [{"role": "user", "content": "test"}]
+
+        result = responder.clear_current_session()
+
+        assert result is True
+        assert responder.memory == []
+        mock_memory.delete_session.assert_called_once_with("test-session")
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    @patch('src.character_responder.ConversationMemory')
+    def test_create_new_session(self, mock_memory_class, mock_processor_class):
+        """Test creating a new session."""
+        mock_memory = Mock()
+        mock_memory.create_session.side_effect = ["initial-session", "new-session"]
+        mock_memory.get_recent_messages.return_value = []
+        mock_memory_class.return_value = mock_memory
+        mock_processor_class.return_value = Mock()
+
+        responder = CharacterResponder(self.test_character, use_persistent_memory=True)
+        # Add some memory
+        responder.memory = [{"role": "user", "content": "test"}]
+
+        new_session_id = responder.create_new_session()
+
+        assert new_session_id == "new-session"
+        assert responder.session_id == "new-session"
+        assert responder.memory == []
+        assert mock_memory.create_session.call_count == 2  # Initial + new
+
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    def test_conversation_logging(self, mock_processor_class):
+        """Test that conversations are properly logged."""
+        mock_processor = Mock()
+        mock_processor.process.side_effect = [
+            "<selected_option>Option A</selected_option>Evaluation text",
+            "<character_response>Hello there!</character_response>Response text"
+        ]
+        mock_processor_class.return_value = mock_processor
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = Path(temp_dir)
+            responder = CharacterResponder(
+                self.test_character,
+                session_id="test123",
+                use_persistent_memory=False,
+                logs_dir=logs_dir
+            )
+
+            try:
+                # Make a response to trigger logging
+                responder.respond("Hello character!")
+
+                # Check that log file was created and contains expected content
+                assert responder.chat_logger.log_file_path.exists()
+
+                log_content = responder.chat_logger.log_file_path.read_text(encoding='utf-8')
+                assert "=== SESSION START: Alice ===" in log_content
+                assert "USER: Hello character!" in log_content
+                assert "ASSISTANT (RAW):" in log_content
+                assert "CHARACTER: Hello there!" in log_content
+                assert "---" in log_content  # Separator
+            finally:
+                # Close logger to release file handles
+                responder.chat_logger.close_logger()
+                # Clean up log file
+                if responder.chat_logger.log_file_path.exists():
+                    responder.chat_logger.log_file_path.unlink()
+
+    @patch('src.character_responder.ClaudePromptProcessor')
+    def test_multiple_conversation_logging(self, mock_processor_class):
+        """Test that multiple conversations are logged in sequence."""
+        mock_processor = Mock()
+        mock_processor.process.side_effect = [
+            # First conversation
+            "<selected_option>Option A</selected_option>",
+            "<character_response>First response</character_response>",
+            # Second conversation
+            "<selected_option>Option B</selected_option>",
+            "<character_response>Second response</character_response>"
+        ]
+        mock_processor_class.return_value = mock_processor
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = Path(temp_dir)
+            responder = CharacterResponder(
+                self.test_character,
+                use_persistent_memory=False,
+                logs_dir=logs_dir
+            )
+
+            try:
+                # Make multiple responses
+                responder.respond("First message")
+                responder.respond("Second message")
+
+                # Check log content
+                log_content = responder.chat_logger.log_file_path.read_text(encoding='utf-8')
+                assert log_content.count("USER:") == 2
+                assert log_content.count("ASSISTANT (RAW):") == 2
+                assert log_content.count("CHARACTER:") == 2
+                assert "First message" in log_content
+                assert "Second message" in log_content
+                assert "First response" in log_content
+                assert "Second response" in log_content
+            finally:
+                responder.chat_logger.close_logger()
+                # Clean up log file
+                if responder.chat_logger.log_file_path.exists():
+                    responder.chat_logger.log_file_path.unlink()
 

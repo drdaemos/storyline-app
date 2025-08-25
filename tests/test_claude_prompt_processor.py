@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import BaseModel
 
-from src.claude_prompt_processor import ClaudePromptProcessor, Message
+from src.claude_prompt_processor import ClaudePromptProcessor
+from src.models.message import GenericMessage
 
 
 class MockResponse(BaseModel):
@@ -190,7 +191,7 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key='test-key')
-        conversation_history: list[Message] = [
+        conversation_history: list[GenericMessage] = [
             {"role": "user", "content": "Previous message"},
             {"role": "assistant", "content": "Previous response"}
         ]
@@ -209,7 +210,13 @@ class TestClaudePromptProcessor:
         assert messages[1]["role"] == "assistant"
         assert messages[1]["content"] == "Previous response"
         assert messages[2]["role"] == "user"
-        assert messages[2]["content"] == "Current prompt"
+        assert messages[2]["content"] == {
+            "type": "text",
+            "text": "Current prompt",
+            "cache_control": {
+                "type": "ephemeral",
+            }
+        }
 
     @patch('src.claude_prompt_processor.anthropic.Anthropic')
     def test_process_multiple_text_blocks(self, mock_anthropic):
