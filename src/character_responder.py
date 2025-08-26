@@ -93,19 +93,26 @@ class CharacterResponder:
         """
         self.streaming_callback = streaming_callback
 
-        if len(self.memory) >= 8:
-            self.memory_summary = self.get_memory_summary([{ "role": "user", "content": self.memory_summary}] + self.memory[:3])
-            self.memory = [{"role": "user", "content": f"Summary of past interactions: {self.memory_summary}"}] + self.memory[4:]
+        # Log user message
+        self.chat_logger.log_message("USER", user_message)
+
+        if len(self.memory) >= 10:
+            self.memory_summary = self.get_memory_summary([{ "role": "user", "content": f"Summary of past interactions: {self.memory_summary}"}] + self.memory)
+            self.memory = [{"role": "user", "content": f"Summary of past interactions: {self.memory_summary}"}]
+            self.chat_logger.log_message("SUMMARY", self.memory_summary)
 
         raw_evaluation = self.get_evaluation(user_message)
+        self.chat_logger.log_message("ASSISTANT (EVAL)", raw_evaluation)
 
         # Parse and extract selected option from XML tags
         selected_option = self._parse_xml_tag(raw_evaluation, "selected_option")
 
         raw_response = self.get_character_response(user_message, selected_option, self.state_update)
+        self.chat_logger.log_message("ASSISTANT (RESPONSE)", raw_response)
 
         # Parse and extract character response from XML tags
         character_response = self._parse_xml_tag(raw_response, "character_response")
+        self.chat_logger.log_message("CHARACTER", character_response)
 
         # Parse and extract character response from XML tags
         self.state_update = self._parse_xml_tag(raw_response, "state_update")
@@ -116,7 +123,7 @@ class CharacterResponder:
 
         # Update memory with the new interaction
         user_msg = {"role": 'user', "content": user_message}
-        assistant_msg = {"role": 'assistant', "content": raw_evaluation + raw_response}
+        assistant_msg = {"role": 'assistant', "content": raw_evaluation + "\n" + raw_response}
 
         self.memory = self.memory + [user_msg, assistant_msg]
 
@@ -125,8 +132,7 @@ class CharacterResponder:
             self.persistent_memory.add_message(self.character.name, self.session_id, 'user', user_message)
             self.persistent_memory.add_message(self.character.name, self.session_id, 'assistant', raw_evaluation + raw_response)
 
-        # Log the conversation
-        self._log_conversation(user_message, raw_evaluation, raw_response, character_response)
+        self.chat_logger.log_message("-----", "")
 
         return character_response
 
@@ -140,7 +146,8 @@ Be concise, brief and factual in the evaluation, avoid verbosity.
 
 Step 1: EVALUATION
 
-Analyse the situation based on the user's input and the ongoing narrative. List out only the key observations:
+Analyse the situation based on the user's input and the ongoing narrative. 
+Outline the key observations, answering the following in a bullet list:
 
 - What does the character see / feel?
 - What body language or non-verbal cues are present?
@@ -157,9 +164,15 @@ Emotional Shift: [List specific emotions and intensity changes, e.g., "Confidenc
 
 Step 2: PLAYWRIGHT PROMPT
 
-Generate THREE distinct continuation options - for each, list actions performed by the character and outline questions or messages they are conveying. Use imperative verbs
-Each option should be genuinely different, not variations of the same response.
-Stay brief and factual, avoid subjective descriptors / adjectives. Do not refer to the character traits or backstory in the options.
+Generate THREE distinct continuation options - for each, list actions performed by the character and outline questions or messages they are conveying. 
+Use imperative verbs, as if the character has an internal monologue. For example:
+- "They are agitated - need to calm them down."
+- "Should ask them about their day."
+You may add short snippets of the dialogue.
+When character is feeling strong emotions (of any kind), use very short, punchy sentences.
+Stay brief and factual, avoid subjective descriptors / adjectives. 
+Do not refer to the character traits or backstory in the options.
+Each option should be genuinely different (in terms of message or action), not variations of the same response.
 
 Option [A/B/C]: [Next plot beat description]
 Consequence: [How it affects the narrative or character dynamic, very short - 2-5 words]
@@ -172,7 +185,7 @@ Assess the situation and the plot state to consider pacing and transition over t
 Avoid stalling the plot, keep the narrative moving forward.
 Prefer options that are driven by the character's own agency rather than asking input from the user.
 
-Provide the brief analysis of the narrative state, listing out:
+Provide the brief analysis of the narrative state, stating a bullet list that covers:
 
 - Current narrative pacing and stage
 - Character consistency
@@ -210,7 +223,7 @@ The user's message is:
             output_type=str
         )
 
-        return evaluation
+        return evaluation # pyright: ignore[reportReturnType]
 
     def get_character_response(self, user_message: str, option: str, previous_state: str) -> str:
         developer_prompt = """
@@ -280,7 +293,7 @@ The script dictates you should act out the following plot beat:
             output_type=str
         )
 
-        return character_response
+        return character_response # pyright: ignore[reportReturnType]
 
     def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> str:
         developer_prompt = """
@@ -298,7 +311,7 @@ Be concise and factual, avoid verbosity.
             output_type=str
         )
 
-        return summary
+        return summary # pyright: ignore[reportReturnType]
 
     def _parse_xml_tag(self, response_text: str, tag: str) -> str:
         """
@@ -418,9 +431,13 @@ Be concise and factual, avoid verbosity.
         self.chat_logger.log_message("USER", user_message)
 
         # Log raw assistant response (evaluation + character response)
-        self.chat_logger.log_message("ASSISTANT (RAW)", raw_evaluation + raw_response)
+        self.chat_logger.log_message("ASSISTANT (EVAL)", raw_evaluation)
+
+        self.chat_logger.log_message("ASSISTANT (RESPONSE)", raw_response)
 
         # Log parsed character response for reference
-        self.chat_logger.log_message("CHARACTER", character_response + "\n--------------------------------\n")
+        self.chat_logger.log_message("CHARACTER", character_response)
+        self.chat_logger.log_message("SUMMARY", self.memory_summary)
+        self.chat_logger.log_message("-----", "")
 
 
