@@ -3,3 +3,5 @@
 - Avoid using Any type if possible
 - Do not add dependencies directly editing the pyproject.toml, use `uv add <dependencies>` command
 - When writing tests for the files that contain LLM prompts, avoid checking for specific text of the prompt, it gets rephrased often.
+- When writing tests, avoid testing for encapsulated, private behaviour: focus on what can be observed in the output due to different inputs.
+- If a test requires some side-effect to be exposed - raise that with the user and ask how they want to do this.

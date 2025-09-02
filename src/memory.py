@@ -88,6 +88,30 @@ class ConversationMemory:
 
             conn.commit()
             return cursor.lastrowid
+        
+    def add_messages(self, character_id: str, session_id: str, messages: list[GenericMessage]) -> int:
+        """
+        Add multiple messages to the conversation memory.
+
+        Args:
+            character_id: ID of the character
+            session_id: Session ID for this conversation
+            messages: List of messages to add
+
+        Returns:
+            The ID of the last inserted message
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.executemany("""
+                INSERT INTO messages (character_id, session_id, role, content, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, [
+                (character_id, session_id, msg["role"], msg["content"], datetime.now().isoformat())
+                for msg in messages
+            ])
+            conn.commit()
+            return cursor.lastrowid
 
     def get_session_messages(self, session_id: str, limit: int | None = None) -> list[GenericMessage]:
         """

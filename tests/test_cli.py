@@ -23,21 +23,10 @@ class TestInteractiveChatCLI:
             name="Test Character",
             role="Test Role",
             backstory="Test backstory",
+            personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
-            autonomy="independent",
-            safety="secure",
-            openmindedness="high",
-            emotional_stability="stable",
-            attachment_pattern="secure",
-            conscientiousness="organized",
-            sociability="extraverted",
-            social_trust="trusting",
-            risk_approach="balanced",
-            conflict_approach="collaborative",
-            leadership_style="democratic",
-            stress_level="low",
-            energy_level="medium",
-            mood="neutral",
+            relationships={"user": "Test relationship"},
+            key_locations=["Test Location"]
         )
 
         # Test without responder (should return no responder message)
@@ -95,164 +84,122 @@ class TestInteractiveChatCLI:
             name="Test Character",
             role="Test Role",
             backstory="Test backstory",
+            personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
-            autonomy="independent",
-            safety="secure",
-            openmindedness="high",
-            emotional_stability="stable",
-            attachment_pattern="secure",
-            conscientiousness="organized",
-            sociability="extraverted",
-            social_trust="trusting",
-            risk_approach="balanced",
-            conflict_approach="collaborative",
-            leadership_style="democratic",
-            stress_level="low",
-            energy_level="medium",
-            mood="neutral",
+            relationships={"user": "Test relationship"},
+            key_locations=["Test Location"]
         )
 
         with patch.object(cli.console, "print") as mock_print:
             cli.display_character_info(character)
             mock_print.assert_called_once()
 
-    @patch('src.interactive_chat.CharacterResponder')
-    def test_setup_character_session_no_existing_sessions(self, mock_responder_class):
+    @patch('src.interactive_chat.ConversationMemory')
+    def test_setup_character_session_no_existing_sessions(self, mock_memory_class: Mock):
         """Test setting up character session when no existing sessions exist."""
         # Mock responder for session checking
-        mock_temp_responder = Mock()
-        mock_temp_responder.get_session_history.return_value = []
-
-        # Mock responder for final creation
-        mock_final_responder = Mock()
-        mock_responder_class.side_effect = [mock_temp_responder, mock_final_responder]
+        mock_memory_class.get_character_sessions.return_value = []
 
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
             role="Test Role",
             backstory="Test backstory",
+            personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
-            autonomy="independent",
-            safety="secure",
-            openmindedness="high",
-            emotional_stability="stable",
-            attachment_pattern="secure",
-            conscientiousness="organized",
-            sociability="extraverted",
-            social_trust="trusting",
-            risk_approach="balanced",
-            conflict_approach="collaborative",
-            leadership_style="democratic",
-            stress_level="low",
-            energy_level="medium",
-            mood="neutral",
+            relationships={"user": "Test relationship"},
+            key_locations=["Test Location"]
         )
 
         with patch.object(cli.console, "print"):
             result = cli._setup_character_session(character)
 
-        assert result == mock_final_responder
-        assert mock_responder_class.call_count == 2
-        # First call for checking sessions, second for creating final responder
-        mock_responder_class.assert_any_call(character, use_persistent_memory=True)
+        assert result.get_last_character_response() is None
 
-    @patch('src.interactive_chat.CharacterResponder')
-    @patch('src.interactive_chat.Prompt.ask')
-    def test_setup_character_session_continue_existing(self, mock_ask, mock_responder_class):
+    @patch('src.interactive_chat.ConversationMemory')
+    @patch('src.models.character_responder_dependencies.ConversationMemory')
+    def test_setup_character_session_continue_existing(self, mock_deps_memory_class: Mock, mock_memory_class: Mock):
         """Test setting up character session when choosing to continue existing session."""
-        # Mock session history
-        session_history = [
-            {"session_id": "session-123", "message_count": 5, "last_message_time": "2023-01-01"}
-        ]
+        # Create a mock memory instance
+        mock_memory_instance = Mock()
+        mock_memory_instance.get_character_sessions.return_value = [{
+            "session_id": 'test-session',
+            "last_message_time": '2023-01-01',
+            "message_count": 5
+        }]
+        mock_memory_instance.get_recent_messages.return_value = [{
+            "role": 'user',
+            "content": 'test'
+        },{
+            "role": 'assistant',
+            "content": 'response'
+        }]
 
-        mock_temp_responder = Mock()
-        mock_temp_responder.get_session_history.return_value = session_history
-
-        mock_final_responder = Mock()
-        mock_final_responder.memory = [{"role": "user", "content": "previous message"}]
-
-        mock_responder_class.side_effect = [mock_temp_responder, mock_final_responder]
-        mock_ask.return_value = "continue"
+        # Mock both ConversationMemory constructors to return the same mock instance
+        mock_memory_class.return_value = mock_memory_instance
+        mock_deps_memory_class.return_value = mock_memory_instance
 
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
             role="Test Role",
             backstory="Test backstory",
+            personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
-            autonomy="independent",
-            safety="secure",
-            openmindedness="high",
-            emotional_stability="stable",
-            attachment_pattern="secure",
-            conscientiousness="organized",
-            sociability="extraverted",
-            social_trust="trusting",
-            risk_approach="balanced",
-            conflict_approach="collaborative",
-            leadership_style="democratic",
-            stress_level="low",
-            energy_level="medium",
-            mood="neutral",
+            relationships={"user": "Test relationship"},
+            key_locations=["Test Location"]
         )
 
-        with patch.object(cli.console, "print"):
+        # Mock the session choice to return "continue"
+        with patch.object(cli.console, "print"), \
+             patch.object(cli, '_prompt_session_choice', return_value='continue'):
             result = cli._setup_character_session(character)
 
-        assert result == mock_final_responder
-        # Should create responder with specific session_id
-        mock_responder_class.assert_any_call(
-            character,
-            session_id="session-123",
-            use_persistent_memory=True
-        )
+        assert result.get_last_character_response() == "response"
 
-    @patch('src.interactive_chat.CharacterResponder')
-    @patch('src.interactive_chat.Prompt.ask')
-    def test_setup_character_session_start_new(self, mock_ask, mock_responder_class):
+    @patch('src.interactive_chat.ConversationMemory')
+    @patch('src.models.character_responder_dependencies.ConversationMemory')
+    def test_setup_character_session_start_new(self, mock_deps_memory_class: Mock, mock_memory_class: Mock):
         """Test setting up character session when choosing to start new session."""
-        # Mock session history
-        session_history = [
-            {"session_id": "session-123", "message_count": 5, "last_message_time": "2023-01-01"}
-        ]
+        # Create a mock memory instance
+        mock_memory_instance = Mock()
+        mock_memory_instance.get_character_sessions.return_value = [{
+            "session_id": 'test-session',
+            "last_message_time": '2023-01-01',
+            "message_count": 5
+        }]
+        mock_memory_instance.get_recent_messages.return_value = [{
+            "role": 'user',
+            "content": 'test'
+        },{
+            "role": 'assistant',
+            "content": 'response'
+        }]
 
-        mock_temp_responder = Mock()
-        mock_temp_responder.get_session_history.return_value = session_history
-        mock_temp_responder.persistent_memory = Mock()
+        # Create a separate mock memory instance for dependencies (after clear)
+        mock_deps_memory_instance = Mock()
+        mock_deps_memory_instance.get_recent_messages.return_value = []
 
-        mock_final_responder = Mock()
-        mock_responder_class.side_effect = [mock_temp_responder, mock_final_responder]
-        mock_ask.return_value = "new"
+        # Mock both ConversationMemory constructors
+        mock_memory_class.return_value = mock_memory_instance
+        mock_deps_memory_class.return_value = mock_deps_memory_instance
 
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
             role="Test Role",
             backstory="Test backstory",
+            personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
-            autonomy="independent",
-            safety="secure",
-            openmindedness="high",
-            emotional_stability="stable",
-            attachment_pattern="secure",
-            conscientiousness="organized",
-            sociability="extraverted",
-            social_trust="trusting",
-            risk_approach="balanced",
-            conflict_approach="collaborative",
-            leadership_style="democratic",
-            stress_level="low",
-            energy_level="medium",
-            mood="neutral",
+            relationships={"user": "Test relationship"},
+            key_locations=["Test Location"]
         )
 
-        with patch.object(cli.console, "print"):
+        with patch.object(cli.console, "print"), \
+             patch.object(cli, '_prompt_session_choice', return_value='new'):
             result = cli._setup_character_session(character)
 
-        assert result == mock_final_responder
-        # Should clear character memory
-        mock_temp_responder.persistent_memory.clear_character_memory.assert_called_once_with("Test Character")
+        assert result.get_last_character_response() is None
 
     def test_display_session_history(self):
         """Test displaying session history."""

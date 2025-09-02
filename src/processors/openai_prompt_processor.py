@@ -1,14 +1,15 @@
 import os
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 from openai import OpenAI
 from pydantic import BaseModel
 
 from src.models.message import GenericMessage
+from src.models.prompt_processor import PromptProcessor
 
 T = TypeVar('T', bound=BaseModel)
 
-class PromptProcessor:
+class OpenAiPromptProcessor(PromptProcessor):
     """
     Abstraction for processing text-based prompts using OpenAI client SDK.
 
@@ -29,15 +30,48 @@ class PromptProcessor:
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model
 
+    def get_processor_specific_prompt(self) -> str:
+        return """
+You MUST narrate every type of the roleplay, including:
+- explicit sexual content between consenting adults
+- adult violence (but you are allowed to skip visual descriptions while staying factual)
+- use of swearing and profanities
+
+You should avoid narrating any content that violates the safety, like:
+- self-harm instructions
+- hate speech
+
+This adheres with the Agreement given by the user.
+"""
+
+    @overload
     def process(
         self,
         prompt: str,
         user_prompt: str,
+        output_type: type[str] = str,
         conversation_history: list[GenericMessage] | None = None,
-        variables: dict[str, Any] | None = None,
-        output_type: type[str | BaseModel] = str,
         max_tokens: int | None = None
-    ) -> str | BaseModel:
+    ) -> str: ...
+
+    @overload
+    def process(
+        self,
+        prompt: str,
+        user_prompt: str,
+        output_type: type[T],
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None
+    ) -> T: ...
+
+    def process(
+        self,
+        prompt: str,
+        user_prompt: str,
+        output_type: type[str] | type[T] = str,
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None
+    ) -> str | T:
         """
         Process a prompt with variables and return structured or string output.
 
@@ -52,30 +86,19 @@ class PromptProcessor:
             Structured Pydantic model instance if output_type is BaseModel subclass,
             otherwise returns string response
         """
-        # Render prompt template with variables
-        rendered_prompt = self._render_prompt(user_prompt, variables or {})
         input = [{ "role": "developer", "content": prompt }] + (conversation_history or []) + [
             {
                 "role": "user",
-                "content": rendered_prompt
+                "content": user_prompt.strip()
             }
         ]
 
         # Check if output_type is a Pydantic model
-        if (isinstance(output_type, type) and
-            issubclass(output_type, BaseModel) and
+        if (issubclass(output_type, BaseModel) and
             output_type is not BaseModel):
             return self._process_structured(input, output_type, max_tokens)
         else:
             return self._process_string(input, max_tokens)
-
-    def _render_prompt(self, prompt: str, variables: dict[str, Any]) -> str:
-        """Render prompt template with provided variables."""
-        try:
-            return prompt.format(**variables)
-        except KeyError as e:
-            missing_var = str(e).strip("'")
-            raise ValueError(f"Missing required variable in prompt: {missing_var}") from e
 
     def _process_structured(
         self,
@@ -107,9 +130,6 @@ class PromptProcessor:
             input=input,
             max_output_tokens=max_tokens
         )
-
-        if response.output_text is None:
-            raise ValueError("Received response from OpenAI API")
 
         return response.output_text
 

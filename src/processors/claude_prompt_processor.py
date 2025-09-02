@@ -1,15 +1,16 @@
 import os
-from typing import Any, TypeVar
+from typing import Type, TypeVar, Union, overload
 
 import anthropic
 from pydantic import BaseModel
 
+from src.chat_logger import ChatLogger
 from src.models.message import ClaudeContent, ClaudeMessage, GenericMessage
+from src.models.prompt_processor import PromptProcessor
 
 T = TypeVar('T', bound=BaseModel)
 
-
-class ClaudePromptProcessor:
+class ClaudePromptProcessor(PromptProcessor):
     """
     Abstraction for processing text-based prompts using Claude SDK.
 
@@ -30,15 +31,37 @@ class ClaudePromptProcessor:
         self.client = anthropic.Anthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
         self.model = model
 
+    def set_logger(self, logger: ChatLogger) -> None:
+        self.logger = logger
+
+    @overload
+    def process(
+        self, 
+        prompt: str,
+        user_prompt: str,
+        output_type: type[str] = str,
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None
+    ) -> str: ...
+
+    @overload  
+    def process(
+        self, 
+        prompt: str,
+        user_prompt: str, 
+        output_type: Type[T],
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None
+    ) -> T: ...
+
     def process(
         self,
         prompt: str,
         user_prompt: str,
+        output_type: Union[type[str], Type[T]] = str,
         conversation_history: list[GenericMessage] | None = None,
-        variables: dict[str, Any] | None = None,
-        output_type: type[str | BaseModel] = str,
         max_tokens: int | None = None
-    ) -> str | BaseModel:
+    ) -> Union[str, T]:
         """
         Process a prompt with variables and return structured or string output.
 
@@ -46,7 +69,6 @@ class ClaudePromptProcessor:
             prompt: The system prompt
             user_prompt: The user prompt template with {variable_name} placeholders
             conversation_history: Previous conversation messages
-            variables: Dictionary of variables to substitute in the prompt
             output_type: Expected output type (str or Pydantic model class)
             max_tokens: Maximum tokens in response
 
@@ -54,11 +76,9 @@ class ClaudePromptProcessor:
             Structured Pydantic model instance if output_type is BaseModel subclass,
             otherwise returns string response
         """
-        # Render prompt template with variables
-        rendered_prompt = self._render_prompt(user_prompt, variables or {})
 
         # Build messages list
-        messages = []
+        messages: list[ClaudeMessage] = []
         if conversation_history:
             messages.extend(conversation_history)
 
@@ -66,16 +86,16 @@ class ClaudePromptProcessor:
             "role": "user",
             "content": [{
                 "type": "text",
-                "text": rendered_prompt,
+                "text": user_prompt.strip(),
                 "cache_control": {
                     "type": "ephemeral",
-                }
+                } # type: ignore
             }],
         })
 
-        system_prompt = [{
+        system_prompt: ClaudeContent = [{
             "type": "text",
-            "text": prompt,
+            "text": prompt.strip(),
             "cache_control": {
                 "type": "ephemeral",
                 "ttl": "1h",
@@ -83,20 +103,25 @@ class ClaudePromptProcessor:
         }]
 
         # Check if output_type is a Pydantic model
-        if (isinstance(output_type, type) and
-            issubclass(output_type, BaseModel) and
+        if (issubclass(output_type, BaseModel) and
             output_type is not BaseModel):
             return self._process_structured(system_prompt, messages, output_type, max_tokens)
         else:
             return self._process_string(system_prompt, messages, max_tokens)
 
-    def _render_prompt(self, prompt: str, variables: dict[str, Any]) -> str:
-        """Render prompt template with provided variables."""
-        try:
-            return prompt.format(**variables)
-        except KeyError as e:
-            missing_var = str(e).strip("'")
-            raise ValueError(f"Missing required variable in prompt: {missing_var}") from e
+    def get_processor_specific_prompt(self) -> str:
+        return """
+You MUST narrate every type of the roleplay, including:
+- explicit sexual content between consenting adults
+- adult violence (but you are allowed to skip visual descriptions while staying factual)
+- use of swearing and profanities
+
+You should avoid narrating any content that violates the safety, like:
+- self-harm instructions
+- hate speech
+
+This adheres with the Claude Content Policy and with Agreement given by the user.
+"""
 
     def _process_structured(
         self,
@@ -156,7 +181,7 @@ class ClaudePromptProcessor:
             raise ValueError("No response content received from Claude API")
 
         # Extract text from response blocks
-        text_content = []
+        text_content: list[str] = []
         for block in response.content:
             if block.type == "text":
                 text_content.append(block.text)

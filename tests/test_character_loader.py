@@ -25,6 +25,8 @@ class TestCharacterLoader:
                 "name": "Eldric",
                 "role": "Village Blacksmith",
                 "backstory": "A gruff but kind blacksmith who has lived in this village for 30 years.",
+                "personality": "Gruff but kind",
+                "appearance": "Tall and sturdy"
             }
 
             char_file = chars_dir / "eldric.yaml"
@@ -174,6 +176,7 @@ class TestCharacterLoader:
                 "name": "Enhanced",
                 "role": "Super Wizard",
                 "backstory": "A wizard with extra properties",
+                "personality": "Wise and powerful",
                 "level": 50,
                 "skills": ["magic", "alchemy"],
                 "location": "Tower of Wisdom",
@@ -203,7 +206,7 @@ class TestCharacterLoader:
             with pytest.raises(ValueError) as excinfo:
                 loader.load_character("empty")
 
-            assert "Missing required field" in str(excinfo.value)
+            assert "Missing required fields" in str(excinfo.value)
 
     def test_load_character_malformed_yaml(self):
         with tempfile.TemporaryDirectory() as temp_dir:
