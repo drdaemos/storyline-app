@@ -353,7 +353,7 @@ By character's script you should act out the following actions:
                     # We need to be careful not to yield partial closing tags
                     potential_closing_start = None
                     for i in range(len(f"</{tag}>")):
-                        closing_prefix = f"</{tag}>[:i+1]"
+                        closing_prefix = f"</{tag}>"[:i+1]
                         if buffer.endswith(closing_prefix):
                             potential_closing_start = len(buffer) - len(closing_prefix)
                             break
