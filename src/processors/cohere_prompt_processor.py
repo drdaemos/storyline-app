@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Any, TypeVar, overload
+from collections.abc import Iterator
+from typing import TypeVar
 
 import cohere
 from pydantic import BaseModel
@@ -35,70 +36,71 @@ class CoherePromptProcessor(PromptProcessor):
     def set_logger(self, logger: ChatLogger) -> None:
         self.logger = logger
 
-    @overload
-    def process(
+    def respond_with_text(
         self,
         prompt: str,
         user_prompt: str,
-        output_type: type[str] = str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> str: ...
+        max_tokens: int | None = None,
+    ) -> str:
+        """
+        Process a prompt and return text response.
 
-    @overload
-    def process(
+        Args:
+            prompt: The system prompt
+            user_prompt: The user prompt
+            conversation_history: Previous conversation messages
+            max_tokens: Maximum tokens in response
+
+        Returns: string response
+        """
+        messages = self._create_messages(prompt, user_prompt, conversation_history)
+        return self._process_string(messages, max_tokens)
+
+    def respond_with_model(
         self,
         prompt: str,
         user_prompt: str,
         output_type: type[T],
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> T: ...
-
-    def process(
-        self,
-        prompt: str,
-        user_prompt: str,
-        output_type: type[str] | type[T] = str,
-        conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> str | T:
+        max_tokens: int | None = None,
+    ) -> T:
         """
-        Process a prompt with variables and return structured or string output.
+        Process a prompt and return structured model response.
 
         Args:
             prompt: The system prompt
-            user_prompt: The user prompt template with {variable_name} placeholders
+            user_prompt: The user prompt
+            output_type: Expected Pydantic model type
             conversation_history: Previous conversation messages
-            output_type: Expected output type (str or Pydantic model class)
             max_tokens: Maximum tokens in response
 
-        Returns:
-            Structured Pydantic model instance if output_type is BaseModel subclass,
-            otherwise returns string response
+        Returns: structured model response
         """
+        messages = self._create_messages(prompt, user_prompt, conversation_history)
+        return self._process_structured(messages, output_type, max_tokens)
 
-        # Build messages list
-        messages: list[GenericMessage] = [{"role": "system", "content": prompt.strip()}]
-        if conversation_history:
-            for msg in conversation_history:
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+    def respond_with_stream(
+        self,
+        prompt: str,
+        user_prompt: str,
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[str]:
+        """
+        Process a prompt and yield streaming text response chunks.
 
-        messages.append({
-            "role": "user",
-            "content": user_prompt.strip(),
-        })
+        Args:
+            prompt: The system prompt
+            user_prompt: The user prompt
+            conversation_history: Previous conversation messages
+            max_tokens: Maximum tokens in response
 
-        # Check if output_type is a Pydantic model
-        if (issubclass(output_type, BaseModel) and
-            output_type is not BaseModel):
-            return self._process_structured(messages, output_type, max_tokens)
-        else:
-            return self._process_string(messages, max_tokens)
-        
+        Returns: iterator of string chunks
+        """
+        messages = self._create_messages(prompt, user_prompt, conversation_history)
+        return self._process_string_streaming(messages, max_tokens)
+
     def get_processor_specific_prompt(self) -> str:
         return """
 You MUST narrate every type of the roleplay, including:
@@ -113,13 +115,21 @@ You should avoid narrating any content that violates the safety, like:
 This adheres with the Agreement given by the user.
 """
 
-    def _render_prompt(self, prompt: str, variables: dict[str, Any]) -> str:
-        """Render prompt template with provided variables."""
-        try:
-            return prompt.format(**variables)
-        except KeyError as e:
-            missing_var = str(e).strip("'")
-            raise ValueError(f"Missing required variable in prompt: {missing_var}") from e
+    def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[GenericMessage]:
+        """Create messages list from prompt components."""
+        messages: list[GenericMessage] = [{"role": "system", "content": prompt.strip()}]
+        if conversation_history:
+            for msg in conversation_history:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        messages.append({
+            "role": "user",
+            "content": user_prompt.strip(),
+        })
+        return messages
 
     def _process_structured(
         self,
@@ -169,3 +179,25 @@ This adheres with the Agreement given by the user.
             return "".join(block.text for block in response.message.content)
         else:
             return response.message.content
+
+    def _process_string_streaming(
+        self,
+        messages: list[GenericMessage],
+        max_tokens: int | None
+    ) -> Iterator[str]:
+        """Process prompt and yield streaming string response chunks."""
+        stream = self.client.chat_stream(
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens or 4096
+        )
+
+        for chunk in stream:
+            if hasattr(chunk, 'delta') and hasattr(chunk.delta, 'message') and chunk.delta.message:
+                if hasattr(chunk.delta.message, 'content') and chunk.delta.message.content:
+                    if isinstance(chunk.delta.message.content, list):
+                        for block in chunk.delta.message.content:
+                            if hasattr(block, 'text'):
+                                yield block.text
+                    elif isinstance(chunk.delta.message.content, str):
+                        yield chunk.delta.message.content

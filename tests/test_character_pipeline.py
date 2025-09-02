@@ -1,29 +1,44 @@
+from typing import Any, Iterator, TypeVar
+
+from pydantic import BaseModel
+from src.chat_logger import ChatLogger
 from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
 from src.models.character import Character
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
+T = TypeVar('T', bound=BaseModel)
 
 class MockPromptProcessor(PromptProcessor):
     """Test implementation of PromptProcessor for testing."""
 
-    def __init__(self, response: str = "Mock response"):
+    def __init__(self, response: str | Iterator[str] = "Mock response"):
         self.response = response
-        self.call_history: list[dict] = []
+        self.call_history: list[dict[str, Any]] = []
         self.logger = None
 
     def get_processor_specific_prompt(self) -> str:
         return "Mock processor specific prompt for testing"
 
-    def set_logger(self, logger) -> None:
+    def set_logger(self, logger: ChatLogger) -> None:
         """Set the logger for this processor."""
         self.logger = logger
 
-    def process(
+    
+    def respond_with_model(
         self,
         prompt: str,
         user_prompt: str,
-        output_type: type = str,
+        output_type: type[T],
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None
+    ) -> T:
+        raise NotImplementedError("Model response not implemented")
+
+    def respond_with_text(
+        self,
+        prompt: str,
+        user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None
     ) -> str:
@@ -31,11 +46,31 @@ class MockPromptProcessor(PromptProcessor):
         self.call_history.append({
             "prompt": prompt,
             "user_prompt": user_prompt,
-            "output_type": output_type,
             "conversation_history": conversation_history,
             "max_tokens": max_tokens
         })
-        return self.response
+        return self.response # type: ignore
+    
+    def respond_with_stream(
+        self,
+        prompt: str,
+        user_prompt: str,
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None
+    ) -> Iterator[str]:
+        # Record the call for verification
+        self.call_history.append({
+            "prompt": prompt,
+            "user_prompt": user_prompt,
+            "conversation_history": conversation_history,
+            "max_tokens": max_tokens
+        })
+        if isinstance(self.response, str):
+            # Convert string to iterator by yielding character by character (to simulate streaming)
+            for char in self.response:
+                yield char
+        else:
+            yield from self.response
 
 
 class TestCharacterPipeline:
@@ -231,11 +266,12 @@ class TestCharacterPipeline:
 
         result = CharacterPipeline.get_character_response(mock_processor, input_data)
 
-        # Just check that result is not None and contains expected content
+        # Just check that result is not None and collect the content from the generator
         assert result is not None
-        assert "*Alice looks up from the case files" in result
-        assert "timeline doesn't add up" in result
-        assert "completely honest with me" in result
+        content = "".join(result)
+        assert "*Alice looks up from the case files" in content
+        assert "timeline doesn't add up" in content
+        assert "completely honest with me" in content
 
         # Verify processor was called
         assert len(mock_processor.call_history) == 1

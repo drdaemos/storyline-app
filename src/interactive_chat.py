@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.text import Text
 
-from src.memory import ConversationMemory
+from src.conversation_memory import ConversationMemory
 
 from .character_loader import CharacterLoader
 from .character_responder import CharacterResponder

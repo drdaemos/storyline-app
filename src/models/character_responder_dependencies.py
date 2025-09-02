@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.chat_logger import ChatLogger
-from src.memory import ConversationMemory
+from src.conversation_memory import ConversationMemory
 from src.models.prompt_processor import PromptProcessor
 
 

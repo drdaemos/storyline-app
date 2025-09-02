@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
-from src.memory import ConversationMemory
+from src.conversation_memory import ConversationMemory
 
 
 class TestConversationMemory:

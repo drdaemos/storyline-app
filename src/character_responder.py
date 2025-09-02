@@ -181,22 +181,25 @@ class CharacterResponder:
         }
 
         # Process the prompt
-        response = CharacterPipeline.get_character_response(
+        stream = CharacterPipeline.get_character_response(
             processor=self.processor,
             input=input
         )
 
-        if response is None:
+        if stream is None:
             fallback = True
-            response = CharacterPipeline.get_character_response(
+            stream = CharacterPipeline.get_character_response(
                 processor=self.backup_processor,
                 input=input
             )
-            if response is None:
+            if stream is None:
                 raise ValueError("Failed to get character response from both primary and backup processors.")
 
-        if self.streaming_callback:
-            self.streaming_callback(response)
+        response = ""
+        for chunk in stream:
+            response += chunk
+            if self.streaming_callback:
+                self.streaming_callback(chunk)
 
         if self.chat_logger:
             self.chat_logger.log_message(f"CHARACTER ({"FALLBACK" if fallback else "NORMAL"})", response)

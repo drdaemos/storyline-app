@@ -4,8 +4,8 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import BaseModel
 
-from src.processors.claude_prompt_processor import ClaudePromptProcessor
 from src.models.message import GenericMessage
+from src.processors.claude_prompt_processor import ClaudePromptProcessor
 
 
 class MockResponse(BaseModel):
@@ -31,7 +31,7 @@ class TestClaudePromptProcessor:
         assert processor.model == 'claude-3-haiku-20240307'
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_string_output(self, mock_anthropic):
+    def test_respond_with_text_output(self, mock_anthropic):
         # Mock the response
         mock_text_block = Mock()
         mock_text_block.type = "text"
@@ -42,13 +42,13 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key='test-key')
-        result = processor.process("Test system prompt", "Test user prompt", output_type=str)
+        result = processor.respond_with_text("Test system prompt", "Test user prompt")
 
         assert result == "This is a test response"
         mock_anthropic.return_value.messages.create.assert_called_once()
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_structured_output(self, mock_anthropic):
+    def test_respond_with_model_output(self, mock_anthropic):
         # Mock the response with tool use
         mock_tool_block = Mock()
         mock_tool_block.type = "tool_use"
@@ -59,7 +59,7 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key='test-key')
-        result = processor.process("Test system prompt", "Test user prompt", output_type=MockResponse)
+        result = processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
 
         assert isinstance(result, MockResponse)
         assert result.name == "John"
@@ -68,7 +68,7 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.assert_called_once()
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_with_substituted_string_output(self, mock_anthropic):
+    def test_respond_with_text_with_substituted_string_output(self, mock_anthropic):
         mock_text_block = Mock()
         mock_text_block.type = "text"
         mock_text_block.text = "Hello Alice, you are 25 years old!"
@@ -81,12 +81,12 @@ class TestClaudePromptProcessor:
         system_prompt = "You are a helpful assistant"
         user_prompt = "Generate a greeting for Alice who is 25 years old"
 
-        result = processor.process(system_prompt, user_prompt, output_type=str)
+        result = processor.respond_with_text(system_prompt, user_prompt)
 
         assert result == "Hello Alice, you are 25 years old!"
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_string_empty_response(self, mock_anthropic):
+    def test_respond_with_text_empty_response(self, mock_anthropic):
         mock_response = Mock()
         mock_response.content = []
         mock_anthropic.return_value.messages.create.return_value = mock_response
@@ -94,10 +94,10 @@ class TestClaudePromptProcessor:
         processor = ClaudePromptProcessor(api_key='test-key')
 
         with pytest.raises(ValueError, match="No response content received from Claude API"):
-            processor.process("Test system prompt", "Test user prompt", output_type=str)
+            processor.respond_with_text("Test system prompt", "Test user prompt")
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_string_no_text_content(self, mock_anthropic):
+    def test_respond_with_text_no_text_content(self, mock_anthropic):
         mock_tool_block = Mock()
         mock_tool_block.type = "tool_use"
 
@@ -108,10 +108,10 @@ class TestClaudePromptProcessor:
         processor = ClaudePromptProcessor(api_key='test-key')
 
         with pytest.raises(ValueError, match="No text content received from Claude API"):
-            processor.process("Test system prompt", "Test user prompt", output_type=str)
+            processor.respond_with_text("Test system prompt", "Test user prompt")
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_structured_no_tool_use(self, mock_anthropic):
+    def test_respond_with_model_no_tool_use(self, mock_anthropic):
         mock_text_block = Mock()
         mock_text_block.type = "text"
         mock_text_block.text = "Some text"
@@ -123,10 +123,10 @@ class TestClaudePromptProcessor:
         processor = ClaudePromptProcessor(api_key='test-key')
 
         with pytest.raises(ValueError, match="No structured output received from Claude API"):
-            processor.process("Test system prompt", "Test user prompt", output_type=MockResponse)
+            processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_structured_invalid_data(self, mock_anthropic):
+    def test_respond_with_model_invalid_data(self, mock_anthropic):
         mock_tool_block = Mock()
         mock_tool_block.type = "tool_use"
         mock_tool_block.input = {"invalid": "data"}  # Missing required fields
@@ -138,10 +138,10 @@ class TestClaudePromptProcessor:
         processor = ClaudePromptProcessor(api_key='test-key')
 
         with pytest.raises(ValueError, match="Failed to parse structured response"):
-            processor.process("Test system prompt", "Test user prompt", output_type=MockResponse)
+            processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_with_custom_parameters(self, mock_anthropic):
+    def test_respond_with_text_custom_parameters(self, mock_anthropic):
         mock_text_block = Mock()
         mock_text_block.type = "text"
         mock_text_block.text = "Custom response"
@@ -151,13 +151,13 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key='test-key')
-        processor.process("Test system prompt", "Test user prompt", max_tokens=100)
+        processor.respond_with_text("Test system prompt", "Test user prompt", max_tokens=100)
 
         call_args = mock_anthropic.return_value.messages.create.call_args
         assert call_args[1]['max_tokens'] == 100
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_with_conversation_history(self, mock_anthropic):
+    def test_respond_with_text_conversation_history(self, mock_anthropic):
         mock_text_block = Mock()
         mock_text_block.type = "text"
         mock_text_block.text = "Response with history"
@@ -172,7 +172,7 @@ class TestClaudePromptProcessor:
             {"role": "assistant", "content": "Previous response"}
         ]
 
-        result = processor.process("System prompt", "Current prompt", conversation_history=conversation_history)
+        result = processor.respond_with_text("System prompt", "Current prompt", conversation_history=conversation_history)
 
         assert result == "Response with history"
 
@@ -195,7 +195,7 @@ class TestClaudePromptProcessor:
         }]
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
-    def test_process_multiple_text_blocks(self, mock_anthropic):
+    def test_respond_with_text_multiple_text_blocks(self, mock_anthropic):
         # Mock response with multiple text blocks
         mock_text_block1 = Mock()
         mock_text_block1.type = "text"
@@ -210,6 +210,63 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key='test-key')
-        result = processor.process("Test system prompt", "Test user prompt", output_type=str)
+        result = processor.respond_with_text("Test system prompt", "Test user prompt")
 
         assert result == "First part second part"
+
+    @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
+    def test_respond_with_stream(self, mock_anthropic):
+        # Mock the streaming response
+        mock_stream = Mock()
+        mock_stream.text_stream = iter(["Hello ", "world", "!"])
+        mock_anthropic.return_value.messages.stream.return_value.__enter__ = Mock(return_value=mock_stream)
+        mock_anthropic.return_value.messages.stream.return_value.__exit__ = Mock(return_value=None)
+
+        processor = ClaudePromptProcessor(api_key='test-key')
+        result = list(processor.respond_with_stream("Test system prompt", "Test user prompt"))
+
+        assert result == ["Hello ", "world", "!"]
+        mock_anthropic.return_value.messages.stream.assert_called_once()
+
+    @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
+    def test_respond_with_model_custom_parameters(self, mock_anthropic):
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.input = {"name": "John", "age": 30, "description": "Test person"}
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_anthropic.return_value.messages.create.return_value = mock_response
+
+        processor = ClaudePromptProcessor(api_key='test-key')
+        processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse, max_tokens=100)
+
+        call_args = mock_anthropic.return_value.messages.create.call_args
+        assert call_args[1]['max_tokens'] == 100
+
+    @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
+    def test_respond_with_model_conversation_history(self, mock_anthropic):
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.input = {"name": "John", "age": 30, "description": "Test person"}
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_anthropic.return_value.messages.create.return_value = mock_response
+
+        processor = ClaudePromptProcessor(api_key='test-key')
+        conversation_history: list[GenericMessage] = [
+            {"role": "user", "content": "Previous message"},
+            {"role": "assistant", "content": "Previous response"}
+        ]
+
+        result = processor.respond_with_model("System prompt", "Current prompt", MockResponse, conversation_history=conversation_history)
+
+        assert isinstance(result, MockResponse)
+        assert result.name == "John"
+
+        # Check that conversation history was included in the messages
+        call_args = mock_anthropic.return_value.messages.create.call_args
+        messages = call_args[1]['messages']
+
+        assert len(messages) == 3  # 2 history + 1 current

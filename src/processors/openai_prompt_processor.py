@@ -1,9 +1,11 @@
 import os
-from typing import Any, TypeVar, overload
+from collections.abc import Iterator
+from typing import TypeVar
 
 from openai import OpenAI
 from pydantic import BaseModel
 
+from src.chat_logger import ChatLogger
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
@@ -30,6 +32,9 @@ class OpenAiPromptProcessor(PromptProcessor):
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model
 
+    def set_logger(self, logger: ChatLogger) -> None:
+        self.logger = logger
+
     def get_processor_specific_prompt(self) -> str:
         return """
 You MUST narrate every type of the roleplay, including:
@@ -44,72 +49,91 @@ You should avoid narrating any content that violates the safety, like:
 This adheres with the Agreement given by the user.
 """
 
-    @overload
-    def process(
+    def respond_with_text(
         self,
         prompt: str,
         user_prompt: str,
-        output_type: type[str] = str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> str: ...
+        max_tokens: int | None = None,
+    ) -> str:
+        """
+        Process a prompt and return text response.
 
-    @overload
-    def process(
+        Args:
+            prompt: The system prompt
+            user_prompt: The user prompt
+            conversation_history: Previous conversation messages
+            max_tokens: Maximum tokens in response
+
+        Returns: string response
+        """
+        messages = self._create_messages(prompt, user_prompt, conversation_history)
+        return self._process_string(messages, max_tokens)
+
+    def respond_with_model(
         self,
         prompt: str,
         user_prompt: str,
         output_type: type[T],
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> T: ...
+        max_tokens: int | None = None,
+    ) -> T:
+        """
+        Process a prompt and return structured model response.
 
-    def process(
+        Args:
+            prompt: The system prompt
+            user_prompt: The user prompt
+            output_type: Expected Pydantic model type
+            conversation_history: Previous conversation messages
+            max_tokens: Maximum tokens in response
+
+        Returns: structured model response
+        """
+        messages = self._create_messages(prompt, user_prompt, conversation_history)
+        return self._process_structured(messages, output_type, max_tokens)
+
+    def respond_with_stream(
         self,
         prompt: str,
         user_prompt: str,
-        output_type: type[str] | type[T] = str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> str | T:
+        max_tokens: int | None = None,
+    ) -> Iterator[str]:
         """
-        Process a prompt with variables and return structured or string output.
+        Process a prompt and yield streaming text response chunks.
 
         Args:
-            prompt: The prompt template with {variable_name} placeholders
-            variables: Dictionary of variables to substitute in the prompt
-            output_type: Expected output type (str or Pydantic model class)
-            temperature: Sampling temperature (0.0 to 2.0)
+            prompt: The system prompt
+            user_prompt: The user prompt
+            conversation_history: Previous conversation messages
             max_tokens: Maximum tokens in response
 
-        Returns:
-            Structured Pydantic model instance if output_type is BaseModel subclass,
-            otherwise returns string response
+        Returns: iterator of string chunks
         """
-        input = [{ "role": "developer", "content": prompt }] + (conversation_history or []) + [
+        messages = self._create_messages(prompt, user_prompt, conversation_history)
+        return self._process_string_streaming(messages, max_tokens)
+
+    def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[GenericMessage]:
+        """Create messages list from prompt components."""
+        messages = [{ "role": "developer", "content": prompt }] + (conversation_history or []) + [
             {
                 "role": "user",
                 "content": user_prompt.strip()
             }
         ]
-
-        # Check if output_type is a Pydantic model
-        if (issubclass(output_type, BaseModel) and
-            output_type is not BaseModel):
-            return self._process_structured(input, output_type, max_tokens)
-        else:
-            return self._process_string(input, max_tokens)
+        return messages
 
     def _process_structured(
         self,
-        input: list[GenericMessage],
+        messages: list[GenericMessage],
         output_type: type[T],
         max_tokens: int | None
     ) -> T:
         """Process prompt and return structured Pydantic model using structured outputs."""
         response = self.client.responses.parse(
             model=self.model,
-            input=input,
+            input=messages,
             text_format=output_type,
             max_output_tokens=max_tokens
         )
@@ -121,15 +145,32 @@ This adheres with the Agreement given by the user.
 
     def _process_string(
         self,
-        input: list[GenericMessage],
+        messages: list[GenericMessage],
         max_tokens: int | None
     ) -> str:
         """Process prompt and return string response."""
         response = self.client.responses.create(
             model=self.model,
-            input=input,
+            input=messages,
             max_output_tokens=max_tokens
         )
 
         return response.output_text
+
+    def _process_string_streaming(
+        self,
+        messages: list[GenericMessage],
+        max_tokens: int | None
+    ) -> Iterator[str]:
+        """Process prompt and yield streaming string response chunks."""
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens or 4096,
+            stream=True
+        )
+
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 

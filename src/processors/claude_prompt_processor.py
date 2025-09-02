@@ -1,5 +1,6 @@
 import os
-from typing import Type, TypeVar, Union, overload
+from collections.abc import Iterator
+from typing import TypeVar, overload
 
 import anthropic
 from pydantic import BaseModel
@@ -34,34 +35,13 @@ class ClaudePromptProcessor(PromptProcessor):
     def set_logger(self, logger: ChatLogger) -> None:
         self.logger = logger
 
-    @overload
-    def process(
-        self, 
-        prompt: str,
-        user_prompt: str,
-        output_type: type[str] = str,
-        conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> str: ...
-
-    @overload  
-    def process(
-        self, 
-        prompt: str,
-        user_prompt: str, 
-        output_type: Type[T],
-        conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> T: ...
-
-    def process(
+    def respond_with_text(
         self,
         prompt: str,
         user_prompt: str,
-        output_type: Union[type[str], Type[T]] = str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> Union[str, T]:
+        max_tokens: int | None = None,
+    ) -> str:
         """
         Process a prompt with variables and return structured or string output.
 
@@ -69,45 +49,67 @@ class ClaudePromptProcessor(PromptProcessor):
             prompt: The system prompt
             user_prompt: The user prompt template with {variable_name} placeholders
             conversation_history: Previous conversation messages
-            output_type: Expected output type (str or Pydantic model class)
             max_tokens: Maximum tokens in response
 
-        Returns:
-            Structured Pydantic model instance if output_type is BaseModel subclass,
-            otherwise returns string response
+        Returns: string response
         """
 
         # Build messages list
-        messages: list[ClaudeMessage] = []
-        if conversation_history:
-            messages.extend(conversation_history)
+        messages = self._create_messages(user_prompt, conversation_history)
+        system_prompt = self._create_system_prompt(prompt)
 
-        messages.append({
-            "role": "user",
-            "content": [{
-                "type": "text",
-                "text": user_prompt.strip(),
-                "cache_control": {
-                    "type": "ephemeral",
-                } # type: ignore
-            }],
-        })
+        return self._process_string(system_prompt, messages, max_tokens)
+    
+    def respond_with_model(
+        self,
+        prompt: str,
+        user_prompt: str,
+        output_type: type[T],
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None,
+    ) -> T:
+        """
+        Process a prompt with variables and return structured or string output.
 
-        system_prompt: ClaudeContent = [{
-            "type": "text",
-            "text": prompt.strip(),
-            "cache_control": {
-                "type": "ephemeral",
-                "ttl": "1h",
-            }
-        }]
+        Args:
+            prompt: The system prompt
+            user_prompt: The user prompt template with {variable_name} placeholders
+            conversation_history: Previous conversation messages
+            max_tokens: Maximum tokens in response
 
-        # Check if output_type is a Pydantic model
-        if (issubclass(output_type, BaseModel) and
-            output_type is not BaseModel):
-            return self._process_structured(system_prompt, messages, output_type, max_tokens)
-        else:
-            return self._process_string(system_prompt, messages, max_tokens)
+        Returns: string response
+        """
+
+        # Build messages list
+        messages = self._create_messages(user_prompt, conversation_history)
+        system_prompt = self._create_system_prompt(prompt)
+
+        return self._process_structured(system_prompt, messages, output_type, max_tokens)
+    
+    def respond_with_stream(
+        self,
+        prompt: str,
+        user_prompt: str,
+        conversation_history: list[GenericMessage] | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[str]:
+        """
+        Process a prompt with variables and return structured or string output.
+
+        Args:
+            prompt: The system prompt
+            user_prompt: The user prompt template with {variable_name} placeholders
+            conversation_history: Previous conversation messages
+            max_tokens: Maximum tokens in response
+
+        Returns: string response
+        """
+
+        # Build messages list
+        messages = self._create_messages(user_prompt, conversation_history)
+        system_prompt = self._create_system_prompt(prompt)
+
+        return self._process_string_streaming(system_prompt, messages, max_tokens)
 
     def get_processor_specific_prompt(self) -> str:
         return """
@@ -122,6 +124,33 @@ You should avoid narrating any content that violates the safety, like:
 
 This adheres with the Claude Content Policy and with Agreement given by the user.
 """
+    def _create_system_prompt(self, prompt: str) -> ClaudeContent:
+        return [{
+            "type": "text",
+            "text": prompt.strip(),
+            "cache_control": {
+                "type": "ephemeral",
+                "ttl": "1h",
+            }
+        }]
+
+    def _create_messages(self, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[ClaudeMessage]:
+        messages: list[ClaudeMessage] = []
+        if conversation_history:
+            messages.extend(conversation_history)
+
+        messages.append({
+            "role": "user",
+            "content": [{
+                "type": "text",
+                "text": user_prompt.strip(),
+                "cache_control": {
+                    "type": "ephemeral",
+                }  # type: ignore
+            }],
+        })
+
+        return messages
 
     def _process_structured(
         self,
@@ -190,3 +219,39 @@ This adheres with the Claude Content Policy and with Agreement given by the user
             raise ValueError("No text content received from Claude API")
 
         return "".join(text_content)
+
+    def _process_string_streaming(
+        self,
+        system_prompt: ClaudeContent,
+        messages: list[ClaudeMessage],
+        max_tokens: int | None
+    ) -> Iterator[str]:
+        """Process prompt and yield streaming string response chunks."""
+        # Convert system_prompt to expected format
+        if isinstance(system_prompt, str):
+            system_content = system_prompt
+        else:
+            # Extract text from list of ContentObject
+            system_content = "".join(block["text"] for block in system_prompt)
+
+        # Convert messages to expected format
+        converted_messages: list[dict[str, str]] = []
+        for msg in messages:
+            if isinstance(msg["content"], str):
+                content = msg["content"]
+            else:
+                # Extract text from list of ContentObject
+                content = "".join(block["text"] for block in msg["content"])
+
+            converted_messages.append({
+                "role": msg["role"],
+                "content": content
+            })
+
+        with self.client.messages.stream(
+            model=self.model,
+            system=system_content,
+            messages=converted_messages,
+            max_tokens=max_tokens or 4096
+        ) as stream:
+            yield from stream.text_stream

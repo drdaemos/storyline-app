@@ -31,26 +31,26 @@ class TestOpenAiPromptProcessor:
         assert processor.model == 'gpt-4'
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_string_output(self, mock_openai):
+    def test_respond_with_text_output(self, mock_openai):
         mock_response = Mock()
         mock_response.output_text = "This is a test response"
         mock_openai.return_value.responses.create.return_value = mock_response
 
         processor = OpenAiPromptProcessor(api_key='test-key')
-        result = processor.process("System prompt", "Test prompt", output_type=str)
+        result = processor.respond_with_text("System prompt", "Test prompt")
 
         assert result == "This is a test response"
         mock_openai.return_value.responses.create.assert_called_once()
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_structured_output(self, mock_openai):
+    def test_respond_with_model_output(self, mock_openai):
         mock_parsed_response = MockResponse(name="John", age=30, description="Test person")
         mock_response = Mock()
         mock_response.output_parsed = mock_parsed_response
         mock_openai.return_value.responses.parse.return_value = mock_response
 
         processor = OpenAiPromptProcessor(api_key='test-key')
-        result = processor.process("System prompt", "Test prompt", output_type=MockResponse)
+        result = processor.respond_with_model("System prompt", "Test prompt", MockResponse)
 
         assert isinstance(result, MockResponse)
         assert result.name == "John"
@@ -59,7 +59,7 @@ class TestOpenAiPromptProcessor:
         mock_openai.return_value.responses.parse.assert_called_once()
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_with_substituted_string_output(self, mock_openai):
+    def test_respond_with_text_with_substituted_string_output(self, mock_openai):
         mock_response = Mock()
         mock_response.output_text = "Hello Alice, you are 25 years old!"
         mock_openai.return_value.responses.create.return_value = mock_response
@@ -67,23 +67,23 @@ class TestOpenAiPromptProcessor:
         processor = OpenAiPromptProcessor(api_key='test-key')
         prompt = "Generate a greeting for Alice who is 25 years old"
 
-        result = processor.process("System prompt", prompt, output_type=str)
+        result = processor.respond_with_text("System prompt", prompt)
 
         assert result == "Hello Alice, you are 25 years old!"
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_string_empty_response(self, mock_openai):
+    def test_respond_with_text_empty_response(self, mock_openai):
         mock_response = Mock()
         mock_response.output_text = None
         mock_openai.return_value.responses.create.return_value = mock_response
 
         processor = OpenAiPromptProcessor(api_key='test-key')
-        
-        result = processor.process("System prompt", "Test prompt", output_type=str)
+
+        result = processor.respond_with_text("System prompt", "Test prompt")
         assert result is None
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_structured_failed_parsing(self, mock_openai):
+    def test_respond_with_model_failed_parsing(self, mock_openai):
         mock_response = Mock()
         mock_response.output_parsed = None
         mock_openai.return_value.responses.parse.return_value = mock_response
@@ -91,22 +91,22 @@ class TestOpenAiPromptProcessor:
         processor = OpenAiPromptProcessor(api_key='test-key')
 
         with pytest.raises(ValueError, match="Failed to parse structured response from OpenAI API"):
-            processor.process("System prompt", "Test prompt", output_type=MockResponse)
+            processor.respond_with_model("System prompt", "Test prompt", MockResponse)
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_with_custom_parameters(self, mock_openai):
+    def test_respond_with_text_custom_parameters(self, mock_openai):
         mock_response = Mock()
         mock_response.output_text = "Custom response"
         mock_openai.return_value.responses.create.return_value = mock_response
 
         processor = OpenAiPromptProcessor(api_key='test-key')
-        processor.process("System prompt", "Test prompt", max_tokens=100)
+        processor.respond_with_text("System prompt", "Test prompt", max_tokens=100)
 
         call_args = mock_openai.return_value.responses.create.call_args
         assert call_args[1]['max_output_tokens'] == 100
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
-    def test_process_with_conversation_history(self, mock_openai):
+    def test_respond_with_text_conversation_history(self, mock_openai):
         mock_response = Mock()
         mock_response.output_text = "Response with history"
         mock_openai.return_value.responses.create.return_value = mock_response
@@ -117,7 +117,7 @@ class TestOpenAiPromptProcessor:
             {"role": "assistant", "content": "Previous response"}
         ]
 
-        result = processor.process("System prompt", "Current prompt", conversation_history=conversation_history)
+        result = processor.respond_with_text("System prompt", "Current prompt", conversation_history=conversation_history)
 
         assert result == "Response with history"
 
@@ -134,3 +134,75 @@ class TestOpenAiPromptProcessor:
         assert input_messages[2]["content"] == "Previous response"
         assert input_messages[3]["role"] == "user"
         assert input_messages[3]["content"] == "Current prompt"
+
+    @patch('src.processors.openai_prompt_processor.OpenAI')
+    def test_respond_with_stream(self, mock_openai):
+        # Mock the streaming response chunks
+        chunk1 = Mock()
+        chunk1.choices = [Mock()]
+        chunk1.choices[0].delta = Mock()
+        chunk1.choices[0].delta.content = "Hello "
+
+        chunk2 = Mock()
+        chunk2.choices = [Mock()]
+        chunk2.choices[0].delta = Mock()
+        chunk2.choices[0].delta.content = "world"
+
+        chunk3 = Mock()
+        chunk3.choices = [Mock()]
+        chunk3.choices[0].delta = Mock()
+        chunk3.choices[0].delta.content = "!"
+
+        mock_openai.return_value.chat.completions.create.return_value = iter([chunk1, chunk2, chunk3])
+
+        processor = OpenAiPromptProcessor(api_key='test-key')
+        result = list(processor.respond_with_stream("System prompt", "Test prompt"))
+
+        assert result == ["Hello ", "world", "!"]
+        mock_openai.return_value.chat.completions.create.assert_called_once()
+
+    @patch('src.processors.openai_prompt_processor.OpenAI')
+    def test_respond_with_model_custom_parameters(self, mock_openai):
+        mock_parsed_response = MockResponse(name="John", age=30, description="Test person")
+        mock_response = Mock()
+        mock_response.output_parsed = mock_parsed_response
+        mock_openai.return_value.responses.parse.return_value = mock_response
+
+        processor = OpenAiPromptProcessor(api_key='test-key')
+        processor.respond_with_model("System prompt", "Test prompt", MockResponse, max_tokens=100)
+
+        call_args = mock_openai.return_value.responses.parse.call_args
+        assert call_args[1]['max_output_tokens'] == 100
+
+    @patch('src.processors.openai_prompt_processor.OpenAI')
+    def test_respond_with_model_conversation_history(self, mock_openai):
+        mock_parsed_response = MockResponse(name="John", age=30, description="Test person")
+        mock_response = Mock()
+        mock_response.output_parsed = mock_parsed_response
+        mock_openai.return_value.responses.parse.return_value = mock_response
+
+        processor = OpenAiPromptProcessor(api_key='test-key')
+        conversation_history: list[GenericMessage] = [
+            {"role": "user", "content": "Previous message"},
+            {"role": "assistant", "content": "Previous response"}
+        ]
+
+        result = processor.respond_with_model("System prompt", "Current prompt", MockResponse, conversation_history=conversation_history)
+
+        assert isinstance(result, MockResponse)
+        assert result.name == "John"
+
+        # Check that conversation history was included in the input
+        call_args = mock_openai.return_value.responses.parse.call_args
+        input_messages = call_args[1]['input']
+
+        assert len(input_messages) == 4  # 1 system + 2 history + 1 current
+        assert input_messages[0]["role"] == "developer"
+        assert input_messages[0]["content"] == "System prompt"
+        assert input_messages[1]["role"] == "user"
+        assert input_messages[1]["content"] == "Previous message"
+        assert input_messages[2]["role"] == "assistant"
+        assert input_messages[2]["content"] == "Previous response"
+        assert input_messages[3]["role"] == "user"
+        assert input_messages[3]["content"] == "Current prompt"
+
