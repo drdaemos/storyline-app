@@ -1,42 +1,27 @@
 # Storyline
 
-A CLI interactive LLM-driven roleplaying chat with a configurable NPC character.
+A CLI interactive LLM-driven roleplaying chat with a configurable NPC character - creating a stage for creative writing for small stories (usually with two main characters).
 
 ## Architecture
 
-Built on `haystack-ai`, utilizes an LLM-based pipeline consisting of the following components in a more-or-less sequential fashion:
+The system utilizes an LLM-based pipeline consisting of the following components in a more-or-less sequential fashion:
 
 1. Retrieve conversation memory (list of summarized user actions and character actions).
-2. Run a planning prompt (evaluate the user request to determine the action, intent, next steps to take and how it affects the character state).
-3. Update the character state.
-4. Feed that to the response prompt (generate the response text based on the action plan and character state).
-5. Update conversation memory with the data from current step and store it.
-6. Respond to user and await the next message.
+2. Run an evaluation prompt (evaluate the user request to determine the action, intent, next steps to take and how it affects the character state) - this has the full memory of previous evaluations and user messages.
+4. Feed last evaluation to the response prompt (generate the response text based on the action plan and character state).
+5. Update conversation memory with (user message, character evaluation, character response) exchange.
+6. Respond to user and await for the next message.
 
-## Problems and Ideas
+Every N exchanges the conversation memory is summarized and further plot beats are generated (this is where the storytelling operates on a level of act).
 
-**Problem**: Character tends to avoid moving the plot unless given a direct instruction or hint towards the next thing.
+Basically, pipeline operates on multiple levels:
 
-Solution 1: Create a separate "plot director / playwright" system to evaluate the response (or rather, an action plan) and loop the logic execution until the plan is moving the plot enough and is engaging.
+- Character works with the lowest level: dialogue, actions, internal thinking - following user input and their own idea of story beats the fit the scene
+- (every N exchanges) The scene is reevaluated based on the idea of point in narrative (e.g. is there a rising conflict / tension / escalation?). Act transition may be planned here. Next plot beats are generated for the following scene.
 
-Solution 2: Add a document store and a separate system to analyze (or search for?) existing stories and summarize them to extract plot points and character behaviour.
+## Things not yet explored
 
-*maybe use solution 1 to trigger solution 2*
-  
-------
-
-**Problem**: Character repeats the same phrases over and over again (which fit stylistically, but in a real interaction they won't happen multiple times)
-
-Solution 1: Add a document store (embedding-based?) to store last character responses and validate if the next response matches it too closely (at least partially) + rerun the query if detects repetition. How to score the similarity and set up the threshold?
-
-------
-
-Ideas:
-- Use cache_control attr to optimize token spending
-- Summarize every 2-3 roundtrips
-- Long term memory - with the same summarization prompt
-    - store as embeddings and provide MCP to search over it?
-    - https://github.com/asg017/sqlite-vec
-    - https://github.com/asg017/sqlite-rembed
-- Do not summarize separately, extract part of the response and accumulate + remove first added if context size overflows?
-
+- Story analysis on a longer span (summary covers only last exchanges, which is too small).
+- Using randomized external events to move the story and make both characters react
+- Using /commands to enable out of character / story transition actions (outside the default pipeline)
+- /rewind command to go back one step (remove last exchange from memory)

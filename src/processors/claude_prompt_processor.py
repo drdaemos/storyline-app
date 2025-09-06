@@ -1,6 +1,6 @@
 import os
 from collections.abc import Iterator
-from typing import TypeVar, overload
+from typing import TypeVar
 
 import anthropic
 from pydantic import BaseModel
@@ -59,7 +59,7 @@ class ClaudePromptProcessor(PromptProcessor):
         system_prompt = self._create_system_prompt(prompt)
 
         return self._process_string(system_prompt, messages, max_tokens)
-    
+
     def respond_with_model(
         self,
         prompt: str,
@@ -85,7 +85,7 @@ class ClaudePromptProcessor(PromptProcessor):
         system_prompt = self._create_system_prompt(prompt)
 
         return self._process_structured(system_prompt, messages, output_type, max_tokens)
-    
+
     def respond_with_stream(
         self,
         prompt: str,

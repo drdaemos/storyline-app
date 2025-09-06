@@ -181,7 +181,6 @@ Select a character to start chatting with them!
             session_id=session_id or "default-session",
             use_persistent_memory=use_persistent_memory,
             logs_dir=None,
-            processor_type="claude"
         )
 
     def _setup_character_session(self, character: Character) -> CharacterResponder:
@@ -197,7 +196,7 @@ Select a character to start chatting with them!
                 # Load the most recent session
                 most_recent_session = session_history[0]
                 dependencies = self._create_dependencies(
-                    character.name, 
+                    character.name,
                     session_id=most_recent_session["session_id"],
                     use_persistent_memory=True
                 )

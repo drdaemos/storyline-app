@@ -36,9 +36,26 @@ class ConversationMemory:
                     session_id TEXT NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
+                    offset INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Add offset column if it doesn't exist (migration)
+            cursor = conn.execute("PRAGMA table_info(messages)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'offset' not in columns:
+                conn.execute("ALTER TABLE messages ADD COLUMN offset INTEGER NOT NULL DEFAULT 0")
+                # Initialize offset values for existing records per session
+                conn.execute("""
+                    UPDATE messages
+                    SET offset = (
+                        SELECT COUNT(*) - 1
+                        FROM messages m2
+                        WHERE m2.session_id = messages.session_id
+                        AND m2.id <= messages.id
+                    )
+                """)
 
             # Create indexes for better query performance
             conn.execute("""
@@ -49,6 +66,11 @@ class ConversationMemory:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session_created_at
                 ON messages (session_id, created_at)
+            """)
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_session_offset
+                ON messages (session_id, offset)
             """)
 
             conn.commit()
@@ -81,14 +103,22 @@ class ConversationMemory:
             The ID of the inserted message
         """
         with sqlite3.connect(self.db_path) as conn:
+            # Get the next offset for this session
             cursor = conn.execute("""
-                INSERT INTO messages (character_id, session_id, role, content, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (character_id, session_id, role, content, datetime.now().isoformat()))
+                SELECT COALESCE(MAX(offset), -1) + 1 as next_offset
+                FROM messages
+                WHERE session_id = ?
+            """, (session_id,))
+            next_offset = cursor.fetchone()[0]
+
+            cursor = conn.execute("""
+                INSERT INTO messages (character_id, session_id, role, content, offset, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (character_id, session_id, role, content, next_offset, datetime.now().isoformat()))
 
             conn.commit()
-            return cursor.lastrowid
-        
+            return cursor.lastrowid or 0
+
     def add_messages(self, character_id: str, session_id: str, messages: list[GenericMessage]) -> int:
         """
         Add multiple messages to the conversation memory.
@@ -102,16 +132,33 @@ class ConversationMemory:
             The ID of the last inserted message
         """
         with sqlite3.connect(self.db_path) as conn:
+            # Get the current max offset for this session
+            cursor = conn.execute("""
+                SELECT COALESCE(MAX(offset), -1) as max_offset
+                FROM messages
+                WHERE session_id = ?
+            """, (session_id,))
+            max_offset = cursor.fetchone()[0]
+
+            # Prepare data with incremental offsets
+            data: list[tuple[str, str, str, str, int, str]] = []
+            for i, msg in enumerate(messages):
+                data.append((
+                    character_id,
+                    session_id,
+                    msg["role"],
+                    msg["content"],
+                    max_offset + 1 + i,
+                    datetime.now().isoformat()
+                ))
+
             cursor = conn.cursor()
             cursor.executemany("""
-                INSERT INTO messages (character_id, session_id, role, content, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, [
-                (character_id, session_id, msg["role"], msg["content"], datetime.now().isoformat())
-                for msg in messages
-            ])
+                INSERT INTO messages (character_id, session_id, role, content, offset, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, data)
             conn.commit()
-            return cursor.lastrowid
+            return cursor.lastrowid or 0
 
     def get_session_messages(self, session_id: str, limit: int | None = None) -> list[GenericMessage]:
         """
@@ -128,10 +175,10 @@ class ConversationMemory:
             conn.row_factory = sqlite3.Row
 
             query = """
-                SELECT role, content, created_at
+                SELECT role, content, offset, created_at
                 FROM messages
                 WHERE session_id = ?
-                ORDER BY created_at ASC
+                ORDER BY offset ASC
             """
             params = (session_id,)
 
@@ -202,13 +249,13 @@ class ConversationMemory:
             cursor = conn.execute("""
                 SELECT role, content
                 FROM (
-                    SELECT role, content, created_at
+                    SELECT role, content, offset
                     FROM messages
                     WHERE character_id = ? AND session_id = ?
-                    ORDER BY created_at DESC
+                    ORDER BY offset DESC
                     LIMIT ?
                 )
-                ORDER BY created_at ASC
+                ORDER BY offset ASC
             """, (character_id, session_id, limit))
 
             rows = cursor.fetchall()

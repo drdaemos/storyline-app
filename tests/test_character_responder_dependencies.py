@@ -16,7 +16,8 @@ def test_character_responder_dependencies_creation():
         personality="Helpful and direct",
         appearance="Digital assistant",
         relationships={"user": "helper"},
-        key_locations=["digital space"]
+        key_locations=["digital space"],
+        setting_description="Test digital environment"
     )
 
     # Create mock processors
@@ -58,10 +59,11 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
         personality="Standard assistant",
         appearance="Default appearance",
         relationships={"user": "client"},
-        key_locations=["office"]
+        key_locations=["office"],
+        setting_description="Default office environment"
     )
 
-    # Create dependencies manually 
+    # Create dependencies manually
     dependencies = CharacterResponderDependencies(
         primary_processor=MockPromptProcessor("Claude response"),
         backup_processor=MockPromptProcessor("Cohere response"),
@@ -69,7 +71,7 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
         chat_logger=None,
         session_id="default-session"
     )
-    
+
     # Create CharacterResponder with dependencies
     responder = CharacterResponder(character, dependencies)
 

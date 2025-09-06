@@ -302,3 +302,143 @@ class TestConversationMemory:
         """Test the close method (currently no-op)."""
         # Should not raise an exception
         self.memory.close()
+
+    def test_message_offset_incremental(self):
+        """Test that message offsets increment correctly within a session."""
+        session_id = self.memory.create_session(self.character_id)
+
+        # Add messages one by one
+        self.memory.add_message(self.character_id, session_id, "user", "Message 0")
+        self.memory.add_message(self.character_id, session_id, "assistant", "Message 1")
+        self.memory.add_message(self.character_id, session_id, "user", "Message 2")
+
+        # Verify offsets by checking database directly
+        import sqlite3
+        with sqlite3.connect(self.memory.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT role, content, offset
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY offset ASC
+            """, (session_id,))
+            rows = cursor.fetchall()
+
+        assert len(rows) == 3
+        assert rows[0]["offset"] == 0
+        assert rows[0]["content"] == "Message 0"
+        assert rows[1]["offset"] == 1
+        assert rows[1]["content"] == "Message 1"
+        assert rows[2]["offset"] == 2
+        assert rows[2]["content"] == "Message 2"
+
+    def test_message_offset_across_sessions(self):
+        """Test that offsets are isolated per session."""
+        session1 = self.memory.create_session(self.character_id)
+        session2 = self.memory.create_session(self.character_id)
+
+        # Add messages to both sessions
+        self.memory.add_message(self.character_id, session1, "user", "Session1 Msg0")
+        self.memory.add_message(self.character_id, session2, "user", "Session2 Msg0")
+        self.memory.add_message(self.character_id, session1, "assistant", "Session1 Msg1")
+        self.memory.add_message(self.character_id, session2, "assistant", "Session2 Msg1")
+
+        # Check offsets for session1
+        import sqlite3
+        with sqlite3.connect(self.memory.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT content, offset
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY offset ASC
+            """, (session1,))
+            session1_rows = cursor.fetchall()
+
+            cursor = conn.execute("""
+                SELECT content, offset
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY offset ASC
+            """, (session2,))
+            session2_rows = cursor.fetchall()
+
+        # Each session should have offsets starting from 0
+        assert len(session1_rows) == 2
+        assert session1_rows[0]["offset"] == 0
+        assert session1_rows[1]["offset"] == 1
+
+        assert len(session2_rows) == 2
+        assert session2_rows[0]["offset"] == 0
+        assert session2_rows[1]["offset"] == 1
+
+    def test_add_messages_offset_batch(self):
+        """Test that add_messages correctly handles offset incrementation."""
+        session_id = self.memory.create_session(self.character_id)
+
+        # Add an initial message
+        self.memory.add_message(self.character_id, session_id, "user", "Initial message")
+
+        # Add multiple messages at once
+        batch_messages = [
+            {"role": "assistant", "content": "Batch message 1"},
+            {"role": "user", "content": "Batch message 2"},
+            {"role": "assistant", "content": "Batch message 3"}
+        ]
+        self.memory.add_messages(self.character_id, session_id, batch_messages)
+
+        # Verify offsets
+        import sqlite3
+        with sqlite3.connect(self.memory.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT content, offset
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY offset ASC
+            """, (session_id,))
+            rows = cursor.fetchall()
+
+        assert len(rows) == 4
+        assert rows[0]["offset"] == 0
+        assert rows[0]["content"] == "Initial message"
+        assert rows[1]["offset"] == 1
+        assert rows[1]["content"] == "Batch message 1"
+        assert rows[2]["offset"] == 2
+        assert rows[2]["content"] == "Batch message 2"
+        assert rows[3]["offset"] == 3
+        assert rows[3]["content"] == "Batch message 3"
+
+    def test_message_ordering_by_offset(self):
+        """Test that messages are retrieved in correct order by offset."""
+        session_id = self.memory.create_session(self.character_id)
+
+        # Add messages
+        self.memory.add_message(self.character_id, session_id, "user", "First")
+        self.memory.add_message(self.character_id, session_id, "assistant", "Second")
+        self.memory.add_message(self.character_id, session_id, "user", "Third")
+
+        # Get messages and verify order
+        messages = self.memory.get_session_messages(session_id)
+
+        assert len(messages) == 3
+        assert messages[0]["content"] == "First"
+        assert messages[1]["content"] == "Second"
+        assert messages[2]["content"] == "Third"
+
+    def test_get_recent_messages_offset_ordering(self):
+        """Test that get_recent_messages uses offset for correct ordering."""
+        session_id = self.memory.create_session(self.character_id)
+
+        # Add many messages
+        for i in range(10):
+            self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
+
+        # Get recent messages
+        recent = self.memory.get_recent_messages(self.character_id, session_id, limit=3)
+
+        assert len(recent) == 3
+        # Should get the last 3 messages (7, 8, 9) in chronological order
+        assert recent[0]["content"] == "Message 7"
+        assert recent[1]["content"] == "Message 8"
+        assert recent[2]["content"] == "Message 9"

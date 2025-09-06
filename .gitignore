@@ -15,4 +15,4 @@ golden_dataset/**
 characters/**
 logs/**
 memory/**
-!characters/eldric.yaml
+!characters/morgan.yaml

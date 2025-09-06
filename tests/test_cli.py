@@ -26,7 +26,8 @@ class TestInteractiveChatCLI:
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
-            key_locations=["Test Location"]
+            key_locations=["Test Location"],
+            setting_description="Test environment"
         )
 
         # Test without responder (should return no responder message)
@@ -87,7 +88,8 @@ class TestInteractiveChatCLI:
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
-            key_locations=["Test Location"]
+            key_locations=["Test Location"],
+            setting_description="Test environment"
         )
 
         with patch.object(cli.console, "print") as mock_print:
@@ -108,7 +110,8 @@ class TestInteractiveChatCLI:
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
-            key_locations=["Test Location"]
+            key_locations=["Test Location"],
+            setting_description="Test environment"
         )
 
         with patch.object(cli.console, "print"):
@@ -134,6 +137,13 @@ class TestInteractiveChatCLI:
             "role": 'assistant',
             "content": 'response'
         }]
+        mock_memory_instance.get_session_messages.return_value = [{
+            "role": 'user',
+            "content": 'test'
+        },{
+            "role": 'assistant',
+            "content": 'response'
+        }]
 
         # Mock both ConversationMemory constructors to return the same mock instance
         mock_memory_class.return_value = mock_memory_instance
@@ -147,7 +157,8 @@ class TestInteractiveChatCLI:
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
-            key_locations=["Test Location"]
+            key_locations=["Test Location"],
+            setting_description="Test environment"
         )
 
         # Mock the session choice to return "continue"
@@ -179,6 +190,7 @@ class TestInteractiveChatCLI:
         # Create a separate mock memory instance for dependencies (after clear)
         mock_deps_memory_instance = Mock()
         mock_deps_memory_instance.get_recent_messages.return_value = []
+        mock_deps_memory_instance.get_session_messages.return_value = []  # Add for offset tracking
 
         # Mock both ConversationMemory constructors
         mock_memory_class.return_value = mock_memory_instance
@@ -192,7 +204,8 @@ class TestInteractiveChatCLI:
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
-            key_locations=["Test Location"]
+            key_locations=["Test Location"],
+            setting_description="Test environment"
         )
 
         with patch.object(cli.console, "print"), \

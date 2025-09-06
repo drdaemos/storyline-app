@@ -11,6 +11,7 @@ class CharacterResponder:
     """Character responder that uses PromptProcessor to handle character interactions with XML tag parsing."""
     RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 10
     EPOCH_MESSAGES = 3
+    PROPAGATED_MEMORY_SIZE = RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * EPOCH_MESSAGES
 
     def __init__(self, character: Character, dependencies: CharacterResponderDependencies) -> None:
         """
@@ -28,6 +29,7 @@ class CharacterResponder:
         self.processor = dependencies.primary_processor
         self.backup_processor = dependencies.backup_processor
         self.persistent_memory = dependencies.conversation_memory
+        self.summary_memory = dependencies.summary_memory
         self.chat_logger = dependencies.chat_logger
         self.session_id = dependencies.session_id
 
@@ -37,12 +39,16 @@ class CharacterResponder:
             self.memory = self.persistent_memory.get_recent_messages(
                 character.name,
                 self.session_id,
-                limit=self.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * self.EPOCH_MESSAGES
+                limit=self.PROPAGATED_MEMORY_SIZE * 10 # fetch more to do an efficient summarization
             )
+            # Track current message offset for this session
+            self._current_message_offset = self._get_current_message_offset()
         else:
             self.memory: list[GenericMessage] = []
+            self._current_message_offset = 0
 
-        self.memory_summary = ""
+        # Load existing summaries and concatenate them
+        self.memory_summary = self._load_existing_summaries()
         self.status_update = ""
         self.user_name = ""
         self.plans = ""
@@ -66,10 +72,8 @@ class CharacterResponder:
             self.chat_logger.log_message("USER", user_message)
 
         # Compress / summarize memory if too many messages
-        if len(self.memory) >= self.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * self.EPOCH_MESSAGES:
-            summary_msg: GenericMessage = { "role": "user", "content": f"Summary of previous interactions: {self.memory_summary}"}
-            self.memory_summary = self.get_memory_summary([summary_msg] + self.memory)
-            self.memory = self.memory[-self.EPOCH_MESSAGES:]
+        if self._should_trigger_summarization(user_message):
+            self.compress_memory()
             self.plans = self.get_character_plans()
 
         # Get scenario evaluation
@@ -102,6 +106,8 @@ class CharacterResponder:
         # Save to persistent memory if enabled
         if self.persistent_memory and self.session_id:
             self.persistent_memory.add_messages(self.character.name, self.session_id, [user_msg, eval_msg, response_msg])
+            # Update current message offset
+            self._current_message_offset += 3
 
         if self.chat_logger:
             self.chat_logger.log_message("-----", "")
@@ -111,28 +117,30 @@ class CharacterResponder:
     def get_evaluation(self, user_message: str) -> str:
         fallback = False
         input: EvaluationInput = {
-            "memory_summary": self.memory_summary,
+            "summary": self.memory_summary,
             "plans": self.plans,
             "user_message": user_message,
             "character": self.character
         }
 
         # Process the prompt
-        evaluation = CharacterPipeline.get_evaluation(
-            processor=self.processor,
-            input=input,
-            memory=self.memory
-        )
-
-        if evaluation is None:
+        try:
+            evaluation = CharacterPipeline.get_evaluation(
+                processor=self.processor,
+                input=input,
+                memory=self.memory[-self.PROPAGATED_MEMORY_SIZE:]  # pass only the most recent messages for context
+            )
+            if evaluation is None:
+                raise ValueError("No evaluation from primary processor.")
+        except Exception as e: # type: ignore
             fallback = True
             evaluation = CharacterPipeline.get_evaluation(
                 processor=self.backup_processor,
                 input=input,
-                memory=self.memory
+                memory=self.memory[-self.PROPAGATED_MEMORY_SIZE:]  # pass only the most recent messages for context
             )
             if evaluation is None:
-                raise ValueError("Failed to get evaluation from both primary and backup processors.")
+                raise ValueError("No evaluation from both primary and backup processor.")
 
         if self.chat_logger:
             self.chat_logger.log_message(f"ASSISTANT (EVAL) {"FALLBACK" if fallback else "NORMAL"}", evaluation)
@@ -142,19 +150,21 @@ class CharacterResponder:
     def get_character_plans(self) -> str:
         fallback = False
         input: PlanGenerationInput = {
-            "character_name": self.character.name,
+            "character": self.character,
             "user_name": self.user_name,
             "summary": self.memory_summary,
             "scenario_state": self.status_update
         }
 
         # Process the prompt
-        plans = CharacterPipeline.get_character_plans(
-            processor=self.processor,
-            input=input
-        )
-
-        if plans is None:
+        try:
+            plans = CharacterPipeline.get_character_plans(
+                processor=self.processor,
+                input=input
+            )
+            if plans is None:
+                raise ValueError("No plans from primary processor.")
+        except Exception as e: # type: ignore
             fallback = True
             plans = CharacterPipeline.get_character_plans(
                 processor=self.backup_processor,
@@ -172,6 +182,7 @@ class CharacterResponder:
 
         fallback = False
         input: CharacterResponseInput = {
+            "summary": self.memory_summary,
             "previous_response": self.memory[-1]["content"] if self.memory else "",
             "user_message": user_message,
             "continuation_option": continuation_option,
@@ -181,12 +192,14 @@ class CharacterResponder:
         }
 
         # Process the prompt
-        stream = CharacterPipeline.get_character_response(
-            processor=self.processor,
-            input=input
-        )
-
-        if stream is None:
+        try:
+            stream = CharacterPipeline.get_character_response(
+                processor=self.processor,
+                input=input
+            )
+            if stream is None:
+                raise ValueError("No response stream from primary processor.")
+        except Exception as e: # type: ignore
             fallback = True
             stream = CharacterPipeline.get_character_response(
                 processor=self.backup_processor,
@@ -207,10 +220,75 @@ class CharacterResponder:
         return response
 
     def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> str:
-        return CharacterPipeline.get_memory_summary(
-            processor=self.processor,
-            memory=conversation_memory
-        )
+        try:
+            summary = CharacterPipeline.get_memory_summary(
+                processor=self.processor,
+                memory=conversation_memory
+            )
+        except Exception as e: # type: ignore
+            summary = CharacterPipeline.get_memory_summary(
+                processor=self.backup_processor,
+                memory=conversation_memory
+            )
+
+        if self.chat_logger:
+            self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary)
+
+        return summary
+
+    def compress_memory(self) -> None:
+        """Compress the current memory using the summarization mechanism."""
+        if not self.memory:
+            return
+
+        # Calculate offset range for the messages being summarized
+        messages_to_summarize = self.memory[:-self.EPOCH_MESSAGES]
+        if not messages_to_summarize:
+            return
+
+        # Calculate start and end offsets for the messages being summarized
+        start_offset = self._current_message_offset - len(self.memory)
+        end_offset = self._current_message_offset - self.EPOCH_MESSAGES - 1
+
+        summary_msg: GenericMessage = { "role": "user", "content": f"Summary of previous interactions: {self.memory_summary}"}
+        new_summary = self.get_memory_summary([summary_msg] + self.memory)
+
+        # Store the summary with offset range in SummaryMemory
+        if self.summary_memory and self.session_id:
+            self.summary_memory.add_summary(
+                character_id=self.character.name,
+                session_id=self.session_id,
+                summary=new_summary,
+                start_offset=max(0, start_offset),  # Ensure non-negative
+                end_offset=max(0, end_offset)       # Ensure non-negative
+            )
+
+        self.memory_summary = new_summary
+        self.memory = self.memory[-self.EPOCH_MESSAGES:]
+
+    def _should_trigger_summarization(self, user_message: str) -> bool:
+        """
+        Determine if memory summarization should be triggered based on offset difference.
+
+        Compares the current message offset with the end offset of the most recent summary.
+        If the difference exceeds the trigger threshold, summarization is triggered.
+        """
+        if not self.summary_memory or not self.session_id:
+            # Fallback to memory size if summary memory is not available
+            return len(self.memory) >= self.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * self.EPOCH_MESSAGES
+
+        # Get the maximum processed offset (end of last summary)
+        max_processed_offset = self.summary_memory.get_max_processed_offset(self.session_id)
+
+        # If no summaries exist, assume we start from offset -1 (so first message is offset 0)
+        if max_processed_offset is None:
+            max_processed_offset = -1
+
+        # Calculate messages since last summary
+        messages_since_last_summary = self._current_message_offset - max_processed_offset - 1
+
+        # Trigger if we have enough new messages since the last summary
+        return messages_since_last_summary >= self.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * self.EPOCH_MESSAGES
 
     def _parse_xml_tag(self, response_text: str, tag: str) -> str | None:
         """
@@ -261,7 +339,11 @@ class CharacterResponder:
             return False
 
         self.persistent_memory.delete_session(self.session_id)
+        if self.summary_memory:
+            self.summary_memory.delete_session_summaries(self.session_id)
         self.memory = []
+        self.memory_summary = ""
+        self._current_message_offset = 0
         return True
 
     def create_new_session(self) -> str | None:
@@ -276,6 +358,43 @@ class CharacterResponder:
 
         self.session_id = self.persistent_memory.create_session(self.character.name)
         self.memory = []
+        self._current_message_offset = 0
         return self.session_id
+
+    def _get_current_message_offset(self) -> int:
+        """
+        Get the current message offset for the session.
+
+        Returns:
+            Current message offset (total messages in session)
+        """
+        if not self.persistent_memory or not self.session_id:
+            return 0
+
+        # Get all messages for this session to determine current offset
+        all_messages = self.persistent_memory.get_session_messages(self.session_id)
+        return len(all_messages)
+
+    def _load_existing_summaries(self) -> str:
+        """
+        Load existing summaries for the current session and concatenate them.
+
+        Returns:
+            Concatenated summary text from all existing summaries
+        """
+        if not self.summary_memory or not self.session_id:
+            return ""
+
+        # Get all summaries for this session
+        summaries = self.summary_memory.get_session_summaries(self.session_id)
+        if not summaries:
+            return ""
+
+        # Concatenate all summary texts
+        summary_parts: list[str] = []
+        for summary in summaries:
+            summary_parts.append(f"Summary (messages {summary['start_offset']}-{summary['end_offset']}): {summary['summary']}")
+
+        return "\n".join(summary_parts)
 
 

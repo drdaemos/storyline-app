@@ -14,6 +14,7 @@ class Character:
     appearance: str  # Physical description
     relationships: dict[str, str]  # Relationships with other characters (e.g., "user": "description")
     key_locations: list[str]  # Important locations for the character
+    setting_description: str  # Description of the world/setting the character exists in
 
     @classmethod
     def from_dict(cls, data: dict[str, str | Any]) -> "Character":
@@ -29,5 +30,6 @@ class Character:
             personality=data.get('personality', ''),
             appearance=data.get('appearance', ''),
             relationships=relationships,
-            key_locations=key_locations
+            key_locations=key_locations,
+            setting_description=data.get('setting_description', '')
         )

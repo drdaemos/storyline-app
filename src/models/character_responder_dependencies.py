@@ -4,6 +4,7 @@ from pathlib import Path
 from src.chat_logger import ChatLogger
 from src.conversation_memory import ConversationMemory
 from src.models.prompt_processor import PromptProcessor
+from src.summary_memory import SummaryMemory
 
 
 @dataclass
@@ -13,6 +14,7 @@ class CharacterResponderDependencies:
     primary_processor: PromptProcessor
     backup_processor: PromptProcessor
     conversation_memory: ConversationMemory | None = None
+    summary_memory: SummaryMemory | None = None
     chat_logger: ChatLogger | None = None
     session_id: str | None = None
 
@@ -53,6 +55,7 @@ class CharacterResponderDependencies:
 
         # Setup memory if requested
         conversation_memory = ConversationMemory() if use_persistent_memory else None
+        summary_memory = SummaryMemory() if use_persistent_memory else None
 
         # Setup chat logger
         chat_logger = ChatLogger(character_name, session_id, logs_dir)
@@ -62,6 +65,7 @@ class CharacterResponderDependencies:
             primary_processor=primary_processor,
             backup_processor=backup_processor,
             conversation_memory=conversation_memory,
+            summary_memory=summary_memory,
             chat_logger=chat_logger,
             session_id=session_id
         )

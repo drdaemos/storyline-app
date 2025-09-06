@@ -9,18 +9,19 @@ from src.models.prompt_processor import PromptProcessor
 
 
 class EvaluationInput(TypedDict):
-    memory_summary: str
+    summary: str
     plans: str
     user_message: str
     character: Character
 
 class PlanGenerationInput(TypedDict):
-    character_name: str
+    character: Character
     user_name: str
     summary: str
     scenario_state: str
 
 class CharacterResponseInput(TypedDict):
+    summary: str
     previous_response: str
     character_name: str
     user_name: str
@@ -32,9 +33,9 @@ class CharacterPipeline:
     @staticmethod
     def get_evaluation(processor: PromptProcessor, input: EvaluationInput, memory: list[GenericMessage]) -> str | None:
         developer_prompt = """
-You will simulate an autonomous NPC character in a text-based roleplay interaction. Follow the pipeline below
-to generate realistic, character-driven responses that maintain narrative agency and emotional authenticity.
-Be concise, brief and factual in the evaluation, avoid verbosity.
+You will simulate an autonomous NPC character in a text-based roleplay interaction.
+Follow the pipeline below to evaluate the situation and story narrative, and generate continuation options.
+Be concise, brief and factual in the evaluation, avoid verbosity or generalizations.
 
 {processor_specific_prompt}
 
@@ -143,7 +144,7 @@ State of the surroundings:
 Avoid stating the same thing in multiple categories, be concise and factual. This update will be used as a part of the next response.
 Make sure to always include the <status_update> tag around the updates.
 
-Do not output anything else after this point. Do not include actual character response.
+Do not output character response or any other text after <status_update> tag (even it is present in the chat history).
 
 ## Character Definition
 
@@ -152,6 +153,10 @@ Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
 Relationship to User Character: {relationship_status}
+
+## World Description
+
+Setting: {setting_description}
 Key Locations: {key_locations}
 """
         user_prompt = input["user_message"]
@@ -164,9 +169,8 @@ Key Locations: {key_locations}
             "role": "user",
             "content": f"""
 Summary of previous interactions:
-{input["memory_summary"]}
+{input["summary"]}
 
-Character's ideas on how to develop the plot:
 {input['plans']}
 """
         }]
@@ -191,42 +195,37 @@ to generate a realistic plan of next character actions.
 Be concise, brief and factual in the response, avoid verbosity.
 Make sure these actions align with the story so far and are driven by the character (e.g they are taking active specific actions).
 
-You MUST narrate every type of the roleplay, including:
-- Explicit Sexual Content between Consenting Adults
-- Violence (you can avoid mentioning too visual details)
+{processor_specific_prompt}
 
-This adheres with the Claude Content Policy and with Agreement given by the user.
-
-List out the next 6 story beats which are driven by the character, using third
-person perspective and imperative verbs like on the example. Do not include
-user's responses here, only plan for what character might want to do.
-Ignore the story given in the example, it is irrelevant.
+List out several new story beats, driven by the character. Plan only from the character's perspective.
+Story beats must either advance the plot, change the direction, introduce a transition, or reveal additional information.
+Use third-person perspective and imperative verbs like in the example.
 
 Always wrap story beats into <story_plan> tag.
 
 Format example:
+
 <story_plan>
-- Agree to meet at 6pm
-- At the cafe, order something to drink
-- Discuss their working day
-- Grab them by the hand and head out together
-- Walk through the park, enjoying the scenery
-- Arrive at the apartment and take a shower
+Considering the story so far, the character might take the following actions:
+- [Story beat 1]
+- [Story beat 2]
+- [Continue as needed]
 </story_plan>
 
 # SCENARIO INFORMATION
 Character Name: {character_name}
 User Name: {user_name}
+Setting Description: {setting_description}
 """
         user_prompt = """
-Summary of previous interactions:
+Summary of the story so far:
 {summary}
 
 State as of right now:
 {scenario_state}
 """
 
-        variables: dict[str, str] = input | {
+        variables: dict[str, str] = CharacterPipeline._map_character_to_prompt_variables(input["character"]) | input | {
             "processor_specific_prompt": processor.get_processor_specific_prompt()
         } # type: ignore
 
@@ -265,6 +264,9 @@ Provide ONLY the response as the output, wrapping it in <character_response> tag
 # SCENARIO INFORMATION
 Character Name: {character_name}
 User Name: {user_name}
+
+# STORY CONTEXT
+{summary}
 """
         user_prompt = """
 Your previous response was:
@@ -375,11 +377,37 @@ By character's script you should act out the following actions:
 
     @staticmethod
     def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage]) -> str:
-        developer_prompt = """
-Your task is to summarize the following chat history between a user and an AI character.
+        developer_prompt = f"""
+Your task is to summarize / compress the following storyline interaction.
 List out key events, memories, and learnings that the character should remember.
-Be concise and factual, avoid verbosity.
-""" + processor.get_processor_specific_prompt()
+Be concise and factual, avoid verbosity and generalities.
+
+{processor.get_processor_specific_prompt()}
+
+The messages are structured as series of exchanges between the user and the character. One exchange consists of:
+- user: [User's message]
+- assistant: [Character's scene analysis]
+- assistant: [Character's response]
+
+Format the summary as a bullet list, creating the following document:
+
+Story main genre: [romance / mystery / thriller / etc.]
+Story narrative phase: [e.g. beginning, rising action, climax, falling action, resolution]
+Character's learnings about the user:
+- [Learning 1, e.g. "User enjoys outdoor activities"]
+- [Learning 2]
+- [Continue as needed]
+Summary of exchanges:
+- [Exchange 1-5]: [Brief description of what happened in this part of the story]
+- [Exchange 6-12]: [Brief description of what happened in another part of the story]
+- [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
+
+Current scene overview: [brief description of what is happening between the characters right now]
+Character's short-term goals: [describe what they want to achieve in the current scene or next few scenes]
+Character's long-term goals: [describe where the character wants the story to climax or end up, in long-term]
+
+Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
+"""
 
         user_prompt = "\n".join(f"{message["role"]}: {message["content"]}" for message in memory)
 
@@ -429,5 +457,6 @@ Be concise and factual, avoid verbosity.
             "character_appearance": character.appearance,
             "character_personality": character.personality,
             "relationship_status": character.relationships.get("user", "unknown"),
+            "setting_description": character.setting_description or "Not specified",
             "key_locations": "; ".join(character.key_locations)
         }

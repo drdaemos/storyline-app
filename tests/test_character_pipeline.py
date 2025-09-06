@@ -1,6 +1,8 @@
-from typing import Any, Iterator, TypeVar
+from collections.abc import Iterator
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
+
 from src.chat_logger import ChatLogger
 from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
 from src.models.character import Character
@@ -24,7 +26,7 @@ class MockPromptProcessor(PromptProcessor):
         """Set the logger for this processor."""
         self.logger = logger
 
-    
+
     def respond_with_model(
         self,
         prompt: str,
@@ -50,7 +52,7 @@ class MockPromptProcessor(PromptProcessor):
             "max_tokens": max_tokens
         })
         return self.response # type: ignore
-    
+
     def respond_with_stream(
         self,
         prompt: str,
@@ -67,8 +69,7 @@ class MockPromptProcessor(PromptProcessor):
         })
         if isinstance(self.response, str):
             # Convert string to iterator by yielding character by character (to simulate streaming)
-            for char in self.response:
-                yield char
+            yield from self.response
         else:
             yield from self.response
 
@@ -83,7 +84,8 @@ class TestCharacterPipeline:
             personality="Sharp, analytical, slightly cynical but caring",
             appearance="Tall, auburn hair, piercing green eyes",
             relationships={"user": "professional acquaintance"},
-            key_locations=["downtown office", "crime scenes", "local diner"]
+            key_locations=["downtown office", "crime scenes", "local diner"],
+            setting_description="Urban detective story setting"
         )
 
     def test_get_evaluation_success(self):
@@ -130,7 +132,7 @@ class TestCharacterPipeline:
         mock_processor = MockPromptProcessor(evaluation_response)
 
         input_data: EvaluationInput = {
-            "memory_summary": "Previous case discussion",
+            "summary": "Previous case discussion",
             "plans": "Investigate the missing person case",
             "user_message": "I need your help with something important",
             "character": self.test_character
@@ -171,7 +173,7 @@ class TestCharacterPipeline:
         mock_processor = MockPromptProcessor(evaluation_response)
 
         input_data: EvaluationInput = {
-            "memory_summary": "",
+            "summary": "",
             "plans": "",
             "user_message": "Test message",
             "character": self.test_character
@@ -197,7 +199,7 @@ class TestCharacterPipeline:
         mock_processor = MockPromptProcessor(plans_response)
 
         input_data: PlanGenerationInput = {
-            "character_name": "Alice",
+            "character": self.test_character,
             "user_name": "John",
             "summary": "Missing person case discussion",
             "scenario_state": "Office meeting, case files on desk"
@@ -229,7 +231,7 @@ class TestCharacterPipeline:
         mock_processor = MockPromptProcessor(plans_response)
 
         input_data: PlanGenerationInput = {
-            "character_name": "Alice",
+            "character": self.test_character,
             "user_name": "John",
             "summary": "Test summary",
             "scenario_state": "Test state"
@@ -256,6 +258,7 @@ class TestCharacterPipeline:
         mock_processor = MockPromptProcessor(character_response)
 
         input_data: CharacterResponseInput = {
+            "summary": "Discussion about missing person case",
             "previous_response": "I understand you need help",
             "character_name": "Alice",
             "user_name": "John",
@@ -288,6 +291,7 @@ class TestCharacterPipeline:
         mock_processor = MockPromptProcessor(response_text)
 
         input_data: CharacterResponseInput = {
+            "summary": "Discussion about missing person case",
             "previous_response": "",
             "character_name": "Alice",
             "user_name": "John",
@@ -405,7 +409,8 @@ class TestCharacterPipeline:
             "character_appearance": "Tall, auburn hair, piercing green eyes",
             "character_personality": "Sharp, analytical, slightly cynical but caring",
             "relationship_status": "professional acquaintance",
-            "key_locations": "downtown office; crime scenes; local diner"
+            "key_locations": "downtown office; crime scenes; local diner",
+            "setting_description": "Urban detective story setting"
         }
 
         assert result == expected
@@ -419,7 +424,8 @@ class TestCharacterPipeline:
             personality="Analytical",
             appearance="Average height",
             relationships={},  # No user relationship
-            key_locations=["office"]
+            key_locations=["office"],
+            setting_description="Modern office environment"
         )
 
         result = CharacterPipeline._map_character_to_prompt_variables(character)
@@ -435,7 +441,8 @@ class TestCharacterPipeline:
             personality="Analytical",
             appearance="Average height",
             relationships={"user": "colleague"},
-            key_locations=[]  # Empty locations
+            key_locations=[],  # Empty locations
+            setting_description="Modern office environment"
         )
 
         result = CharacterPipeline._map_character_to_prompt_variables(character)

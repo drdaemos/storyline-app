@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Iterator, TypeVar
+from collections.abc import Iterator
+from typing import TypeVar
 
 from pydantic import BaseModel
 
