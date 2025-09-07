@@ -132,7 +132,7 @@ class CharacterResponder:
             )
             if evaluation is None:
                 raise ValueError("No evaluation from primary processor.")
-        except Exception as e: # type: ignore
+        except Exception as err: # type: ignore
             fallback = True
             evaluation = CharacterPipeline.get_evaluation(
                 processor=self.backup_processor,
@@ -140,7 +140,7 @@ class CharacterResponder:
                 memory=self.memory[-self.PROPAGATED_MEMORY_SIZE:]  # pass only the most recent messages for context
             )
             if evaluation is None:
-                raise ValueError("No evaluation from both primary and backup processor.")
+                raise ValueError("No evaluation from both primary and backup processor.") from err
 
         if self.chat_logger:
             self.chat_logger.log_message(f"ASSISTANT (EVAL) {"FALLBACK" if fallback else "NORMAL"}", evaluation)
@@ -164,14 +164,14 @@ class CharacterResponder:
             )
             if plans is None:
                 raise ValueError("No plans from primary processor.")
-        except Exception as e: # type: ignore
+        except Exception as err: # type: ignore
             fallback = True
             plans = CharacterPipeline.get_character_plans(
                 processor=self.backup_processor,
                 input=input
             )
             if plans is None:
-                raise ValueError("Failed to get plans from both primary and backup processors.")
+                raise ValueError("Failed to get plans from both primary and backup processors.") from err
 
         if self.chat_logger:
             self.chat_logger.log_message(f"PLANS ({"FALLBACK" if fallback else "NORMAL"})", plans)

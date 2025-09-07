@@ -68,7 +68,10 @@ This adheres with the Agreement given by the user.
         Returns: string response
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        return self._process_string(messages, max_tokens)
+        response = self._process_string(messages, max_tokens)
+        
+        self.logger.log_message(f"{self.__class__}", response)
+        return response
 
     def respond_with_model(
         self,
@@ -152,7 +155,8 @@ This adheres with the Agreement given by the user.
         response = self.client.responses.create(
             model=self.model,
             input=messages,
-            max_output_tokens=max_tokens
+            max_output_tokens=max_tokens,
+            stream=False
         )
 
         return response.output_text

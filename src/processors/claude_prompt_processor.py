@@ -58,7 +58,10 @@ class ClaudePromptProcessor(PromptProcessor):
         messages = self._create_messages(user_prompt, conversation_history)
         system_prompt = self._create_system_prompt(prompt)
 
-        return self._process_string(system_prompt, messages, max_tokens)
+        response = self._process_string(system_prompt, messages, max_tokens)
+        
+        self.logger.log_message("claude", response)
+        return response
 
     def respond_with_model(
         self,

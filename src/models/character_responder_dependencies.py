@@ -4,6 +4,10 @@ from pathlib import Path
 from src.chat_logger import ChatLogger
 from src.conversation_memory import ConversationMemory
 from src.models.prompt_processor import PromptProcessor
+from src.processors.claude_prompt_processor import ClaudePromptProcessor
+from src.processors.cohere_prompt_processor import CoherePromptProcessor
+from src.processors.openai_prompt_processor import OpenAiPromptProcessor
+from src.processors.openrouter_prompt_processor import OpenRouterPromptProcessor
 from src.summary_memory import SummaryMemory
 
 
@@ -40,18 +44,22 @@ class CharacterResponderDependencies:
         Returns:
             CharacterResponderDependencies instance with default setup
         """
-        from src.processors.claude_prompt_processor import ClaudePromptProcessor
-        from src.processors.cohere_prompt_processor import CoherePromptProcessor
 
         # Setup processors
-        if processor_type.lower() == "cohere":
-            primary_processor = CoherePromptProcessor()
-            backup_processor = ClaudePromptProcessor()  # Use Claude as backup for Cohere
-        elif processor_type.lower() == "claude":
-            primary_processor = ClaudePromptProcessor()
-            backup_processor = CoherePromptProcessor()  # Use Cohere as backup for Claude
-        else:
-            raise ValueError(f"Unsupported processor type: {processor_type}. Use 'claude' or 'cohere'.")
+        match processor_type.lower():
+            case "cohere":
+                primary_processor = CoherePromptProcessor()
+                backup_processor = OpenRouterPromptProcessor()
+            case "claude":
+                primary_processor = ClaudePromptProcessor()
+                backup_processor = OpenRouterPromptProcessor()
+            case "deepseek":
+                primary_processor = OpenRouterPromptProcessor()
+                backup_processor = ClaudePromptProcessor()
+            case "gpt":
+                primary_processor = OpenAiPromptProcessor()
+                backup_processor = OpenRouterPromptProcessor()
+
 
         # Setup memory if requested
         conversation_memory = ConversationMemory() if use_persistent_memory else None
@@ -60,6 +68,7 @@ class CharacterResponderDependencies:
         # Setup chat logger
         chat_logger = ChatLogger(character_name, session_id, logs_dir)
         primary_processor.set_logger(chat_logger)
+        backup_processor.set_logger(chat_logger)
 
         return cls(
             primary_processor=primary_processor,

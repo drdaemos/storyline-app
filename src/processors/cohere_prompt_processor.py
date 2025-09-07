@@ -55,7 +55,10 @@ class CoherePromptProcessor(PromptProcessor):
         Returns: string response
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        return self._process_string(messages, max_tokens)
+        response = self._process_string(messages, max_tokens)
+        
+        self.logger.log_message("cohere", response)
+        return response
 
     def respond_with_model(
         self,
