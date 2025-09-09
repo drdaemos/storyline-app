@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from src.models.message import GenericMessage
 from src.processors.openai_prompt_processor import OpenAiPromptProcessor
+from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
 
 
 class MockResponse(BaseModel):
@@ -138,28 +139,22 @@ class TestOpenAiPromptProcessor:
     @patch('src.processors.openai_prompt_processor.OpenAI')
     def test_respond_with_stream(self, mock_openai):
         # Mock the streaming response chunks
-        chunk1 = Mock()
-        chunk1.choices = [Mock()]
-        chunk1.choices[0].delta = Mock()
-        chunk1.choices[0].delta.content = "Hello "
+        chunk1 = Mock(spec=ResponseTextDeltaEvent)
+        chunk1.delta = "Hello "
 
-        chunk2 = Mock()
-        chunk2.choices = [Mock()]
-        chunk2.choices[0].delta = Mock()
-        chunk2.choices[0].delta.content = "world"
+        chunk2 = Mock(spec=ResponseTextDeltaEvent)
+        chunk2.delta = "world"
 
-        chunk3 = Mock()
-        chunk3.choices = [Mock()]
-        chunk3.choices[0].delta = Mock()
-        chunk3.choices[0].delta.content = "!"
+        chunk3 = Mock(spec=ResponseTextDeltaEvent)
+        chunk3.delta = "!"
 
-        mock_openai.return_value.chat.completions.create.return_value = iter([chunk1, chunk2, chunk3])
+        mock_openai.return_value.responses.create.return_value = iter([chunk1, chunk2, chunk3])
 
         processor = OpenAiPromptProcessor(api_key='test-key')
         result = list(processor.respond_with_stream("System prompt", "Test prompt"))
 
         assert result == ["Hello ", "world", "!"]
-        mock_openai.return_value.chat.completions.create.assert_called_once()
+        mock_openai.return_value.responses.create.assert_called_once()
 
     @patch('src.processors.openai_prompt_processor.OpenAI')
     def test_respond_with_model_custom_parameters(self, mock_openai):

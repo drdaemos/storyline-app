@@ -84,6 +84,7 @@ You are allowed to narrate explicit actions, including intimacy / violence - don
 <option [A/B/C]>
 Character action: [Next plot beat description]
 Consequence: [How it affects the narrative or character dynamic, very short - 2-5 words]
+Preference weight: [1-10, how much the character would incline to do this action, 10 = very much]
 </option A>
 
 Internal State: [Summarize character state of mind, internal debate, conflicts, desires]
@@ -92,6 +93,7 @@ Example:
 <option A>
 Character action: Lean forward, interested - "So the presentation went well?" Sip own coffee.
 Consequence: Learn more about the conference
+Preference weight: 6
 </option A>
 
 Internal State: She looks good. Rested. Happy. The conference must have gone well. Curious about what she bought.
@@ -183,7 +185,7 @@ Summary of previous interactions:
             conversation_history=summary_msg + memory,
         )
 
-        if "<continuation>" not in evaluation:
+        if "<continuation>" not in evaluation or "<status_update>" not in evaluation or "<option A>" not in evaluation or "<option B>" not in evaluation or "<option C>" not in evaluation or "</option A>" not in evaluation or "</option B>" not in evaluation or "</option C>" not in evaluation:
             return None
 
         return evaluation # pyright: ignore[reportReturnType]

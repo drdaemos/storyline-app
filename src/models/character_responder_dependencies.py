@@ -53,14 +53,18 @@ class CharacterResponderDependencies:
             case "claude":
                 primary_processor = ClaudePromptProcessor()
                 backup_processor = OpenRouterPromptProcessor()
-            case "deepseek":
-                primary_processor = OpenRouterPromptProcessor()
-                backup_processor = ClaudePromptProcessor()
             case "gpt":
                 primary_processor = OpenAiPromptProcessor()
                 backup_processor = OpenRouterPromptProcessor()
-
-
+            case "deepseek":
+                primary_processor = OpenRouterPromptProcessor(model="deepseek/deepseek-chat-v3.1")
+                backup_processor = ClaudePromptProcessor()
+            case "gpt-oss":
+                primary_processor = OpenRouterPromptProcessor(model="openai/gpt-oss-120b")
+                backup_processor = OpenRouterPromptProcessor()
+            case _:
+                raise ValueError(f"Unsupported processor type: {processor_type}")
+            
         # Setup memory if requested
         conversation_memory = ConversationMemory() if use_persistent_memory else None
         summary_memory = SummaryMemory() if use_persistent_memory else None

@@ -181,7 +181,7 @@ Select a character to start chatting with them!
             session_id=session_id or "default-session",
             use_persistent_memory=use_persistent_memory,
             logs_dir=None,
-            processor_type="deepseek"
+            processor_type="gpt-oss"
         )
 
     def _setup_character_session(self, character: Character) -> CharacterResponder:

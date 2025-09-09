@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class CacheControl(TypedDict):
@@ -17,5 +17,5 @@ class ClaudeMessage(TypedDict):
     content: ClaudeContent
 
 class GenericMessage(TypedDict):
-    role: str
+    role: Literal["user", "assistant", "system", "developer"]
     content: str

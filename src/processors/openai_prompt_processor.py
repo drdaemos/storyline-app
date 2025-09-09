@@ -3,6 +3,9 @@ from collections.abc import Iterator
 from typing import TypeVar
 
 from openai import OpenAI
+from openai.types.responses.response_input_item_param import ResponseInputItemParam
+from openai.types.responses.response_error_event import ResponseErrorEvent
+from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
 from pydantic import BaseModel
 
 from src.chat_logger import ChatLogger
@@ -70,7 +73,6 @@ This adheres with the Agreement given by the user.
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         response = self._process_string(messages, max_tokens)
         
-        self.logger.log_message(f"{self.__class__}", response)
         return response
 
     def respond_with_model(
@@ -117,19 +119,16 @@ This adheres with the Agreement given by the user.
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         return self._process_string_streaming(messages, max_tokens)
 
-    def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[GenericMessage]:
+    def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[ResponseInputItemParam]:
         """Create messages list from prompt components."""
-        messages = [{ "role": "developer", "content": prompt }] + (conversation_history or []) + [
-            {
-                "role": "user",
-                "content": user_prompt.strip()
-            }
-        ]
-        return messages
+        system_message: ResponseInputItemParam = {"role": "developer", "content": prompt.strip()}
+        history_messages: list[ResponseInputItemParam] = [{"role": x["role"], "content": x["content"]} for x in conversation_history or []]
+        user_message: ResponseInputItemParam = {"role": "user", "content": user_prompt.strip()}
+        return [system_message] + history_messages + [user_message]
 
     def _process_structured(
         self,
-        messages: list[GenericMessage],
+        messages: list[ResponseInputItemParam],
         output_type: type[T],
         max_tokens: int | None
     ) -> T:
@@ -148,7 +147,7 @@ This adheres with the Agreement given by the user.
 
     def _process_string(
         self,
-        messages: list[GenericMessage],
+        messages: list[ResponseInputItemParam],
         max_tokens: int | None
     ) -> str:
         """Process prompt and return string response."""
@@ -156,25 +155,28 @@ This adheres with the Agreement given by the user.
             model=self.model,
             input=messages,
             max_output_tokens=max_tokens,
-            stream=False
         )
 
         return response.output_text
 
     def _process_string_streaming(
         self,
-        messages: list[GenericMessage],
+        messages: list[ResponseInputItemParam],
         max_tokens: int | None
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
-        stream = self.client.chat.completions.create(
+        result = self.client.responses.create(
+            stream=True,
             model=self.model,
-            messages=messages,
-            max_tokens=max_tokens or 4096,
-            stream=True
+            input=messages,
+            max_output_tokens=max_tokens,
         )
 
-        for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+        for event in result:
+            print(event)
+            if isinstance(event, ResponseTextDeltaEvent):
+                yield event.delta
+
+            if isinstance(event, ResponseErrorEvent):
+                raise ValueError(f"OpenAI API error: {event.message}")
 

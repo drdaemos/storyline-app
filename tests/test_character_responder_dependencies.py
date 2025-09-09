@@ -83,20 +83,23 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
     assert responder.session_id == "default-session"
 
 
-@patch('src.processors.cohere_prompt_processor.CoherePromptProcessor')
-@patch('src.processors.claude_prompt_processor.ClaudePromptProcessor')
+@patch('src.models.character_responder_dependencies.OpenRouterPromptProcessor')
+@patch('src.models.character_responder_dependencies.CoherePromptProcessor')
+@patch('src.models.character_responder_dependencies.ClaudePromptProcessor')
 @patch('src.models.character_responder_dependencies.ConversationMemory')
 @patch('src.models.character_responder_dependencies.ChatLogger')
-def test_dependencies_create_default(mock_logger, mock_memory, mock_claude, mock_cohere):
+def test_dependencies_create_default(mock_logger, mock_memory, mock_claude, mock_cohere, mock_openrouter):
     """Test CharacterResponderDependencies.create_default method."""
     # Mock the dependencies
     mock_claude_instance = MockPromptProcessor("Claude response")
     mock_cohere_instance = MockPromptProcessor("Cohere response")
+    mock_openrouter_instance = MockPromptProcessor("OpenRouter response")
     mock_memory_instance = Mock()
     mock_logger_instance = Mock()
 
     mock_claude.return_value = mock_claude_instance
     mock_cohere.return_value = mock_cohere_instance
+    mock_openrouter.return_value = mock_openrouter_instance
     mock_memory.return_value = mock_memory_instance
     mock_logger.return_value = mock_logger_instance
 
@@ -109,7 +112,7 @@ def test_dependencies_create_default(mock_logger, mock_memory, mock_claude, mock
     )
 
     assert dependencies.primary_processor is mock_claude_instance
-    assert dependencies.backup_processor is mock_cohere_instance
+    assert dependencies.backup_processor is mock_openrouter_instance
     assert dependencies.conversation_memory is None  # Because use_persistent_memory=False
     assert dependencies.chat_logger is mock_logger_instance
 
@@ -122,4 +125,6 @@ def test_dependencies_create_default(mock_logger, mock_memory, mock_claude, mock
         processor_type="cohere"
     )
 
+    assert dependencies_with_memory.primary_processor is mock_cohere_instance
+    assert dependencies_with_memory.backup_processor is mock_openrouter_instance
     assert dependencies_with_memory.conversation_memory is mock_memory_instance

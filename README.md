@@ -25,3 +25,7 @@ Basically, pipeline operates on multiple levels:
 - Using randomized external events to move the story and make both characters react
 - Using /commands to enable out of character / story transition actions (outside the default pipeline)
 - /rewind command to go back one step (remove last exchange from memory)
+- Remove evaluation from memory (to save tokens / avoid extra response generation in eval)
+- Move <state_update> upwards
+- Move option selection to code -> provide params
+- Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.

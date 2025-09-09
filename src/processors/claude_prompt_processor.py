@@ -60,7 +60,6 @@ class ClaudePromptProcessor(PromptProcessor):
 
         response = self._process_string(system_prompt, messages, max_tokens)
         
-        self.logger.log_message("claude", response)
         return response
 
     def respond_with_model(
