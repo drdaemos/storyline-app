@@ -122,13 +122,15 @@ class CharacterResponder:
             "user_message": user_message,
             "character": self.character
         }
+        # pass only the most recent messages for context (use only user msg and character responses)
+        memory: list[GenericMessage] = [msg for i, msg in enumerate(self.memory[-self.PROPAGATED_MEMORY_SIZE:]) if i % 3 in [0, 2]]
 
         # Process the prompt
         try:
             evaluation = CharacterPipeline.get_evaluation(
                 processor=self.processor,
                 input=input,
-                memory=self.memory[-self.PROPAGATED_MEMORY_SIZE:]  # pass only the most recent messages for context
+                memory=memory  # pass only the most recent messages for context
             )
             if evaluation is None:
                 raise ValueError("No evaluation from primary processor.")
@@ -137,7 +139,7 @@ class CharacterResponder:
             evaluation = CharacterPipeline.get_evaluation(
                 processor=self.backup_processor,
                 input=input,
-                memory=self.memory[-self.PROPAGATED_MEMORY_SIZE:]  # pass only the most recent messages for context
+                memory=memory
             )
             if evaluation is None:
                 raise ValueError("No evaluation from both primary and backup processor.") from err
