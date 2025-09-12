@@ -62,6 +62,9 @@ class CharacterResponderDependencies:
             case "gpt-oss":
                 primary_processor = OpenRouterPromptProcessor(model="openai/gpt-oss-120b")
                 backup_processor = OpenRouterPromptProcessor()
+            case "google":
+                primary_processor = OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
+                backup_processor = ClaudePromptProcessor()
             case _:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
             

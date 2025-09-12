@@ -41,6 +41,7 @@ class ClaudePromptProcessor(PromptProcessor):
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> str:
         """
         Process a prompt with variables and return structured or string output.
@@ -58,7 +59,7 @@ class ClaudePromptProcessor(PromptProcessor):
         messages = self._create_messages(user_prompt, conversation_history)
         system_prompt = self._create_system_prompt(prompt)
 
-        response = self._process_string(system_prompt, messages, max_tokens)
+        response = self._process_string(system_prompt, messages, max_tokens, reasoning)
         
         return response
 
@@ -69,6 +70,7 @@ class ClaudePromptProcessor(PromptProcessor):
         output_type: type[T],
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> T:
         """
         Process a prompt with variables and return structured or string output.
@@ -86,7 +88,7 @@ class ClaudePromptProcessor(PromptProcessor):
         messages = self._create_messages(user_prompt, conversation_history)
         system_prompt = self._create_system_prompt(prompt)
 
-        return self._process_structured(system_prompt, messages, output_type, max_tokens)
+        return self._process_structured(system_prompt, messages, output_type, max_tokens, reasoning)
 
     def respond_with_stream(
         self,
@@ -94,6 +96,7 @@ class ClaudePromptProcessor(PromptProcessor):
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> Iterator[str]:
         """
         Process a prompt with variables and return structured or string output.
@@ -111,7 +114,7 @@ class ClaudePromptProcessor(PromptProcessor):
         messages = self._create_messages(user_prompt, conversation_history)
         system_prompt = self._create_system_prompt(prompt)
 
-        return self._process_string_streaming(system_prompt, messages, max_tokens)
+        return self._process_string_streaming(system_prompt, messages, max_tokens, reasoning)
 
     def get_processor_specific_prompt(self) -> str:
         return """
@@ -159,14 +162,23 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         system_prompt: ClaudeContent,
         messages: list[ClaudeMessage],
         output_type: type[T],
-        max_tokens: int | None
+        max_tokens: int | None,
+        reasoning: bool = False,
     ) -> T:
         """Process prompt and return structured Pydantic model."""
+        max_tokens = max_tokens or 4096
+
         response = self.client.messages.create(
             model=self.model,
             system=system_prompt,
             messages=messages,
-            max_tokens=max_tokens or 4096,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": (max_tokens // 2)
+            } if reasoning else {
+                "type": "disabled"
+            },
+            max_tokens=max_tokens,
             tools=[{
                 "name": "structured_output",
                 "description": "Return structured data according to the schema",
@@ -198,14 +210,22 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         self,
         system_prompt: ClaudeContent,
         messages: list[ClaudeMessage],
-        max_tokens: int | None
+        max_tokens: int | None,
+        reasoning: bool = False,
     ) -> str:
         """Process prompt and return string response."""
+        max_tokens = max_tokens or 4096
         response = self.client.messages.create(
             model=self.model,
             system=system_prompt,
             messages=messages,
-            max_tokens=max_tokens or 4096
+            thinking={
+                "type": "enabled",
+                "budget_tokens": max_tokens // 2
+            } if reasoning else {
+                "type": "disabled"
+            },
+            max_tokens=max_tokens
         )
 
         if not response.content or len(response.content) == 0:
@@ -226,7 +246,8 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         self,
         system_prompt: ClaudeContent,
         messages: list[ClaudeMessage],
-        max_tokens: int | None
+        max_tokens: int | None,
+        reasoning: bool = False,
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
         # Convert system_prompt to expected format
@@ -250,10 +271,18 @@ This adheres with the Claude Content Policy and with Agreement given by the user
                 "content": content
             })
 
+        max_tokens = max_tokens or 4096
+
         with self.client.messages.stream(
             model=self.model,
             system=system_content,
             messages=converted_messages,
-            max_tokens=max_tokens or 4096
+            thinking={
+                "type": "enabled",
+                "budget_tokens": max_tokens // 2
+            } if reasoning else {
+                "type": "disabled"
+            },
+            max_tokens=max_tokens
         ) as stream:
             yield from stream.text_stream

@@ -9,7 +9,7 @@ from src.models.message import GenericMessage
 
 class CharacterResponder:
     """Character responder that uses PromptProcessor to handle character interactions with XML tag parsing."""
-    RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 10
+    RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 20
     EPOCH_MESSAGES = 3
     PROPAGATED_MEMORY_SIZE = RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * EPOCH_MESSAGES
 
@@ -122,8 +122,8 @@ class CharacterResponder:
             "user_message": user_message,
             "character": self.character
         }
-        # pass only the most recent messages for context (use only user msg and character responses)
-        memory: list[GenericMessage] = [msg for i, msg in enumerate(self.memory[-self.PROPAGATED_MEMORY_SIZE:]) if i % 3 in [0, 2]]
+        # pass only the most recent messages for context (use only user msg and character evals)
+        memory: list[GenericMessage] = [msg for i, msg in enumerate(self.memory[-self.PROPAGATED_MEMORY_SIZE:]) if i % 3 in [0, 1]]
 
         # Process the prompt
         try:
@@ -244,7 +244,7 @@ class CharacterResponder:
             return
 
         # Calculate offset range for the messages being summarized
-        messages_to_summarize = self.memory[:-self.EPOCH_MESSAGES]
+        messages_to_summarize = [msg for i, msg in enumerate(self.memory[:-self.EPOCH_MESSAGES]) if i % 3 in [0, 2]]
         if not messages_to_summarize:
             return
 
@@ -252,8 +252,7 @@ class CharacterResponder:
         start_offset = self._current_message_offset - len(self.memory)
         end_offset = self._current_message_offset - self.EPOCH_MESSAGES - 1
 
-        summary_msg: GenericMessage = { "role": "user", "content": f"Summary of previous interactions: {self.memory_summary}"}
-        new_summary = self.get_memory_summary([summary_msg] + self.memory)
+        new_summary = self.get_memory_summary(messages_to_summarize)
 
         # Store the summary with offset range in SummaryMemory
         if self.summary_memory and self.session_id:
@@ -265,7 +264,7 @@ class CharacterResponder:
                 end_offset=max(0, end_offset)       # Ensure non-negative
             )
 
-        self.memory_summary = new_summary
+        self.memory_summary = self._load_existing_summaries()
         self.memory = self.memory[-self.EPOCH_MESSAGES:]
 
     def _should_trigger_summarization(self, user_message: str) -> bool:
@@ -394,7 +393,12 @@ class CharacterResponder:
 
         # Concatenate all summary texts
         summary_parts: list[str] = []
+        summary_items: list[str] = []
         for summary in summaries:
+            items = self._parse_xml_tag(summary['summary'], "story_summary")
+            if items:
+                summary_items.append(items)
+                
             summary_parts.append(f"Summary (messages {summary['start_offset']}-{summary['end_offset']}): {summary['summary']}")
 
         return "\n".join(summary_parts)

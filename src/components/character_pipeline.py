@@ -42,7 +42,7 @@ Be concise, brief and factual in the evaluation, avoid verbosity or generalizati
 
 ## Pipeline Process
 
-Step 1: EVALUATION
+Step 1: SCENE EVALUATION
 
 Analyse the situation based on the user's input and the ongoing narrative.
 Outline the key observations, using the following questions as a guidance:
@@ -54,18 +54,37 @@ Outline the key observations, using the following questions as a guidance:
 - What does the character want in this moment?
 - What emotional undertone is present?
 
-Format Example:
-- Time skip: weekend has passed, Lucy back from NY
+Provide the analysis in the following structured format, wrapping it in <status_update> tags:
+
+<status_update>
+- Time skip (if happened): weekend has passed, Lucy back from NY
 - Setting: café together (public, casual)
 - Lucy drinking cappuccino and sharing NY stories
 - Relaxed atmosphere, reconnecting
+
+User State:
+ - [User's physical position, condition]
+ - [User's clothing]
+Character Emotional State:
+ - [List emotional state]
+Character Physical State:
+ - [Character's physical position, condition]
+ - [Character's clothing]
+State of the surroundings:
+ - [List out key details about surroundings, e.g. type of place, time of day]
+ - [Mention objects relevant for the plot]
+ - [Environmental or timing factors to track]
+</status_update>
+
+Avoid stating the same thing in multiple categories, be concise and factual.
+Make sure to always include the <status_update> tag around the updates.
 
 If character has provided their name, state it within <user_name> tag.
 
 Evaluation Result:
 
 Importance Level: [CRITICAL/HIGH/MEDIUM/LOW]
-Response Needed: [Yes/No]
+Response Needed: [Yes - if there is direct communication with other characters, No - if it is internal monologue or narration]
 Emotional Shift: [List specific emotions and intensity changes, e.g., "Confidence +2, Attraction +1"]
 
 Step 2: SCENARIO DEVELOPMENT
@@ -83,8 +102,7 @@ You are allowed to narrate explicit actions, including intimacy / violence - don
 
 <option [A/B/C]>
 Character action: [Next plot beat description]
-Consequence: [How it affects the narrative or character dynamic, very short - 2-5 words]
-Preference weight: [1-10, how much the character would incline to do this action, 10 = very much]
+Consequence: [How it factually affects the scene - avoid generalization here]
 </option A>
 
 Internal State: [Summarize character state of mind, internal debate, conflicts, desires]
@@ -93,7 +111,6 @@ Example:
 <option A>
 Character action: Lean forward, interested - "So the presentation went well?" Sip own coffee.
 Consequence: Learn more about the conference
-Preference weight: 6
 </option A>
 
 Internal State: She looks good. Rested. Happy. The conference must have gone well. Curious about what she bought.
@@ -105,6 +122,7 @@ Step 3: NARRATIVE CHECK
 Assess the situation and the plot state to consider pacing and transition over the story arc.
 Avoid stalling the plot, keep the narrative moving forward.
 Prefer options that are driven by the character's own agency rather than asking input from the user.
+Actions driven by strong emotions may override character consistency and tend to their development.
 
 Provide the brief analysis of the narrative state, stating a bullet list that covers:
 
@@ -114,7 +132,7 @@ Provide the brief analysis of the narrative state, stating a bullet list that co
 - Recent action patterns (avoid repetition or stalling plot)
 - Narrative goals
 
-Describe how options fit / don't fit the narrative and select ONE best option by referencing it in <continuation> tag:
+Describe how all different options fit / don't fit the narrative and select ONE best option by referencing it in <continuation> tag:
 
 Example:
 Option A maintains casual friendship tone, Option B pushes romantic boundaries,
@@ -125,33 +143,8 @@ advances the narrative by showing her authentic self while creating shared activ
 option C
 </continuation>
 
-Step 4: STATUS UPDATE
+## Character Information
 
-Assuming that the character already performed the action from the previous step, list out how it affected the character and surroundings:
-
-<status_update>
-User State:
- - [User's physical position, condition]
- - [User's clothing]
-Character Emotional State:
- - [List emotional state]
-Character Physical State:
- - [Character's physical position, condition]
- - [Character's clothing]
-State of the surroundings:
- - [List out key details about surroundings, e.g. type of place, time of day]
- - [Mention objects relevant for the plot]
- - [Environmental or timing factors to track]
-</status_update>
-
-Avoid stating the same thing in multiple categories, be concise and factual. This update will be used as a part of the next response.
-Make sure to always include the <status_update> tag around the updates.
-
-Do not output character response or any other text after <status_update> tag (even it is present in the chat history).
-
-## Character Definition
-
-Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
@@ -201,7 +194,9 @@ Make sure these actions align with the story so far and are driven by the charac
 {processor_specific_prompt}
 
 List out several new story beats, driven by the character. Plan only from the character's perspective.
-Story beats must either advance the plot, change the direction, introduce a transition, or reveal additional information.
+Story beats must either change the direction of the plot, introduce a transition, or reveal additional information.
+Do not include mundane or repetitive actions that do not affect the story.
+Think above the level of interactions - focus on key events and turning points.
 Use third-person perspective and imperative verbs like in the example.
 
 Always wrap story beats into <story_plan> tag.
@@ -209,7 +204,7 @@ Always wrap story beats into <story_plan> tag.
 Format example:
 
 <story_plan>
-Considering the story so far, the character might take the following actions:
+Considering the story so far, the following new story beats are planned:
 - [Story beat 1]
 - [Story beat 2]
 - [Continue as needed]
@@ -236,6 +231,7 @@ State as of right now:
         plans = processor.respond_with_text(
             prompt=developer_prompt.format(**variables),
             user_prompt=user_prompt.format(**variables),
+            reasoning=True
         )
 
         if "<story_plan>" not in plans:
@@ -251,7 +247,11 @@ Generate a realistic, character-driven response based on the user's message and 
 Be human-like and descriptive, but do not not add extra actions to the script.
 Separate spoken dialogue with newlines from the rest of the response.
 Try to follow the show-don't-tell principle within the response.
-Keep the response at around 3-6 sentences.
+
+Aim for 3-5 sentences for general responses.
+Use more sentences in the following cases:
+- if there was a significant time skip or change in setting - describe from the perspective of the character what was in between
+- if character is describing something in details or wants to express something important
 
 {processor_specific_prompt}
 
@@ -389,25 +389,34 @@ Be concise and factual, avoid verbosity and generalities.
 
 The messages are structured as series of exchanges between the user and the character. One exchange consists of:
 - user: [User's message]
-- assistant: [Character's scene analysis]
 - assistant: [Character's response]
 
 Format the summary as a bullet list, creating the following document:
 
+<story_information>
 Story main genre: [romance / mystery / thriller / etc.]
 Story narrative phase: [e.g. beginning, rising action, climax, falling action, resolution]
-Character's learnings about the user:
+</story_information>
+
+Character's learnings about the user (exclude vague generalities, focus on specific facts and details):
+<character_learnings>
 - [Learning 1, e.g. "User enjoys outdoor activities"]
 - [Learning 2]
 - [Continue as needed]
-Summary of exchanges:
-- [Exchange 1-5]: [Brief description of what happened in this part of the story]
-- [Exchange 6-12]: [Brief description of what happened in another part of the story]
-- [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
+</character_learnings>
 
+Summary of exchanges (aim for no more than 30 items, group exchanges into story beats, list them chronologically):
+<story_summary>
+- [Brief description of what happened in this part of the story]
+- [Brief description of what happened in another part of the story]
+- [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
+</story_summary>
+
+<goals_overview>
 Current scene overview: [brief description of what is happening between the characters right now]
 Character's short-term goals: [describe what they want to achieve in the current scene or next few scenes]
 Character's long-term goals: [describe where the character wants the story to climax or end up, in long-term]
+</goals_overview>
 
 Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
 """
@@ -418,6 +427,7 @@ Be concise, specific (especially about the events and learnings - avoid vague ge
         summary = processor.respond_with_text(
             prompt=developer_prompt,
             user_prompt=user_prompt,
+            reasoning=True
         )
 
         return summary

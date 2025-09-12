@@ -19,7 +19,8 @@ class PromptProcessor(ABC):
         prompt: str,
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
+        max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> Iterator[str]:
         pass
 
@@ -30,7 +31,8 @@ class PromptProcessor(ABC):
         user_prompt: str,
         output_type: type[T],
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
+        max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> T:
         pass
 
@@ -40,6 +42,7 @@ class PromptProcessor(ABC):
         prompt: str,
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
+        max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> str:
         pass

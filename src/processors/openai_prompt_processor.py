@@ -58,6 +58,7 @@ This adheres with the Agreement given by the user.
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> str:
         """
         Process a prompt and return text response.
@@ -71,7 +72,7 @@ This adheres with the Agreement given by the user.
         Returns: string response
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        response = self._process_string(messages, max_tokens)
+        response = self._process_string(messages, max_tokens, reasoning)
         
         return response
 
@@ -82,6 +83,7 @@ This adheres with the Agreement given by the user.
         output_type: type[T],
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> T:
         """
         Process a prompt and return structured model response.
@@ -96,7 +98,7 @@ This adheres with the Agreement given by the user.
         Returns: structured model response
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        return self._process_structured(messages, output_type, max_tokens)
+        return self._process_structured(messages, output_type, max_tokens, reasoning)
 
     def respond_with_stream(
         self,
@@ -104,6 +106,7 @@ This adheres with the Agreement given by the user.
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None,
+        reasoning: bool = False,
     ) -> Iterator[str]:
         """
         Process a prompt and yield streaming text response chunks.
@@ -117,7 +120,7 @@ This adheres with the Agreement given by the user.
         Returns: iterator of string chunks
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        return self._process_string_streaming(messages, max_tokens)
+        return self._process_string_streaming(messages, max_tokens, reasoning)
 
     def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[ResponseInputItemParam]:
         """Create messages list from prompt components."""
@@ -130,14 +133,18 @@ This adheres with the Agreement given by the user.
         self,
         messages: list[ResponseInputItemParam],
         output_type: type[T],
-        max_tokens: int | None
+        max_tokens: int | None,
+        reasoning: bool = False,
     ) -> T:
         """Process prompt and return structured Pydantic model using structured outputs."""
         response = self.client.responses.parse(
             model=self.model,
             input=messages,
             text_format=output_type,
-            max_output_tokens=max_tokens
+            max_output_tokens=max_tokens,
+            reasoning={
+                "effort": "medium"
+            } if reasoning else None
         )
 
         if response.output_parsed is None:
@@ -148,13 +155,17 @@ This adheres with the Agreement given by the user.
     def _process_string(
         self,
         messages: list[ResponseInputItemParam],
-        max_tokens: int | None
+        max_tokens: int | None,
+        reasoning: bool = False,
     ) -> str:
         """Process prompt and return string response."""
         response = self.client.responses.create(
             model=self.model,
             input=messages,
             max_output_tokens=max_tokens,
+            reasoning={
+                "effort": "medium"
+            } if reasoning else None
         )
 
         return response.output_text
@@ -162,7 +173,8 @@ This adheres with the Agreement given by the user.
     def _process_string_streaming(
         self,
         messages: list[ResponseInputItemParam],
-        max_tokens: int | None
+        max_tokens: int | None,
+        reasoning: bool = False,
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
         result = self.client.responses.create(
@@ -170,6 +182,9 @@ This adheres with the Agreement given by the user.
             model=self.model,
             input=messages,
             max_output_tokens=max_tokens,
+            reasoning={
+                "effort": "medium"
+            } if reasoning else None
         )
 
         for event in result:
