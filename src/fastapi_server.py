@@ -1,7 +1,7 @@
 import asyncio
 import json
-from collections.abc import AsyncGenerator
 import os
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -246,25 +246,25 @@ async def interact(request: InteractRequest) -> StreamingResponse:
 
                 # Create a queue for streaming chunks
                 chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
-                response_complete = False
                 character_response = ""
+                loop = asyncio.get_event_loop()
 
                 def streaming_callback(chunk: str) -> None:
                     """Called by responder when a chunk is available."""
-                    asyncio.create_task(chunk_queue.put(chunk))
+                    # Use call_soon_threadsafe to safely add to queue from executor thread
+                    loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
 
                 # Run the character response in a separate task
                 async def run_character_response() -> None:
-                    nonlocal character_response, response_complete
+                    nonlocal character_response
                     try:
-                        loop = asyncio.get_event_loop()
                         character_response = await loop.run_in_executor(
                             None,
                             lambda: responder.respond(request.user_message, streaming_callback)
                         )
                     finally:
-                        response_complete = True
-                        await chunk_queue.put(None)  # Signal completion
+                        # Signal completion
+                        await chunk_queue.put(None)
 
                 # Start the character response task
                 response_task = asyncio.create_task(run_character_response())
