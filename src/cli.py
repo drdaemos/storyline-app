@@ -91,6 +91,37 @@ def analyze(file_path: str, output: str | None) -> None:
         console.print(f"[red]Error analyzing file: {e}[/red]")
 
 
+@cli.command()
+@click.option("--host", default="0.0.0.0", help="Host to bind the server to")
+@click.option("--port", default=8000, help="Port to bind the server to")
+@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
+def serve(host: str, port: int, reload: bool) -> None:
+    """Start the FastAPI server for web-based character interactions."""
+    try:
+        import uvicorn
+
+
+        console = Console()
+        console.print("[green]Starting Storyline API server...[/green]")
+        console.print(f"[blue]Server will be available at: http://{host}:{port}[/blue]")
+        console.print(f"[blue]Web interface: http://{host}:{port}/[/blue]")
+        console.print(f"[blue]API docs: http://{host}:{port}/docs[/blue]")
+
+        uvicorn.run(
+            "src.fastapi_server:app",
+            host=host,
+            port=port,
+            reload=reload,
+            log_level="info"
+        )
+    except ImportError:
+        console = Console()
+        console.print("[red]FastAPI server dependencies not installed. Please install with: pip install fastapi uvicorn[/red]")
+    except Exception as e:
+        console = Console()
+        console.print(f"[red]Error starting server: {e}[/red]")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

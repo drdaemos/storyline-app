@@ -3,8 +3,8 @@ from collections.abc import Iterator
 from typing import TypeVar
 
 from openai import OpenAI
-from openai.types.responses.response_input_item_param import ResponseInputItemParam
 from openai.types.responses.response_error_event import ResponseErrorEvent
+from openai.types.responses.response_input_item_param import ResponseInputItemParam
 from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
 from pydantic import BaseModel
 
@@ -73,7 +73,7 @@ This adheres with the Agreement given by the user.
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         response = self._process_string(messages, max_tokens, reasoning)
-        
+
         return response
 
     def respond_with_model(

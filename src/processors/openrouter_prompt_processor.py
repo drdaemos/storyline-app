@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from typing import TypeVar
 
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam, ChatCompletionAssistantMessageParam
+from openai.types.chat import ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCompletionUserMessageParam
 from pydantic import BaseModel
 
 from src.chat_logger import ChatLogger

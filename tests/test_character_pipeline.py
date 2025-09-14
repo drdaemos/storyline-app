@@ -42,14 +42,16 @@ class MockPromptProcessor(PromptProcessor):
         prompt: str,
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
+        max_tokens: int | None = None,
+        reasoning: bool = False
     ) -> str:
         # Record the call for verification
         self.call_history.append({
             "prompt": prompt,
             "user_prompt": user_prompt,
             "conversation_history": conversation_history,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
+            "reasoning": reasoning
         })
         return self.response # type: ignore
 
@@ -152,8 +154,8 @@ class TestCharacterPipeline:
         call = mock_processor.call_history[0]
 
         # Check that prompt contains character information
-        assert "Alice" in call['prompt']
         assert "Former police officer" in call['prompt']
+        assert "Detective" in call['prompt'] or "investigator" in call['prompt']
 
         # Check that user prompt was passed
         assert call['user_prompt'] == "I need your help with something important"
@@ -220,7 +222,7 @@ class TestCharacterPipeline:
         assert len(mock_processor.call_history) == 1
         call = mock_processor.call_history[0]
 
-        # Check character name in prompt
+        # Check character information in prompt
         assert "Alice" in call['prompt']
         assert "John" in call['prompt']
 

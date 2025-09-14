@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storyline Chat Interface</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        select, input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .chat-container {
+            margin-top: 30px;
+            border-top: 2px solid #eee;
+            padding-top: 20px;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .user-message {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .character-message {
+            background-color: #f3e5f5;
+            border-left: 4px solid #9C27B0;
+            white-space: pre-wrap;
+        }
+        
+        .system-message {
+            background-color: #fff3e0;
+            border-left: 4px solid #FF9800;
+            font-style: italic;
+        }
+        
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .loading {
+            display: inline-block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .session-info {
+            background-color: #e8f5e8;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .clear-button {
+            background-color: #f44336;
+            margin-top: 10px;
+        }
+        
+        .clear-button:hover:not(:disabled) {
+            background-color: #da190b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 Storyline Chat Interface</h1>
+        
+        <div class="form-group">
+            <label for="character-select">Character:</label>
+            <select id="character-select">
+                <option value="">Loading characters...</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="processor-select">AI Processor:</label>
+            <select id="processor-select">
+                <option value="google">Google (Gemini)</option>
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="cohere">Cohere</option>
+                <option value="openrouter">OpenRouter</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="session-input">Session ID (optional):</label>
+            <input type="text" id="session-input" placeholder="Leave empty for new session">
+        </div>
+        
+        <div class="form-group">
+            <label for="message-input">Your message:</label>
+            <textarea id="message-input" placeholder="Type your message here..."></textarea>
+        </div>
+        
+        <button id="send-button" onclick="sendMessage()">Send Message</button>
+        
+        <div id="session-info" class="session-info" style="display: none;"></div>
+        
+        <div class="chat-container">
+            <div id="chat-messages"></div>
+        </div>
+        
+        <button id="clear-button" class="clear-button" onclick="clearSession()" style="display: none;">Clear Session</button>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let messageCount = 0;
+
+        // Load characters on page load
+        document.addEventListener('DOMContentLoaded', loadCharacters);
+
+        async function loadCharacters() {
+            try {
+                const response = await fetch('/characters');
+                const characters = await response.json();
+                
+                const select = document.getElementById('character-select');
+                select.innerHTML = '';
+                
+                if (characters.length === 0) {
+                    select.innerHTML = '<option value="">No characters available</option>';
+                    return;
+                }
+                
+                characters.forEach(character => {
+                    const option = document.createElement('option');
+                    option.value = character;
+                    option.textContent = character;
+                    select.appendChild(option);
+                });
+                
+                // Select first character by default
+                select.selectedIndex = 0;
+                
+            } catch (error) {
+                console.error('Error loading characters:', error);
+                document.getElementById('character-select').innerHTML = '<option value="">Error loading characters</option>';
+            }
+        }
+
+        async function sendMessage() {
+            const characterSelect = document.getElementById('character-select');
+            const processorSelect = document.getElementById('processor-select');
+            const sessionInput = document.getElementById('session-input');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const chatMessages = document.getElementById('chat-messages');
+            
+            const characterName = characterSelect.value;
+            const processorType = processorSelect.value;
+            const sessionId = sessionInput.value.trim() || null;
+            const userMessage = messageInput.value.trim();
+            
+            if (!characterName) {
+                showError('Please select a character');
+                return;
+            }
+            
+            if (!userMessage) {
+                showError('Please enter a message');
+                return;
+            }
+            
+            // Disable form during request
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+            
+            // Add user message to chat
+            addMessage('You', userMessage, 'user-message');
+            messageInput.value = '';
+            
+            try {
+                const requestData = {
+                    character_name: characterName,
+                    user_message: userMessage,
+                    session_id: sessionId || currentSessionId,
+                    processor_type: processorType
+                };
+                
+                const response = await fetch('/interact', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                // Create character message element for streaming
+                const characterMessageDiv = addMessage(characterName, '', 'character-message', true);
+                const contentDiv = characterMessageDiv.querySelector('.message-content');
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep incomplete line in buffer
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            if (dataStr.trim()) {
+                                try {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if (data.type === 'session') {
+                                        currentSessionId = data.session_id;
+                                        sessionInput.value = currentSessionId;
+                                        updateSessionInfo();
+                                    } else if (data.type === 'chunk') {
+                                        contentDiv.textContent += data.content;
+                                    } else if (data.type === 'complete') {
+                                        messageCount = data.message_count;
+                                        updateSessionInfo();
+                                        break;
+                                    } else if (data.type === 'error') {
+                                        showError(`Character response error: ${data.error}`);
+                                        break;
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing SSE data:', e);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Error: ${error.message}`);
+            } finally {
+                sendButton.disabled = false;
+                sendButton.textContent = 'Send Message';
+            }
+        }
+
+        function addMessage(sender, content, className, isStreaming = false) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className}`;
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header';
+            headerDiv.textContent = sender;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            if (isStreaming) {
+                const loadingSpan = document.createElement('span');
+                loadingSpan.className = 'loading';
+                loadingSpan.textContent = '●';
+                contentDiv.appendChild(loadingSpan);
+            }
+            
+            messageDiv.appendChild(headerDiv);
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            messageDiv.scrollIntoView({ behavior: 'smooth' });
+            
+            return messageDiv;
+        }
+
+        function showError(message) {
+            const chatMessages = document.getElementById('chat-messages');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            chatMessages.appendChild(errorDiv);
+            errorDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function updateSessionInfo() {
+            const sessionInfo = document.getElementById('session-info');
+            const clearButton = document.getElementById('clear-button');
+            
+            if (currentSessionId) {
+                sessionInfo.style.display = 'block';
+                clearButton.style.display = 'block';
+                sessionInfo.textContent = `Session: ${currentSessionId} | Messages: ${messageCount}`;
+            } else {
+                sessionInfo.style.display = 'none';
+                clearButton.style.display = 'none';
+            }
+        }
+
+        async function clearSession() {
+            if (!currentSessionId) return;
+            
+            try {
+                const response = await fetch(`/sessions/${currentSessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    currentSessionId = null;
+                    messageCount = 0;
+                    document.getElementById('session-input').value = '';
+                    document.getElementById('chat-messages').innerHTML = '';
+                    updateSessionInfo();
+                    addMessage('System', 'Session cleared successfully', 'system-message');
+                } else {
+                    showError('Failed to clear session');
+                }
+            } catch (error) {
+                console.error('Error clearing session:', error);
+                showError(`Error clearing session: ${error.message}`);
+            }
+        }
+
+        // Allow Enter key to send message (Shift+Enter for new line)
+        document.getElementById('message-input').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

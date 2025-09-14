@@ -2,11 +2,11 @@ import os
 from unittest.mock import Mock, patch
 
 import pytest
+from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
 from pydantic import BaseModel
 
 from src.models.message import GenericMessage
 from src.processors.openai_prompt_processor import OpenAiPromptProcessor
-from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
 
 
 class MockResponse(BaseModel):

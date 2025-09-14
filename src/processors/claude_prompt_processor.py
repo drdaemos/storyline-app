@@ -60,7 +60,7 @@ class ClaudePromptProcessor(PromptProcessor):
         system_prompt = self._create_system_prompt(prompt)
 
         response = self._process_string(system_prompt, messages, max_tokens, reasoning)
-        
+
         return response
 
     def respond_with_model(

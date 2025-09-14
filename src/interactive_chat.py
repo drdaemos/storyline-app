@@ -127,6 +127,7 @@ Select a character to start chatting with them!
 
         self.console.print(f"\n[bold green]Starting chat with {self.current_character.name}[/bold green]")
         self.console.print("[dim]Type 'quit' to exit the chat[/dim]\n")
+        self.responder.chat_logger.log_message("SYSTEM", f"Started chat session with {self.current_character.name}")
         last_response = self.responder.get_last_character_response() if self.responder else None
         if last_response:
             colorized_response = self._colorize_dialogue(last_response)
@@ -176,13 +177,7 @@ Select a character to start chatting with them!
 
     def _create_dependencies(self, character_name: str, session_id: str | None = None, use_persistent_memory: bool = True) -> CharacterResponderDependencies:
         """Create dependencies for CharacterResponder."""
-        return CharacterResponderDependencies.create_default(
-            character_name=character_name,
-            session_id=session_id or "default-session",
-            use_persistent_memory=use_persistent_memory,
-            logs_dir=None,
-            processor_type="google"
-        )
+        return CharacterResponderDependencies.create_default(character_name=character_name, session_id=session_id, use_persistent_memory=use_persistent_memory, logs_dir=None, processor_type="google")
 
     def _setup_character_session(self, character: Character) -> CharacterResponder:
         """Set up character session, checking for existing sessions and prompting user choice."""
@@ -196,11 +191,7 @@ Select a character to start chatting with them!
             if choice == "continue":
                 # Load the most recent session
                 most_recent_session = session_history[0]
-                dependencies = self._create_dependencies(
-                    character.name,
-                    session_id=most_recent_session["session_id"],
-                    use_persistent_memory=True
-                )
+                dependencies = self._create_dependencies(character.name, session_id=most_recent_session["session_id"], use_persistent_memory=True)
                 responder = CharacterResponder(character, dependencies)
                 self.console.print(f"[green]Continuing previous session with {len(responder.memory)} messages loaded.[/green]")
                 return responder
@@ -233,11 +224,7 @@ Select a character to start chatting with them!
         self.console.print("1. [green]Continue[/green] from the most recent conversation")
         self.console.print("2. [red]Start new[/red] conversation (clears all previous sessions)")
 
-        choice = Prompt.ask(
-            "Choose an option",
-            choices=["1", "2", "continue", "new", "c", "n"],
-            default="1"
-        )
+        choice = Prompt.ask("Choose an option", choices=["1", "2", "continue", "new", "c", "n"], default="1")
 
         if choice in ["1", "continue", "c"]:
             return "continue"

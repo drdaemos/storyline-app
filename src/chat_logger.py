@@ -23,7 +23,7 @@ class ChatLogger:
         character_logs_dir.mkdir(parents=True, exist_ok=True)
 
         # Create log filename using session ID only (character name is now in folder)
-        safe_session_id = (session_id or "no-session")[:8]  # Use first 8 chars of session ID
+        safe_session_id = session_id[:8]  # Use first 8 chars of session ID
         log_filename = f"{safe_session_id}.log"
         self.log_file_path = character_logs_dir / log_filename
 
@@ -52,8 +52,6 @@ class ChatLogger:
 
         # Prevent propagation to avoid duplicate logs
         self.logger.propagate = False
-
-        self.logger.info(f"=== SESSION START: {character_id} ===")
 
     def log_message(self, role: str, content: str) -> None:
         """

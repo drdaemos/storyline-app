@@ -201,14 +201,14 @@ class CharacterResponder:
             )
             if stream is None:
                 raise ValueError("No response stream from primary processor.")
-        except Exception as e: # type: ignore
+        except Exception: # type: ignore
             fallback = True
             stream = CharacterPipeline.get_character_response(
                 processor=self.backup_processor,
                 input=input
             )
             if stream is None:
-                raise ValueError("Failed to get character response from both primary and backup processors.")
+                raise ValueError("Failed to get character response from both primary and backup processors.") from None
 
         response = ""
         for chunk in stream:
@@ -227,7 +227,7 @@ class CharacterResponder:
                 processor=self.processor,
                 memory=conversation_memory
             )
-        except Exception as e: # type: ignore
+        except Exception: # type: ignore
             summary = CharacterPipeline.get_memory_summary(
                 processor=self.backup_processor,
                 memory=conversation_memory
@@ -347,21 +347,6 @@ class CharacterResponder:
         self._current_message_offset = 0
         return True
 
-    def create_new_session(self) -> str | None:
-        """
-        Create a new session for this character.
-
-        Returns:
-            New session ID or None if persistent memory not enabled
-        """
-        if not self.persistent_memory:
-            return None
-
-        self.session_id = self.persistent_memory.create_session(self.character.name)
-        self.memory = []
-        self._current_message_offset = 0
-        return self.session_id
-
     def _get_current_message_offset(self) -> int:
         """
         Get the current message offset for the session.
@@ -398,7 +383,7 @@ class CharacterResponder:
             items = self._parse_xml_tag(summary['summary'], "story_summary")
             if items:
                 summary_items.append(items)
-                
+
             summary_parts.append(f"Summary (messages {summary['start_offset']}-{summary['end_offset']}): {summary['summary']}")
 
         return "\n".join(summary_parts)

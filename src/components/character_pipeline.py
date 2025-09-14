@@ -1,5 +1,4 @@
 
-import logging
 import re
 from collections.abc import Iterator
 from typing import TypedDict
@@ -178,7 +177,8 @@ Summary of previous interactions:
             conversation_history=summary_msg + memory,
         )
 
-        if "<continuation>" not in evaluation or "<status_update>" not in evaluation or "<option A>" not in evaluation or "<option B>" not in evaluation or "<option C>" not in evaluation or "</option A>" not in evaluation or "</option B>" not in evaluation or "</option C>" not in evaluation:
+        required_tags = ["<continuation>", "<status_update>", "<option A>", "<option B>", "<option C>", "</option A>", "</option B>", "</option C>"]
+        if any(tag not in evaluation for tag in required_tags):
             return None
 
         return evaluation # pyright: ignore[reportReturnType]

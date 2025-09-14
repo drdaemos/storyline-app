@@ -37,6 +37,7 @@ class TestSummaryMemory:
         """Test initialization with default directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             original_cwd = Path.cwd()
+            memory = None
             try:
                 # Change to temp directory
                 import os
@@ -46,7 +47,15 @@ class TestSummaryMemory:
                 expected_path = Path(temp_dir) / "memory" / "summaries.db"
                 # Resolve both paths to handle symlinks (like /var -> /private/var on macOS)
                 assert memory.db_path.resolve() == expected_path.resolve()
+                # Close the database connection to prevent permission errors on Windows
+                memory.close()
+                memory = None
+                # Force garbage collection to help with Windows file locking issues
+                import gc
+                gc.collect()
             finally:
+                if memory:
+                    memory.close()
                 os.chdir(original_cwd)
 
     def test_init_custom_directory(self):

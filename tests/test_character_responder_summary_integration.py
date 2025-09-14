@@ -22,7 +22,7 @@ class MockPromptProcessor:
     def respond_with_model(self, prompt: str, user_prompt: str, output_type, conversation_history=None, max_tokens=None):
         return self.response
 
-    def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None) -> str:
+    def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None, reasoning=False) -> str:
         return self.response
 
     def respond_with_stream(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None):
@@ -94,7 +94,7 @@ class TestCharacterResponderSummaryIntegration:
                     return self.summary_response
                 return self.eval_response
 
-            def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None) -> str:
+            def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None, reasoning=False) -> str:
                 # Return summary response if this looks like a summary call
                 if ("summarize" in prompt.lower() or
                     "compress" in prompt.lower() or
@@ -291,24 +291,6 @@ class TestCharacterResponderSummaryIntegration:
             # Should succeed without throwing exceptions
         except Exception as e:
             raise AssertionError(f"compress_memory failed when summary_memory is None: {e}") from e
-
-    def test_new_session_resets_offset_tracking(self):
-        """Test that creating a new session properly resets offset tracking."""
-        dependencies = self.create_dependencies_with_mock_responses("test", "test")
-        responder = CharacterResponder(self.character, dependencies)
-
-        # Simulate some activity
-        responder._current_message_offset = 10
-        responder.memory_summary = "Some existing summary"
-
-        # Create new session
-        new_session_id = responder.create_new_session()
-        assert new_session_id is not None
-
-        # Verify reset
-        assert responder._current_message_offset == 0
-        assert responder.memory == []
-        assert responder.session_id == new_session_id
 
     def test_summarization_trigger_based_on_offset_difference(self):
         """Test that summarization is triggered based on offset difference from last summary."""

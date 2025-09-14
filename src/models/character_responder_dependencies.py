@@ -26,7 +26,7 @@ class CharacterResponderDependencies:
     def create_default(
         cls,
         character_name: str,
-        session_id: str,
+        session_id: str | None = None,
         use_persistent_memory: bool = True,
         logs_dir: Path | None = None,
         processor_type: str = "claude"
@@ -67,10 +67,13 @@ class CharacterResponderDependencies:
                 backup_processor = ClaudePromptProcessor()
             case _:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
-            
+
         # Setup memory if requested
         conversation_memory = ConversationMemory() if use_persistent_memory else None
         summary_memory = SummaryMemory() if use_persistent_memory else None
+
+        if session_id is None:
+            session_id = conversation_memory.create_session(character_name)
 
         # Setup chat logger
         chat_logger = ChatLogger(character_name, session_id, logs_dir)

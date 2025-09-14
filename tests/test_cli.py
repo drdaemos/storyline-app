@@ -170,7 +170,8 @@ class TestInteractiveChatCLI:
 
     @patch('src.interactive_chat.ConversationMemory')
     @patch('src.models.character_responder_dependencies.ConversationMemory')
-    def test_setup_character_session_start_new(self, mock_deps_memory_class: Mock, mock_memory_class: Mock):
+    @patch('src.models.character_responder_dependencies.CharacterResponderDependencies.create_default')
+    def test_setup_character_session_start_new(self, mock_create_default: Mock, mock_deps_memory_class: Mock, mock_memory_class: Mock):
         """Test setting up character session when choosing to start new session."""
         # Create a mock memory instance
         mock_memory_instance = Mock()
@@ -195,6 +196,17 @@ class TestInteractiveChatCLI:
         # Mock both ConversationMemory constructors
         mock_memory_class.return_value = mock_memory_instance
         mock_deps_memory_class.return_value = mock_deps_memory_instance
+
+        # Mock the dependencies with proper session_id
+        mock_dependencies = Mock()
+        mock_dependencies.session_id = "test-session-12345678"
+        mock_dependencies.conversation_memory = mock_deps_memory_instance
+        mock_dependencies.summary_memory = Mock()
+        mock_dependencies.summary_memory.get_session_summaries.return_value = []
+        mock_dependencies.chat_logger = Mock()
+        mock_dependencies.primary_processor = Mock()
+        mock_dependencies.backup_processor = Mock()
+        mock_create_default.return_value = mock_dependencies
 
         cli = InteractiveChatCLI()
         character = Character(

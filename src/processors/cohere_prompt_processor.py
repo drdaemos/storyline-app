@@ -57,7 +57,7 @@ class CoherePromptProcessor(PromptProcessor):
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         response = self._process_string(messages, max_tokens,reasoning)
-        
+
         return response
 
     def respond_with_model(
