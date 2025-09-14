@@ -1,3 +1,4 @@
+import os
 import click
 from dotenv import load_dotenv
 from rich.console import Console
@@ -92,14 +93,16 @@ def analyze(file_path: str, output: str | None) -> None:
 
 
 @cli.command()
-@click.option("--host", default="0.0.0.0", help="Host to bind the server to")
-@click.option("--port", default=8000, help="Port to bind the server to")
+@click.option("--host", help="Host to bind the server to")
+@click.option("--port", help="Port to bind the server to")
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
 def serve(host: str, port: int, reload: bool) -> None:
     """Start the FastAPI server for web-based character interactions."""
     try:
         import uvicorn
 
+        host = host or os.getenv("HOST", "0.0.0.0")
+        port = port or int(os.getenv("PORT", 8000))
 
         console = Console()
         console.print("[green]Starting Storyline API server...[/green]")
