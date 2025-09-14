@@ -1,7 +1,4 @@
 from unittest.mock import Mock, patch
-from pathlib import Path
-from tempfile import TemporaryDirectory
-import os
 
 import pytest
 from fastapi.testclient import TestClient

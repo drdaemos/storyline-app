@@ -1,4 +1,5 @@
 import os
+
 import click
 from dotenv import load_dotenv
 from rich.console import Console

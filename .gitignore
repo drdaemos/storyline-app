@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Frontend build output
+/static/
+
 # User-specific files
 .env
 golden_dataset/**

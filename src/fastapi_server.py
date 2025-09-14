@@ -10,21 +10,25 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.character_loader import CharacterLoader
+from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.conversation_memory import ConversationMemory
+from src.models.api_models import CreateCharacterRequest, CreateCharacterResponse
+from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.summary_memory import SummaryMemory
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
 
 # Mount static files for the web interface
-static_dir = Path(__file__).parent.parent / "static"
+static_dir = Path(__file__).parent.parent / "static" / "assets"
 if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    app.mount("/assets", StaticFiles(directory=static_dir), name="assets")
 
 # Global variables to store character responders by session
 character_sessions: dict[str, CharacterResponder] = {}
 character_loader = CharacterLoader()
+character_manager = CharacterManager()
 
 
 class InteractRequest(BaseModel):
@@ -52,6 +56,8 @@ class HealthStatus(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+
 
 
 @app.get("/health")
@@ -142,6 +148,41 @@ async def get_character_info(character_name: str) -> dict[str, str]:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get character info: {str(e)}") from e
+
+
+@app.post("/characters")
+async def create_character(request: CreateCharacterRequest) -> CreateCharacterResponse:
+    """Create a new character from either structured data or freeform YAML text."""
+    try:
+        # Delegate to service layer
+        if request.is_yaml_text:
+            if not isinstance(request.data, str):
+                raise HTTPException(
+                    status_code=400,
+                    detail="When is_yaml_text is true, data must be a string"
+                )
+            character_data = character_manager.validate_yaml_text(request.data)
+        else:
+            if not isinstance(request.data, Character):
+                raise HTTPException(
+                    status_code=400,
+                    detail="When is_yaml_text is false, data must be structured character data"
+                )
+            character_data = request.data.model_dump()
+
+        filename = character_manager.create_character_file(character_data)
+
+        return CreateCharacterResponse(
+            message=f"Character '{character_data['name']}' created successfully",
+            character_filename=filename
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}") from e
 
 
 @app.get("/sessions")
