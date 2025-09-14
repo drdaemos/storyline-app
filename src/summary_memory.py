@@ -336,6 +336,16 @@ class SummaryMemory:
             result = cursor.fetchone()
             return result[0] if result and result[0] is not None else None
 
+    def health_check(self) -> bool:
+        """Check if the database is accessible and healthy."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("SELECT 1")
+                cursor.fetchone()
+            return True
+        except Exception:
+            return False
+
     def close(self) -> None:
         """Close the database connection (currently no-op as we use context managers)."""
         pass

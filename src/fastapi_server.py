@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 
 from src.character_loader import CharacterLoader
 from src.character_responder import CharacterResponder
+from src.conversation_memory import ConversationMemory
 from src.models.character_responder_dependencies import CharacterResponderDependencies
+from src.summary_memory import SummaryMemory
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
 
@@ -35,11 +37,64 @@ class SessionInfo(BaseModel):
     session_id: str
     character_name: str
     message_count: int
+    last_message_time: str
+    last_character_response: str | None = None
+
+
+class HealthStatus(BaseModel):
+    status: str
+    conversation_memory: str
+    summary_memory: str
+    details: dict[str, str] | None = None
 
 
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+
+@app.get("/health")
+async def health_check() -> HealthStatus:
+    """Health check endpoint that verifies database connectivity."""
+    conversation_status = "ok"
+    summary_status = "ok"
+    overall_status = "healthy"
+    details = {}
+
+    try:
+        # Test conversation memory database
+        conversation_memory = ConversationMemory()
+        if conversation_memory.health_check():
+            details["conversation_db_path"] = str(conversation_memory.db_path)
+        else:
+            conversation_status = "error"
+            overall_status = "unhealthy"
+            details["conversation_error"] = "Database connectivity failed"
+    except Exception as e:
+        conversation_status = "error"
+        overall_status = "unhealthy"
+        details["conversation_error"] = str(e)
+
+    try:
+        # Test summary memory database
+        summary_memory = SummaryMemory()
+        if summary_memory.health_check():
+            details["summary_db_path"] = str(summary_memory.db_path)
+        else:
+            summary_status = "error"
+            overall_status = "unhealthy"
+            details["summary_error"] = "Database connectivity failed"
+    except Exception as e:
+        summary_status = "error"
+        overall_status = "unhealthy"
+        details["summary_error"] = str(e)
+
+    return HealthStatus(
+        status=overall_status,
+        conversation_memory=conversation_status,
+        summary_memory=summary_status,
+        details=details
+    )
 
 
 @app.get("/")
@@ -90,14 +145,45 @@ async def get_character_info(character_name: str) -> dict[str, str]:
 
 @app.get("/sessions")
 async def list_sessions() -> list[SessionInfo]:
-    """List active sessions."""
-    sessions = []
-    for session_id, responder in character_sessions.items():
-        sessions.append(SessionInfo(
-            session_id=session_id,
-            character_name=responder.character.name,
-            message_count=len(responder.memory)
-        ))
+    """List all sessions from conversation memory."""
+    try:
+        conversation_memory = ConversationMemory()
+        character_loader = CharacterLoader()
+        available_characters = character_loader.list_characters()
+        sessions = []
+
+        for character_filename in available_characters:
+            # Load the character to get the actual name used in the database
+            character = character_loader.load_character(character_filename)
+            character_name = character.name if character else character_filename.capitalize()
+
+            character_sessions = conversation_memory.get_character_sessions(character_name, limit=50)
+
+            for session_info in character_sessions:
+                # Get the last character response from this session
+                session_messages = conversation_memory.get_session_messages(session_info["session_id"], limit=1)
+                last_character_response = None
+
+                # Find the last message from the character (assistant role)
+                for message in reversed(session_messages):
+                    if message["role"] == "assistant":
+                        last_character_response = message["content"]
+                        break
+
+                sessions.append(SessionInfo(
+                    session_id=session_info["session_id"],
+                    character_name=character_filename,  # Use filename for frontend consistency
+                    message_count=session_info["message_count"],
+                    last_message_time=session_info["last_message_time"],
+                    last_character_response=last_character_response
+                ))
+
+        # Sort by last message time (newest first)
+        sessions.sort(key=lambda x: x.last_message_time, reverse=True)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list sessions: {str(e)}") from e
+
     return sessions
 
 

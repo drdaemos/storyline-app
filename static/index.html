@@ -160,6 +160,13 @@
         </div>
         
         <div class="form-group">
+            <label for="session-select">Session:</label>
+            <select id="session-select">
+                <option value="">Select a character first</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
             <label for="processor-select">AI Processor:</label>
             <select id="processor-select">
                 <option value="google">Google (Gemini)</option>
@@ -169,10 +176,6 @@
             </select>
         </div>
         
-        <div class="form-group">
-            <label for="session-input">Session ID (optional):</label>
-            <input type="text" id="session-input" placeholder="Leave empty for new session">
-        </div>
         
         <div class="form-group">
             <label for="message-input">Your message:</label>
@@ -195,7 +198,11 @@
         let messageCount = 0;
 
         // Load characters on page load
-        document.addEventListener('DOMContentLoaded', loadCharacters);
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCharacters();
+            setupCharacterChangeHandler();
+            setupSessionChangeHandler();
+        });
 
         async function loadCharacters() {
             try {
@@ -220,24 +227,103 @@
                 // Select first character by default
                 select.selectedIndex = 0;
                 
+                // Load sessions for the first character
+                if (characters.length > 0) {
+                    loadSessionsForCharacter(characters[0]);
+                }
+                
             } catch (error) {
                 console.error('Error loading characters:', error);
                 document.getElementById('character-select').innerHTML = '<option value="">Error loading characters</option>';
             }
         }
 
+        function setupCharacterChangeHandler() {
+            const characterSelect = document.getElementById('character-select');
+            characterSelect.addEventListener('change', function() {
+                const selectedCharacter = this.value;
+                if (selectedCharacter) {
+                    loadSessionsForCharacter(selectedCharacter);
+                } else {
+                    clearSessionSelect();
+                }
+            });
+        }
+
+        function setupSessionChangeHandler() {
+            // No special handling needed now that custom sessions are removed
+        }
+
+        async function loadSessionsForCharacter(characterName) {
+            const sessionSelect = document.getElementById('session-select');
+
+            try {
+                sessionSelect.innerHTML = '<option value="">Loading sessions...</option>';
+
+                // Load all sessions from the unified endpoint
+                const response = await fetch('/sessions');
+                const allSessions = await response.json();
+
+                // Filter sessions for this character
+                const characterSessions = allSessions.filter(session =>
+                    session.character_name === characterName
+                );
+
+                sessionSelect.innerHTML = '';
+
+                // Add "new session" option
+                const newSessionOption = document.createElement('option');
+                newSessionOption.value = 'new';
+                newSessionOption.textContent = '🆕 Start New Session';
+                sessionSelect.appendChild(newSessionOption);
+
+                // Add existing sessions
+                characterSessions.forEach(session => {
+                    const option = document.createElement('option');
+                    option.value = session.session_id;
+                    const lastModified = new Date(session.last_message_time).toLocaleString();
+                    option.textContent = `📝 ${session.session_id} (${session.message_count} messages, ${lastModified})`;
+                    sessionSelect.appendChild(option);
+                });
+
+                // Select the first existing session by default if available, otherwise "new session"
+                if (characterSessions.length > 0) {
+                    sessionSelect.value = characterSessions[0].session_id;
+                } else {
+                    sessionSelect.value = 'new';
+                }
+
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
+            }
+        }
+
+        function clearSessionSelect() {
+            const sessionSelect = document.getElementById('session-select');
+            sessionSelect.innerHTML = '<option value="">Select a character first</option>';
+        }
+
         async function sendMessage() {
             const characterSelect = document.getElementById('character-select');
             const processorSelect = document.getElementById('processor-select');
-            const sessionInput = document.getElementById('session-input');
+            const sessionSelect = document.getElementById('session-select');
             const messageInput = document.getElementById('message-input');
             const sendButton = document.getElementById('send-button');
             const chatMessages = document.getElementById('chat-messages');
             
             const characterName = characterSelect.value;
             const processorType = processorSelect.value;
-            const sessionId = sessionInput.value.trim() || null;
+            const sessionChoice = sessionSelect.value;
             const userMessage = messageInput.value.trim();
+            
+            // Determine session ID based on selection
+            let sessionId = null;
+            if (sessionChoice === 'new') {
+                sessionId = null; // Let the server generate a new session ID
+            } else if (sessionChoice) {
+                sessionId = sessionChoice; // Use selected existing session ID
+            }
             
             if (!characterName) {
                 showError('Please select a character');
@@ -261,7 +347,7 @@
                 const requestData = {
                     character_name: characterName,
                     user_message: userMessage,
-                    session_id: sessionId || currentSessionId,
+                    session_id: sessionId,
                     processor_type: processorType
                 };
                 
@@ -302,7 +388,15 @@
                                     
                                     if (data.type === 'session') {
                                         currentSessionId = data.session_id;
-                                        sessionInput.value = currentSessionId;
+                                        // Update session select if it's a new session
+                                        if (sessionChoice === 'new') {
+                                            const sessionSelect = document.getElementById('session-select');
+                                            const newOption = document.createElement('option');
+                                            newOption.value = currentSessionId;
+                                            newOption.textContent = `📝 ${currentSessionId} (just created)`;
+                                            sessionSelect.insertBefore(newOption, sessionSelect.children[1]);
+                                            sessionSelect.value = currentSessionId;
+                                        }
                                         updateSessionInfo();
                                     } else if (data.type === 'chunk') {
                                         contentDiv.textContent += data.content;
@@ -395,9 +489,16 @@
                 if (response.ok) {
                     currentSessionId = null;
                     messageCount = 0;
-                    document.getElementById('session-input').value = '';
                     document.getElementById('chat-messages').innerHTML = '';
                     updateSessionInfo();
+                    
+                    // Refresh session list for current character
+                    const characterSelect = document.getElementById('character-select');
+                    const currentCharacter = characterSelect.value;
+                    if (currentCharacter) {
+                        loadSessionsForCharacter(currentCharacter);
+                    }
+                    
                     addMessage('System', 'Session cleared successfully', 'system-message');
                 } else {
                     showError('Failed to clear session');
