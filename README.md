@@ -21,11 +21,19 @@ Basically, pipeline operates on multiple levels:
 
 ## Things not yet explored
 
-- Story analysis on a longer span (summary covers only last exchanges, which is too small).
 - Using randomized external events to move the story and make both characters react
 - Using /commands to enable out of character / story transition actions (outside the default pipeline)
 - /rewind command to go back one step (remove last exchange from memory)
 - Remove evaluation from memory (to save tokens / avoid extra response generation in eval)
-- Move <state_update> upwards
-- Move option selection to code -> provide params
+- Additional prompt / logic to select the continuation option
+- Additional actions in the UI should just send the slash /command - no extra endpoints
 - Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.
+
+
+## Frontend Bugs
+
+- Double generation of session id for new conversation - first exchange is lost.
+- Missing last history in the chat window
+- Missing last response in the session preview
+- Missing handling of `error` type event - conversation is stuck
+- Missing auto-scroll on new messages in the chat
