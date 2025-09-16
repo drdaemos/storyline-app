@@ -7,13 +7,12 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
 from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.conversation_memory import ConversationMemory
-from src.models.api_models import CreateCharacterRequest, CreateCharacterResponse
+from src.models.api_models import CreateCharacterRequest, CreateCharacterResponse, HealthStatus, InteractRequest, SessionInfo
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.summary_memory import SummaryMemory
@@ -29,35 +28,6 @@ if static_dir.exists():
 character_sessions: dict[str, CharacterResponder] = {}
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
-
-
-class InteractRequest(BaseModel):
-    character_name: str = Field(..., min_length=1, description="Name of the character to interact with")
-    user_message: str = Field(..., min_length=1, description="User's message to the character")
-    session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
-    processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
-
-
-class SessionInfo(BaseModel):
-    session_id: str
-    character_name: str
-    message_count: int
-    last_message_time: str
-    last_character_response: str | None = None
-
-
-class HealthStatus(BaseModel):
-    status: str
-    conversation_memory: str
-    summary_memory: str
-    details: dict[str, str] | None = None
-
-
-class ErrorResponse(BaseModel):
-    error: str
-    detail: str
-
-
 
 
 @app.get("/health")
@@ -104,22 +74,13 @@ async def health_check() -> HealthStatus:
     )
 
 
-@app.get("/")
-async def root():  # noqa: ANN201
-    """Root endpoint serving the web interface."""
-    html_file = Path(__file__).parent.parent / "static" / "index.html"
-    if html_file.exists():
-        return FileResponse(html_file)
-    return {"message": "Storyline API - Interactive Character Chat", "version": "0.1.0"}
-
-
 @app.get("/api")
 async def api_info() -> dict[str, str]:
     """API information endpoint."""
     return {"message": "Storyline API - Interactive Character Chat", "version": "0.1.0"}
 
 
-@app.get("/characters")
+@app.get("/api/characters")
 async def list_characters() -> list[str]:
     """List available characters."""
     try:
@@ -128,7 +89,7 @@ async def list_characters() -> list[str]:
         raise HTTPException(status_code=500, detail=f"Failed to list characters: {str(e)}") from e
 
 
-@app.get("/characters/{character_name}")
+@app.get("/api/characters/{character_name}")
 async def get_character_info(character_name: str) -> dict[str, str]:
     """Get information about a specific character."""
     try:
@@ -150,7 +111,7 @@ async def get_character_info(character_name: str) -> dict[str, str]:
         raise HTTPException(status_code=500, detail=f"Failed to get character info: {str(e)}") from e
 
 
-@app.post("/characters")
+@app.post("/api/characters")
 async def create_character(request: CreateCharacterRequest) -> CreateCharacterResponse:
     """Create a new character from either structured data or freeform YAML text."""
     try:
@@ -185,14 +146,14 @@ async def create_character(request: CreateCharacterRequest) -> CreateCharacterRe
         raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}") from e
 
 
-@app.get("/sessions")
+@app.get("/api/sessions")
 async def list_sessions() -> list[SessionInfo]:
     """List all sessions from conversation memory."""
     try:
         conversation_memory = ConversationMemory()
         character_loader = CharacterLoader()
         available_characters = character_loader.list_characters()
-        sessions = []
+        sessions: list[SessionInfo] = []
 
         for character_filename in available_characters:
             # Load the character to get the actual name used in the database
@@ -229,7 +190,7 @@ async def list_sessions() -> list[SessionInfo]:
     return sessions
 
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/api/sessions/{session_id}")
 async def clear_session(session_id: str) -> dict[str, str]:
     """Clear a specific session."""
     if session_id not in character_sessions:
@@ -244,7 +205,7 @@ async def clear_session(session_id: str) -> dict[str, str]:
         raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}") from e
 
 
-@app.post("/interact")
+@app.post("/api/interact")
 async def interact(request: InteractRequest) -> StreamingResponse:
     """
     Interact with a character and get streaming response via Server-Sent Events.
@@ -353,6 +314,25 @@ async def interact(request: InteractRequest) -> StreamingResponse:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
+
+# Root route - serve the Vue.js app
+@app.get("/")
+async def serve_root() -> FileResponse:
+    """Serve the frontend application for the root route."""
+    html_file = Path(__file__).parent.parent / "static" / "index.html"
+    if html_file.exists():
+        return FileResponse(html_file)
+    raise HTTPException(status_code=404, detail="Frontend not found")
+
+
+# Frontend routing - serve the Vue.js app for all other non-API routes
+@app.get("/{path:path}")
+async def serve_frontend(path: str = "") -> FileResponse:
+    """Serve the frontend application for all non-API routes."""
+    html_file = Path(__file__).parent.parent / "static" / "index.html"
+    if html_file.exists():
+        return FileResponse(html_file)
+    raise HTTPException(status_code=404, detail="Frontend not found")
 
 
 @app.exception_handler(Exception)

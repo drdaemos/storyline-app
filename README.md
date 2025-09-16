@@ -2,6 +2,31 @@
 
 A CLI interactive LLM-driven roleplaying chat with a configurable NPC character - creating a stage for creative writing for small stories (usually with two main characters).
 
+## Usage
+
+Prerequisites:
+
+- Python >= 3.12
+- Node >= 24.0
+
+Build Python backend and Vue frontend:
+
+```
+./build.sh
+```
+
+Run for development with hot reload:
+
+```
+./dev.sh
+```
+
+Run in production:
+
+```
+uv run main.py serve [--host ""] [--port <int>]
+```
+
 ## Architecture
 
 The system utilizes an LLM-based pipeline consisting of the following components in a more-or-less sequential fashion:
@@ -35,5 +60,5 @@ Basically, pipeline operates on multiple levels:
 - Double generation of session id for new conversation - first exchange is lost.
 - Missing last history in the chat window
 - Missing last response in the session preview
-- Missing handling of `error` type event - conversation is stuck
 - Missing auto-scroll on new messages in the chat
+- Add "Summarizing" event when summarization happens before thinking. In general - add ability to change "thinking" message in the UI.

@@ -104,7 +104,7 @@ const adjustHeight = async () => {
   await nextTick()
   if (textareaRef.value) {
     textareaRef.value.style.height = 'auto'
-    textareaRef.value.style.height = textareaRef.value.scrollHeight + 'px'
+    textareaRef.value.style.height = `${textareaRef.value.scrollHeight}px`
   }
 }
 

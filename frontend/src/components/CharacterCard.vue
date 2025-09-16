@@ -88,7 +88,7 @@ onMounted(async () => {
     try {
       characterInfo.value = await getCharacterInfo(props.character)
     } catch (error) {
-      console.warn(`Failed to load character info for ${props.character}:`, error)
+      console.error('Failed to load character info:', error)
     }
   }
 })

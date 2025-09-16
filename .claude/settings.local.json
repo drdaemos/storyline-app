@@ -12,7 +12,12 @@
       "Bash(python -m pytest tests/test_cli.py::TestInteractiveChatCLI -v)",
       "Bash(python:*)",
       "Bash(sqlite3:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:*)"
     ],
     "deny": []
   }

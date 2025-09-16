@@ -38,13 +38,11 @@ onMounted(() => {
 })
 
 // Global error handler
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason)
+window.addEventListener('unhandledrejection', (_event) => {
   globalError.value = 'Something went wrong. Please try again.'
 })
 
-window.addEventListener('error', (event) => {
-  console.error('Global error:', event.error)
+window.addEventListener('error', (_event) => {
   globalError.value = 'Something went wrong. Please try again.'
 })
 </script>

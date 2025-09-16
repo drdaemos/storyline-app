@@ -422,7 +422,7 @@ const generateCharacter = debounce(async () => {
     successMessage.value = 'AI generation completed! Review and modify the generated content as needed.'
     setTimeout(() => successMessage.value = '', 5000)
 
-  } catch (err) {
+  } catch (_err) {
     errorMessage.value = 'Failed to generate character fields. Please try again.'
     setTimeout(() => errorMessage.value = '', 5000)
   } finally {
@@ -440,7 +440,7 @@ const processYaml = debounce(async () => {
     yamlPreview.value = yamlContent.value
     successMessage.value = 'YAML parsed successfully!'
     setTimeout(() => successMessage.value = '', 3000)
-  } catch (err) {
+  } catch (_err) {
     errorMessage.value = 'Invalid YAML format. Please check your syntax.'
     setTimeout(() => errorMessage.value = '', 5000)
   } finally {
@@ -468,7 +468,7 @@ const saveCharacter = async () => {
       router.push('/')
     }, 2000)
 
-  } catch (err) {
+  } catch (error) {
     validateForm()
     errorMessage.value = error.value?.message || 'Failed to create character. Please try again.'
     setTimeout(() => errorMessage.value = '', 5000)
@@ -489,7 +489,7 @@ const saveYamlCharacter = async () => {
       router.push('/')
     }, 2000)
 
-  } catch (err) {
+  } catch (error) {
     errorMessage.value = error.value?.message || 'Failed to create character from YAML. Please check your format.'
     setTimeout(() => errorMessage.value = '', 5000)
   }

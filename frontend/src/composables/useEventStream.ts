@@ -27,7 +27,7 @@ export function useEventStream() {
 
     return new Promise((resolve, reject) => {
       // Use fetch with streaming response for POST request
-      fetch('/interact', {
+      fetch('/api/interact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,6 +80,10 @@ export function useEventStream() {
                   } else if (data.type === 'complete') {
                     cleanup()
                     return
+                  } else if (data.type === 'error') {
+                    error.value = data.error || 'An error occurred during streaming'
+                    cleanup()
+                    return
                   }
                 } catch (parseError) {
                   console.warn('Failed to parse SSE data:', parseError, 'Line:', line)
@@ -90,7 +94,6 @@ export function useEventStream() {
             // Continue reading
             readStream()
           } catch (readError) {
-            console.error('Stream read error:', readError)
             error.value = readError instanceof Error ? readError.message : 'Stream read error'
             cleanup()
           }
@@ -102,7 +105,7 @@ export function useEventStream() {
         const mockEventSource = {
           close: cleanup,
           readyState: 1,
-          url: '/interact',
+          url: '/api/interact',
           withCredentials: false,
           addEventListener: () => {},
           removeEventListener: () => {},
@@ -135,6 +138,7 @@ export function useEventStream() {
           const eventSource = await connect(payload)
           resolve(eventSource)
         } catch (err) {
+          console.error('Failed to connect, retrying:', err)
           resolve(await retry(payload))
         }
       }, retryDelay * retryCount)

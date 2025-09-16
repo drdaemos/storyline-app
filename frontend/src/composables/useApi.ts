@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import type { Character, SessionInfo, InteractRequest, CreateCharacterRequest, CreateCharacterResponse } from '@/types'
+import type { SessionInfo, InteractRequest, CreateCharacterRequest, CreateCharacterResponse } from '@/types'
 
 interface ApiError {
   message: string
@@ -45,38 +45,38 @@ export function useApi() {
   }
 
   const getCharacters = async (): Promise<string[]> => {
-    return makeRequest<string[]>('/characters')
+    return makeRequest<string[]>('/api/characters')
   }
 
   const getCharacterInfo = async (name: string): Promise<Record<string, string>> => {
-    return makeRequest<Record<string, string>>(`/characters/${encodeURIComponent(name)}`)
+    return makeRequest<Record<string, string>>(`/api/characters/${encodeURIComponent(name)}`)
   }
 
   const getSessions = async (): Promise<SessionInfo[]> => {
-    return makeRequest<SessionInfo[]>('/sessions')
+    return makeRequest<SessionInfo[]>('/api/sessions')
   }
 
   const createCharacter = async (payload: CreateCharacterRequest): Promise<CreateCharacterResponse> => {
-    return makeRequest<CreateCharacterResponse>('/characters', {
+    return makeRequest<CreateCharacterResponse>('/api/characters', {
       method: 'POST',
       body: JSON.stringify(payload)
     })
   }
 
   const deleteSession = async (sessionId: string): Promise<{ message: string }> => {
-    return makeRequest<{ message: string }>(`/sessions/${encodeURIComponent(sessionId)}`, {
+    return makeRequest<{ message: string }>(`/api/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE'
     })
   }
 
   const handleInteraction = (payload: InteractRequest): EventSource => {
-    const eventSource = new EventSource('/interact', {
+    const eventSource = new EventSource('/api/interact', {
 
     })
 
     // Since EventSource doesn't support POST directly, we need to use a different approach
     // We'll create the EventSource after making a POST request
-    fetch('/interact', {
+    fetch('/api/interact', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

@@ -42,6 +42,23 @@
           @regenerate="regenerateLastMessage"
         />
 
+        <!-- Error message -->
+        <div v-if="error && !isThinking" class="error-message">
+          <div class="error-content">
+            <span class="error-icon">⚠️</span>
+            <div class="error-text">
+              <strong>Error:</strong> {{ error }}
+            </div>
+            <button
+              class="error-dismiss"
+              @click="clearError"
+              title="Dismiss error"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
         <!-- Streaming message -->
         <ChatMessage
           v-if="isThinking && streamingContent"
@@ -70,8 +87,9 @@
 </template>
 
 <script setup lang="ts">
+// biome-ignore lint/style/useNamingConvention: Vue template functions need specific names
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { generateSessionId } from '@/utils/formatters'
@@ -86,7 +104,6 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const route = useRoute()
 const router = useRouter()
 const { settings } = useLocalSettings()
 const {
@@ -201,9 +218,10 @@ const sendMessage = async (text: string) => {
 
         scrollToBottom()
       } else if (!isConnected.value && error.value) {
-        // Stream failed
+        // Stream failed - unblock send button and keep error visible
         isThinking.value = false
-        console.error('Stream error:', error.value)
+        // Auto-scroll to show error message
+        scrollToBottom()
       }
     }
 
@@ -216,8 +234,8 @@ const sendMessage = async (text: string) => {
     }, 100)
 
   } catch (err) {
-    isThinking.value = false
     console.error('Failed to send message:', err)
+    isThinking.value = false
   }
 }
 
@@ -231,7 +249,7 @@ const rewindLastExchange = () => {
   if (lastMessage.isUser) {
     // Last message is from user, remove only that
     messages.value.pop()
-  } else if (secondLastMessage && secondLastMessage.isUser) {
+  } else if (secondLastMessage?.isUser) {
     // Remove both user and character messages
     messages.value.splice(-2, 2)
   } else {
@@ -266,9 +284,10 @@ const regenerateLastMessage = async () => {
 
 const scrollToBottom = async () => {
   await nextTick()
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-  }
+  window.scrollTo({
+    top: document.body.scrollHeight,
+    behavior: 'smooth'
+  })
 }
 
 const handleScroll = () => {
@@ -281,10 +300,36 @@ const handleScroll = () => {
   showScrollButton.value = !isNearBottom && messages.value.length > 0
 }
 
+const clearError = () => {
+  // Note: error is from useEventStream composable, may not be directly mutable
+  if (typeof error.value === 'object' && error.value) {
+    Object.assign(error.value, { value: null })
+  }
+}
+
 // Watch for streaming content changes and auto-scroll
 watch(streamingContent, () => {
   if (autoScroll.value) {
     scrollToBottom()
+  }
+}, { flush: 'post' })
+
+// Watch for messages array changes and auto-scroll to new messages
+watch(messages, (newMessages, oldMessages) => {
+  // Only auto-scroll if messages were added and user is near bottom
+  if (newMessages.length > (oldMessages?.length || 0) && autoScroll.value) {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+}, { flush: 'post' })
+
+// Watch for error changes and auto-scroll to show error messages
+watch(error, (newError) => {
+  if (newError && autoScroll.value) {
+    nextTick(() => {
+      scrollToBottom()
+    })
   }
 }, { flush: 'post' })
 
@@ -511,5 +556,63 @@ onUnmounted(() => {
 
 .messages-container::-webkit-scrollbar-thumb:hover {
   background: var(--secondary-color);
+}
+
+.error-message {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  animation: slideIn 0.3s ease-out;
+}
+
+.error-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.error-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.error-text {
+  flex: 1;
+  color: #dc2626;
+  line-height: 1.5;
+}
+
+.error-text strong {
+  color: #991b1b;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.error-dismiss:hover {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

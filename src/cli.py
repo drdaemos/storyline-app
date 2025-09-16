@@ -103,7 +103,7 @@ def serve(host: str, port: int, reload: bool) -> None:
         import uvicorn
 
         host = host or os.getenv("HOST", "0.0.0.0")
-        port = port or int(os.getenv("PORT", 8000))
+        port = int(port or os.getenv("PORT", 8000))
 
         console = Console()
         console.print("[green]Starting Storyline API server...[/green]")

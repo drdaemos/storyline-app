@@ -43,8 +43,9 @@ export interface CreateCharacterResponse {
 }
 
 export interface StreamEvent {
-  type: 'chunk' | 'complete'
+  type: 'chunk' | 'complete' | 'error'
   content?: string
+  error?: string
 }
 
 export interface LocalSettings {

@@ -77,6 +77,7 @@
 </template>
 
 <script setup lang="ts">
+// biome-ignore lint/style/useNamingConvention: Vue template functions need specific names
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
@@ -131,7 +132,7 @@ const selectCharacter = async (characterName: string) => {
 
     selectedCharacterInfo.value = characterInfo
   } catch (err) {
-    console.error(`Failed to load character info for ${characterName}:`, err)
+    console.error('Failed to select character or load character info:', err)
   }
 }
 
@@ -172,8 +173,7 @@ const handleSessionDeleted = (sessionId: string) => {
   sessions.value = sessions.value.filter(session => session.session_id !== sessionId)
 }
 
-const handleSettingChanged = (payload: { key: string; value: any }) => {
-  console.log('Setting changed:', payload)
+const handleSettingChanged = (_payload: { key: string; value: any }) => {
   // Settings are automatically persisted via the composable
 }
 

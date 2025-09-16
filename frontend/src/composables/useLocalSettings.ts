@@ -23,7 +23,7 @@ export function useLocalSettings() {
         lastSelectedCharacter: lastSelectedCharacter || undefined
       }
     } catch (error) {
-      console.warn('Failed to load settings from localStorage:', error)
+      console.warn('Failed to load settings from localStorage, using defaults:', error)
       settings.value = { ...defaultSettings }
     }
   }
@@ -37,7 +37,7 @@ export function useLocalSettings() {
         localStorage.setItem(`${STORAGE_PREFIX}last_character`, settings.value.lastSelectedCharacter)
       }
     } catch (error) {
-      console.warn('Failed to save settings to localStorage:', error)
+      console.error('Failed to save settings to localStorage:', error)
     }
   }
 
