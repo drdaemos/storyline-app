@@ -260,10 +260,9 @@ class CharacterResponder:
             # Update current message offset
             self._current_message_offset = delete_from_offset
 
-        # Send confirmation through streaming callback
-        confirmation = f"Rewound conversation by removing the last exchange ({messages_to_remove} messages)."
-        if self.streaming_callback:
-            self.streaming_callback(confirmation)
+        # Send completion event
+        if self.event_callback:
+            self.event_callback("command", succeeded="true")
 
         return ""
 

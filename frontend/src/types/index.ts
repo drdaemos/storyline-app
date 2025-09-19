@@ -42,11 +42,12 @@ export interface CreateCharacterResponse {
 }
 
 export interface StreamEvent {
-  type: 'chunk' | 'complete' | 'error' | 'session' | 'thinking'
+  type: 'chunk' | 'complete' | 'error' | 'session' | 'thinking' | 'command'
   session_id?: string
   content?: string
   error?: string
   stage?: string  // For thinking events: 'summarizing' | 'deliberating' | 'responding'
+  succeeded?: string  // For command events: 'true' | 'false'
 }
 
 export interface LocalSettings {

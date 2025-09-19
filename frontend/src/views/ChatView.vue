@@ -38,7 +38,9 @@
           v-for="message in messages"
           :message="message"
           :show-actions="isLastCharacterMessage(message)"
+          :show-rewind="isLastUserMessage(message)"
           @regenerate="regenerateLastMessage"
+          @rewind="rewindLastExchange"
         />
 
         <!-- Error message -->
@@ -159,6 +161,17 @@ const isLastCharacterMessage = (message: ChatMessageType): boolean => {
   return message === lastMessage && !message.isUser
 }
 
+const isLastUserMessage = (message: ChatMessageType): boolean => {
+  // Show rewind button on the last user message only if there's a subsequent AI response
+  if (!message.isUser) return false
+
+  const messageIndex = messages.value.indexOf(message)
+  const nextMessage = messages.value[messageIndex + 1]
+
+  // Show if this user message has an AI response after it
+  return nextMessage && !nextMessage.isUser
+}
+
 const handleChatInput = async (text: string) => {
   const trimmedText = text.trim()
 
@@ -166,6 +179,9 @@ const handleChatInput = async (text: string) => {
   switch (trimmedText) {
     case '/regenerate':
       await regenerateLastMessage()
+      break
+    case '/rewind':
+      await rewindLastExchange()
       break
     default:
       await sendMessage(text)
@@ -219,6 +235,10 @@ const sendInteractRequest = async (userMessage: string) => {
         }
 
         scrollToBottom()
+      } else if (!isConnected.value && !streamingContent.value && !error.value) {
+        // Command completed without content (like /rewind)
+        isThinking.value = false
+        scrollToBottom()
       } else if (!isConnected.value && error.value) {
         // Stream failed - unblock send button and keep error visible
         isThinking.value = false
@@ -269,6 +289,27 @@ const regenerateLastMessage = async () => {
 
   // Send regenerate command to backend
   await sendInteractRequest('/regenerate')
+}
+
+const rewindLastExchange = async () => {
+  if (messages.value.length === 0) return
+
+  const lastMessage = messages.value[messages.value.length - 1]
+  const secondLastMessage = messages.value[messages.value.length - 2]
+
+  if (lastMessage.isUser) {
+    // Last message is from user, remove only that
+    messages.value.pop()
+  } else if (secondLastMessage?.isUser) {
+    // Remove both user and character messages
+    messages.value.splice(-2, 2)
+  } else {
+    // Only remove character message
+    messages.value.pop()
+  }
+
+  // Send rewind command to backend
+  await sendInteractRequest('/rewind')
 }
 
 const scrollToBottom = async () => {

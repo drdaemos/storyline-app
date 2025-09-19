@@ -85,6 +85,11 @@ export function useEventStream() {
                     sessionId.value = data.session_id
                   } else if (data.type === 'thinking' && data.stage) {
                     thinkingStage.value = data.stage
+                  } else if (data.type === 'command' && data.succeeded === 'true') {
+                    // Command completed successfully
+                    thinkingStage.value = null
+                    cleanup()
+                    return
                   } else if (data.type === 'complete') {
                     thinkingStage.value = null
                     cleanup()

@@ -14,6 +14,16 @@
       <div v-else class="character-avatar">
         {{ message.author.charAt(0).toUpperCase() }}
       </div>
+
+      <div v-if="showRewind && message.isUser && !isStreaming" class="avatar-actions">
+        <button
+          class="btn-icon rewind-btn"
+          @click="emit('rewind')"
+          title="Remove this exchange"
+        >
+          ⏏️
+        </button>
+      </div>
     </div>
 
     <div class="message-content">
@@ -62,12 +72,14 @@ interface Props {
   message: ChatMessage
   isStreaming?: boolean
   showActions?: boolean
+  showRewind?: boolean
 }
 
 defineProps<Props>()
 
 const emit = defineEmits<{
   regenerate: []
+  rewind: []
 }>()
 </script>
 
@@ -101,6 +113,10 @@ const emit = defineEmits<{
 
 .message-avatar {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .user-avatar,
@@ -234,6 +250,28 @@ const emit = defineEmits<{
 
 .user-message .btn-icon:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.avatar-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.avatar-actions .btn-icon {
+  padding: 0.375rem;
+  font-size: 0.875rem;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-actions .btn-icon:hover {
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 1;
 }
 
 /* Markdown styling */

@@ -131,10 +131,10 @@ def test_rewind_command_with_history():
     """Test /rewind command with conversation history."""
     responder = create_test_responder()
 
-    # Track streaming callback calls
-    streamed_text = []
-    def mock_streaming_callback(text: str) -> None:
-        streamed_text.append(text)
+    # Track event callback calls
+    events = []
+    def mock_event_callback(event_type: str, **kwargs: str) -> None:
+        events.append({"type": event_type, **kwargs})
 
     # Add some conversation history manually
     responder.memory = [
@@ -146,14 +146,15 @@ def test_rewind_command_with_history():
         {"role": "assistant", "content": "Second response", "created_at": "2023-01-01T00:01:02Z", "type": "conversation"}
     ]
 
-    result = responder.respond("/rewind", streaming_callback=mock_streaming_callback)
+    result = responder.respond("/rewind", event_callback=mock_event_callback)
 
     # Should return empty string
     assert result == ""
 
-    # Should stream confirmation message
-    assert len(streamed_text) == 1
-    assert "Rewound conversation by removing the last exchange (3 messages)" in streamed_text[0]
+    # Should send command completion event
+    assert len(events) == 1
+    assert events[0]["type"] == "command"
+    assert events[0]["succeeded"] == "true"
 
     # Memory should only contain the first exchange
     assert len(responder.memory) == 3
@@ -218,10 +219,10 @@ def test_commands_with_persistent_memory():
     """Test that commands work correctly with persistent memory."""
     responder = create_test_responder(with_memory=True)
 
-    # Track streaming callback calls
-    streamed_text = []
-    def mock_streaming_callback(text: str) -> None:
-        streamed_text.append(text)
+    # Track event callback calls
+    events = []
+    def mock_event_callback(event_type: str, **kwargs: str) -> None:
+        events.append({"type": event_type, **kwargs})
 
     # Add some conversation history
     responder.memory = [
@@ -231,14 +232,15 @@ def test_commands_with_persistent_memory():
     ]
     responder._current_message_offset = 3
 
-    result = responder.respond("/rewind", streaming_callback=mock_streaming_callback)
+    result = responder.respond("/rewind", event_callback=mock_event_callback)
 
     # Verify delete_messages_from_offset was called instead of delete_session
     responder.persistent_memory.delete_messages_from_offset.assert_called_once_with(
         responder.session_id, 0  # delete_from_offset = 3 - 3 = 0
     )
 
-    # Should return empty string and stream confirmation
+    # Should return empty string and send command completion event
     assert result == ""
-    assert len(streamed_text) == 1
-    assert "Rewound conversation" in streamed_text[0]
+    assert len(events) == 1
+    assert events[0]["type"] == "command"
+    assert events[0]["succeeded"] == "true"
