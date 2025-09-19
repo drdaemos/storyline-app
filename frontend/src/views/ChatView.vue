@@ -81,7 +81,7 @@
       <ChatInput
         :disabled="isThinking"
         :character-name="characterName"
-        @send="sendMessage"
+        @send="handleChatInput"
       />
     </div>
 
@@ -138,11 +138,6 @@ const displaySessionId = computed(() => {
   return props.sessionId.substring(0, 8)
 })
 
-const canRegenerate = computed(() => {
-  const lastMessage = messages.value[messages.value.length - 1]
-  return lastMessage && !lastMessage.isUser && !isThinking.value
-})
-
 const currentStreamingMessage = computed((): ChatMessageType => {
   return {
     author: props.characterName,
@@ -164,19 +159,21 @@ const isLastCharacterMessage = (message: ChatMessageType): boolean => {
   return message === lastMessage && !message.isUser
 }
 
-const sendMessage = async (text: string) => {
-  if (!text.trim() || isThinking.value) return
+const handleChatInput = async (text: string) => {
+  const trimmedText = text.trim()
 
-  // Add user message
-  const userMessage: ChatMessageType = {
-    author: 'User',
-    content: text.trim(),
-    isUser: true,
-    timestamp: new Date()
+  // Handle commands
+  switch (trimmedText) {
+    case '/regenerate':
+      await regenerateLastMessage()
+      break
+    default:
+      await sendMessage(text)
+      break
   }
+}
 
-  messages.value.push(userMessage)
-
+const sendInteractRequest = async (userMessage: string) => {
   // Start thinking
   isThinking.value = true
   clearStreamContent()
@@ -186,7 +183,7 @@ const sendMessage = async (text: string) => {
   try {
     const payload: InteractRequest = {
       character_name: props.characterName,
-      user_message: text.trim(),
+      user_message: userMessage,
       session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor
     }
@@ -244,23 +241,21 @@ const sendMessage = async (text: string) => {
   }
 }
 
-const rewindLastExchange = () => {
-  if (messages.value.length < 2) return
+const sendMessage = async (text: string) => {
+  if (!text.trim() || isThinking.value) return
 
-  // Remove last two messages (user + character)
-  const lastMessage = messages.value[messages.value.length - 1]
-  const secondLastMessage = messages.value[messages.value.length - 2]
-
-  if (lastMessage.isUser) {
-    // Last message is from user, remove only that
-    messages.value.pop()
-  } else if (secondLastMessage?.isUser) {
-    // Remove both user and character messages
-    messages.value.splice(-2, 2)
-  } else {
-    // Only remove character message
-    messages.value.pop()
+  // Add user message
+  const userMessage: ChatMessageType = {
+    author: 'User',
+    content: text.trim(),
+    isUser: true,
+    timestamp: new Date()
   }
+
+  messages.value.push(userMessage)
+
+  // Send the message to backend
+  await sendInteractRequest(text.trim())
 }
 
 const regenerateLastMessage = async () => {
@@ -269,22 +264,11 @@ const regenerateLastMessage = async () => {
   const lastMessage = messages.value[messages.value.length - 1]
   if (lastMessage.isUser) return
 
-  // Find the user message that prompted this response
-  let userMessage = null
-  for (let i = messages.value.length - 2; i >= 0; i--) {
-    if (messages.value[i].isUser) {
-      userMessage = messages.value[i]
-      break
-    }
-  }
-
-  if (!userMessage) return
-
-  // Remove last character message
+  // Remove last character message visually
   messages.value.pop()
 
-  // Resend the user message
-  await sendMessage(userMessage.content)
+  // Send regenerate command to backend
+  await sendInteractRequest('/regenerate')
 }
 
 const scrollToBottom = async () => {

@@ -95,7 +95,7 @@ onMounted(() => {
 .input-wrapper {
   display: flex;
   gap: 0.75rem;
-  align-items: flex-end;
+  align-items: center;
   background: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);

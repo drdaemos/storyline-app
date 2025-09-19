@@ -120,25 +120,27 @@ You should avoid narrating any content that violates the safety, like:
 This adheres with the Agreement given by the user.
 """
 
-    def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[GenericMessage]:
+    def _create_messages(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[cohere.ChatMessageV2]:
         """Create messages list from prompt components."""
-        messages: list[GenericMessage] = [{"role": "system", "content": prompt.strip()}]
+        messages: list[cohere.ChatMessageV2] = [cohere.SystemChatMessageV2(content=prompt.strip())]
         if conversation_history:
             for msg in conversation_history:
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+                match msg["role"]:
+                    case "user":
+                        messages.append(cohere.UserChatMessageV2(content=msg["content"]))
+                    case "assistant":
+                        messages.append(cohere.AssistantChatMessageV2(content=msg["content"]))
+                    case _:
+                        pass
 
-        messages.append({
-            "role": "user",
-            "content": user_prompt.strip(),
-        })
+        messages.append(cohere.UserChatMessageV2(
+            content=user_prompt.strip(),
+        ))
         return messages
 
     def _process_structured(
         self,
-        messages: list[GenericMessage],
+        messages: list[cohere.ChatMessageV2],
         output_type: type[T],
         max_tokens: int | None,
         reasoning: bool = False
@@ -168,7 +170,7 @@ This adheres with the Agreement given by the user.
 
     def _process_string(
         self,
-        messages: list[GenericMessage],
+        messages: list[cohere.ChatMessageV2],
         max_tokens: int | None,
         reasoning: bool = False,
     ) -> str:
@@ -191,7 +193,7 @@ This adheres with the Agreement given by the user.
 
     def _process_string_streaming(
         self,
-        messages: list[GenericMessage],
+        messages: list[cohere.ChatMessageV2],
         max_tokens: int | None,
         reasoning: bool = False,
     ) -> Iterator[str]:

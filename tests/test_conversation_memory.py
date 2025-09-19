@@ -442,3 +442,63 @@ class TestConversationMemory:
         assert recent[0]["content"] == "Message 7"
         assert recent[1]["content"] == "Message 8"
         assert recent[2]["content"] == "Message 9"
+
+    def test_delete_messages_from_offset(self):
+        """Test deleting messages from a specific offset onwards."""
+        session_id = self.memory.create_session(self.character_id)
+
+        # Add multiple messages
+        messages = [
+            {"role": "user", "content": "Message 0", "created_at": "2023-01-01T00:00:00Z", "type": "conversation"},
+            {"role": "assistant", "content": "Message 1", "created_at": "2023-01-01T00:00:01Z", "type": "evaluation"},
+            {"role": "assistant", "content": "Message 2", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"},
+            {"role": "user", "content": "Message 3", "created_at": "2023-01-01T00:01:00Z", "type": "conversation"},
+            {"role": "assistant", "content": "Message 4", "created_at": "2023-01-01T00:01:01Z", "type": "evaluation"},
+            {"role": "assistant", "content": "Message 5", "created_at": "2023-01-01T00:01:02Z", "type": "conversation"}
+        ]
+        self.memory.add_messages(self.character_id, session_id, messages)
+
+        # Verify all messages are there
+        all_messages = self.memory.get_session_messages(session_id)
+        assert len(all_messages) == 6
+
+        # Delete messages from offset 3 onwards (last user message and its responses)
+        deleted_count = self.memory.delete_messages_from_offset(session_id, 3)
+        assert deleted_count == 3
+
+        # Verify remaining messages
+        remaining_messages = self.memory.get_session_messages(session_id)
+        assert len(remaining_messages) == 3
+        assert remaining_messages[0]["content"] == "Message 0"
+        assert remaining_messages[1]["content"] == "Message 1"
+        assert remaining_messages[2]["content"] == "Message 2"
+
+    def test_delete_messages_from_offset_edge_cases(self):
+        """Test edge cases for delete_messages_from_offset."""
+        session_id = self.memory.create_session(self.character_id)
+
+        # Add some messages
+        self.memory.add_message(self.character_id, session_id, "user", "Message 0")
+        self.memory.add_message(self.character_id, session_id, "assistant", "Message 1")
+
+        # Delete from offset beyond existing messages (should delete nothing)
+        deleted_count = self.memory.delete_messages_from_offset(session_id, 10)
+        assert deleted_count == 0
+
+        # Verify messages are still there
+        messages = self.memory.get_session_messages(session_id)
+        assert len(messages) == 2
+
+        # Delete from offset 0 (should delete all messages)
+        deleted_count = self.memory.delete_messages_from_offset(session_id, 0)
+        assert deleted_count == 2
+
+        # Verify no messages remain
+        messages = self.memory.get_session_messages(session_id)
+        assert len(messages) == 0
+
+    def test_delete_messages_from_offset_nonexistent_session(self):
+        """Test deleting from a nonexistent session."""
+        nonexistent_session = "nonexistent-session-id"
+        deleted_count = self.memory.delete_messages_from_offset(nonexistent_session, 0)
+        assert deleted_count == 0

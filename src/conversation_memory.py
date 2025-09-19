@@ -328,6 +328,26 @@ class ConversationMemory:
                 for row in rows
             ]
 
+    def delete_messages_from_offset(self, session_id: str, from_offset: int) -> int:
+        """
+        Delete messages from a specific offset onwards in a session.
+
+        Args:
+            session_id: Session ID to delete messages from
+            from_offset: Delete messages with offset >= this value
+
+        Returns:
+            Number of messages deleted
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                DELETE FROM messages
+                WHERE session_id = ? AND offset >= ?
+            """, (session_id, from_offset))
+
+            conn.commit()
+            return cursor.rowcount
+
     def delete_session(self, session_id: str) -> int:
         """
         Delete all messages from a session.

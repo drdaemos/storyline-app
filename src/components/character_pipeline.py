@@ -345,7 +345,7 @@ By character's script you should act out the following actions:
                 # Find position after opening tag
                 tag_start = buffer.find(f"<{tag}>") + len(f"<{tag}>")
                 # Remove everything up to and including the opening tag
-                buffer = buffer[tag_start:]
+                buffer = buffer[tag_start:].strip()
 
             # If we're inside the tag, check for closing tag
             if inside_tag:

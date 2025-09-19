@@ -342,6 +342,7 @@ async def interact(request: InteractRequest) -> StreamingResponse:
                     "type": "error",
                     "error": str(e)
                 }
+                responder.chat_logger.log_exception(e) if responder.chat_logger else None
                 yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(

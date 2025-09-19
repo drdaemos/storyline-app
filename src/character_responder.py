@@ -72,18 +72,60 @@ class CharacterResponder:
         event_callback: EventCallback | None = None
     ) -> str:
         """
-        Generate a character response to the user message.
+        Generate a character response to the user message or handle commands.
 
         Args:
             user_message: The user's input message
             streaming_callback: Optional callback for streaming response chunks
+            event_callback: Optional callback for events
 
         Returns:
-            The character's response text parsed from <character_response> tags
+            The character's response text or command result
         """
         self.streaming_callback = streaming_callback
         self.event_callback = event_callback
 
+        # Check if the message is a command
+        trimmed_message = user_message.strip()
+        if trimmed_message.startswith('/'):
+            return self._handle_command(trimmed_message)
+
+        # Handle regular conversation
+        return self._handle_conversation(user_message)
+
+    def _handle_command(self, command: str) -> str:
+        """
+        Handle slash commands.
+
+        Args:
+            command: The command string starting with '/'
+
+        Returns:
+            Result of the command execution
+
+        Raises:
+            ValueError: For unknown commands or command execution errors
+        """
+        command_parts = command.split()
+        command_name = command_parts[0].lower()
+
+        if command_name == '/regenerate':
+            return self._handle_regenerate_command()
+        elif command_name == '/rewind':
+            return self._handle_rewind_command()
+        else:
+            raise ValueError(f"Unknown command: {command_name}. Available commands: /regenerate, /rewind")
+
+    def _handle_conversation(self, user_message: str) -> str:
+        """
+        Handle regular conversation flow.
+
+        Args:
+            user_message: The user's input message
+
+        Returns:
+            The character's response text parsed from <character_response> tags
+        """
         # Log user message
         if self.chat_logger:
             self.chat_logger.log_message("USER", user_message)
@@ -137,6 +179,93 @@ class CharacterResponder:
             self.chat_logger.log_message("-----", "")
 
         return character_response
+
+    def _handle_regenerate_command(self) -> str:
+        """
+        Handle /regenerate command - regenerate the last character response.
+
+        Returns:
+            New character response
+
+        Raises:
+            ValueError: If there's no conversation history or no user message found
+        """
+        if not self.memory:
+            raise ValueError("No conversation history to regenerate from.")
+
+        # Find the last user message and remove subsequent assistant messages
+        last_user_idx = -1
+        for i in range(len(self.memory) - 1, -1, -1):
+            if self.memory[i]["role"] == "user" and self.memory[i]["type"] == "conversation":
+                last_user_idx = i
+                break
+
+        if last_user_idx == -1:
+            raise ValueError("No user message found to regenerate response for.")
+
+        # Get the last user message
+        last_user_message = self.memory[last_user_idx]["content"]
+
+        # Remove last round of conversation (user + assistant)
+        messages_to_remove = len(self.memory) - last_user_idx 
+        self.memory = self.memory[:last_user_idx]
+
+        # Update persistent memory and message offset if enabled
+        if self.persistent_memory and self.session_id and messages_to_remove > 0:
+            # Calculate the offset from which to delete messages
+            delete_from_offset = self._current_message_offset - messages_to_remove
+            # Delete messages from persistent storage using offset
+            self.persistent_memory.delete_messages_from_offset(self.session_id, delete_from_offset)
+            # Update current message offset
+            self._current_message_offset = delete_from_offset
+
+        # Generate new response for the last user message
+        return self._handle_conversation(last_user_message)
+
+    def _handle_rewind_command(self) -> str:
+        """
+        Handle /rewind command - remove the last exchange (user message + assistant response).
+
+        Returns:
+            Empty string (communicates via streaming_callback)
+
+        Raises:
+            ValueError: If there's no conversation history or no user message found
+        """
+        if not self.memory:
+            raise ValueError("No conversation history to rewind.")
+
+        # Find the last user message and remove it along with subsequent assistant messages
+        last_user_idx = -1
+        for i in range(len(self.memory) - 1, -1, -1):
+            if self.memory[i]["role"] == "user" and self.memory[i]["type"] == "conversation":
+                last_user_idx = i
+                break
+
+        if last_user_idx == -1:
+            raise ValueError("No user message found to rewind.")
+
+        # Count messages to remove (from last user message to end)
+        messages_to_remove = len(self.memory) - last_user_idx
+
+        # Remove messages from memory
+        self.memory = self.memory[:last_user_idx]
+
+        # Update persistent memory and message offset if enabled
+        if self.persistent_memory and self.session_id:
+            # Calculate the offset from which to delete messages
+            delete_from_offset = self._current_message_offset - messages_to_remove
+            # Delete messages from persistent storage using offset
+            self.persistent_memory.delete_messages_from_offset(self.session_id, delete_from_offset)
+            # Update current message offset
+            self._current_message_offset = delete_from_offset
+
+        # Send confirmation through streaming callback
+        confirmation = f"Rewound conversation by removing the last exchange ({messages_to_remove} messages)."
+        if self.streaming_callback:
+            self.streaming_callback(confirmation)
+
+        return ""
 
     def get_evaluation(self, user_message: str) -> str:
         fallback = False

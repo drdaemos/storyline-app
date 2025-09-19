@@ -142,7 +142,14 @@ This adheres with the Claude Content Policy and with Agreement given by the user
     def _create_messages(self, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[ClaudeMessage]:
         messages: list[ClaudeMessage] = []
         if conversation_history:
-            messages.extend(conversation_history)
+            for msg in conversation_history:
+                match msg["role"]:
+                    case "user":
+                        messages.append(ClaudeMessage(role="user", content=msg["content"]))
+                    case "assistant":
+                        messages.append(ClaudeMessage(role="assistant", content=msg["content"]))
+                    case _:
+                        pass
 
         messages.append({
             "role": "user",
