@@ -1,10 +1,21 @@
 import re
-from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Protocol
 
 from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.models.message import GenericMessage
+
+
+class EventCallback(Protocol):
+    """Protocol for event callbacks that can send different types of events."""
+    def __call__(self, event_type: str, **kwargs: str) -> None: ...
+
+
+class StreamingCallback(Protocol):
+    """Protocol for streaming callbacks that send text chunks."""
+    def __call__(self, chunk: str) -> None: ...
 
 
 class CharacterResponder:
@@ -22,7 +33,8 @@ class CharacterResponder:
             dependencies: Dependencies container with processors, memory, logger, and session config
         """
         self.character = character
-        self.streaming_callback: Callable[[str], None] | None = None
+        self.streaming_callback: StreamingCallback | None = None
+        self.event_callback: EventCallback | None = None
         self.dependencies = dependencies
 
         # Extract dependencies for easier access
@@ -37,7 +49,6 @@ class CharacterResponder:
         if self.persistent_memory and self.session_id:
             # Load recent messages from persistent memory
             self.memory = self.persistent_memory.get_recent_messages(
-                character.name,
                 self.session_id,
                 limit=self.PROPAGATED_MEMORY_SIZE * 10 # fetch more to do an efficient summarization
             )
@@ -54,7 +65,12 @@ class CharacterResponder:
         self.plans = ""
 
 
-    def respond(self, user_message: str, streaming_callback: Callable[[str], None] | None = None) -> str:
+    def respond(
+        self,
+        user_message: str,
+        streaming_callback: StreamingCallback | None = None,
+        event_callback: EventCallback | None = None
+    ) -> str:
         """
         Generate a character response to the user message.
 
@@ -66,18 +82,26 @@ class CharacterResponder:
             The character's response text parsed from <character_response> tags
         """
         self.streaming_callback = streaming_callback
+        self.event_callback = event_callback
 
         # Log user message
         if self.chat_logger:
             self.chat_logger.log_message("USER", user_message)
 
+        user_msg: GenericMessage = {"role": 'user', "content": user_message, "created_at": datetime.now(UTC).isoformat(), "type": "conversation"}
+
         # Compress / summarize memory if too many messages
         if self._should_trigger_summarization(user_message):
+            if self.event_callback:
+                self.event_callback("thinking", stage="summarizing")
             self.compress_memory()
             self.plans = self.get_character_plans()
 
         # Get scenario evaluation
+        if self.event_callback:
+            self.event_callback("thinking", stage="deliberating")
         raw_evaluation = self.get_evaluation(user_message)
+        eval_msg: GenericMessage = {"role": 'assistant', "content": raw_evaluation, "created_at": datetime.now(UTC).isoformat(), "type": "evaluation"}
 
         # Extract character's idea of continuation
         continuation_option = self._parse_xml_tag(raw_evaluation, "continuation")
@@ -90,6 +114,8 @@ class CharacterResponder:
 
         # Generate character response text
         # status_update comes from the previous response
+        if self.event_callback:
+            self.event_callback("thinking", stage="responding")
         character_response = self.get_character_response(user_message, option_text, self.status_update, self.user_name)
 
         # Parse and extract status update from XML tags
@@ -97,9 +123,7 @@ class CharacterResponder:
         self.status_update = self._parse_xml_tag(raw_evaluation, "status_update") or ""
 
         # Update memory with the new interaction
-        user_msg: GenericMessage = {"role": 'user', "content": user_message}
-        eval_msg: GenericMessage = {"role": 'assistant', "content": raw_evaluation}
-        response_msg: GenericMessage = {"role": 'assistant', "content": character_response}
+        response_msg: GenericMessage = {"role": 'assistant', "content": character_response, "created_at": datetime.now(UTC).isoformat(), "type": "conversation"}
 
         self.memory = self.memory + [user_msg, eval_msg, response_msg]
 
@@ -123,7 +147,7 @@ class CharacterResponder:
             "character": self.character
         }
         # pass only the most recent messages for context (use only user msg and character evals)
-        memory: list[GenericMessage] = [msg for i, msg in enumerate(self.memory[-self.PROPAGATED_MEMORY_SIZE:]) if i % 3 in [0, 1]]
+        memory: list[GenericMessage] = [msg for msg in self.memory[-self.PROPAGATED_MEMORY_SIZE:] if msg["role"] == "user" or (msg["role"] == "assistant" and msg["type"] == "evaluation")]
 
         # Process the prompt
         try:
@@ -244,7 +268,8 @@ class CharacterResponder:
             return
 
         # Calculate offset range for the messages being summarized
-        messages_to_summarize = [msg for i, msg in enumerate(self.memory[:-self.EPOCH_MESSAGES]) if i % 3 in [0, 2]]
+        messages_to_summarize = [msg for msg in self.memory[:-self.EPOCH_MESSAGES] if msg["type"] == "conversation"]
+
         if not messages_to_summarize:
             return
 
@@ -324,7 +349,7 @@ class CharacterResponder:
 
         # Look for the most recent assistant message and parse the character response from it
         for message in reversed(self.memory):
-            if message["role"] == "assistant":
+            if message["role"] == "assistant" and message["type"] == "conversation":
                 return message["content"]
 
         return None

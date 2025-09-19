@@ -5,6 +5,8 @@ export function useEventStream() {
   const isConnected = ref(false)
   const error: Ref<string | null> = ref(null)
   const streamingContent = ref('')
+  const sessionId = ref('')
+  const thinkingStage: Ref<string | null> = ref(null)
 
   let eventSource: EventSource | null = null
   let retryCount = 0
@@ -17,11 +19,13 @@ export function useEventStream() {
       eventSource = null
     }
     isConnected.value = false
+    thinkingStage.value = null
   }
 
   const connect = async (payload: InteractRequest): Promise<EventSource> => {
     cleanup()
     error.value = null
+    sessionId.value = ''
     streamingContent.value = ''
     retryCount = 0
 
@@ -77,10 +81,16 @@ export function useEventStream() {
 
                   if (data.type === 'chunk' && data.content) {
                     streamingContent.value += data.content
+                  } else if (data.type === 'session' && data.session_id) {
+                    sessionId.value = data.session_id
+                  } else if (data.type === 'thinking' && data.stage) {
+                    thinkingStage.value = data.stage
                   } else if (data.type === 'complete') {
+                    thinkingStage.value = null
                     cleanup()
                     return
                   } else if (data.type === 'error') {
+                    thinkingStage.value = null
                     error.value = data.error || 'An error occurred during streaming'
                     cleanup()
                     return
@@ -166,6 +176,8 @@ export function useEventStream() {
     isConnected,
     error,
     streamingContent,
+    sessionId,
+    thinkingStage,
     connect,
     retry,
     disconnect,

@@ -18,7 +18,6 @@ export interface SessionInfo {
 }
 
 export interface ChatMessage {
-  id: string
   author: string
   content: string
   isUser: boolean
@@ -43,13 +42,29 @@ export interface CreateCharacterResponse {
 }
 
 export interface StreamEvent {
-  type: 'chunk' | 'complete' | 'error'
+  type: 'chunk' | 'complete' | 'error' | 'session' | 'thinking'
+  session_id?: string
   content?: string
   error?: string
+  stage?: string  // For thinking events: 'summarizing' | 'deliberating' | 'responding'
 }
 
 export interface LocalSettings {
   aiProcessor: string
   theme: string
   lastSelectedCharacter?: string
+}
+
+export interface SessionMessage {
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export interface SessionDetails {
+  session_id: string
+  character_name: string
+  message_count: number
+  last_messages: SessionMessage[]
+  last_message_time: string
 }

@@ -35,7 +35,7 @@
           </div>
 
           <div v-if="session.last_character_response" class="session-preview">
-            <p>{{ truncateText(session.last_character_response, 120) }}</p>
+            <p>{{ truncateText(session.last_character_response, 160) }}</p>
           </div>
         </div>
 
@@ -72,7 +72,7 @@ const emit = defineEmits<{
   'session-deleted': [sessionId: string]
 }>()
 
-const { deleteSession: apiDeleteSession, error } = useApi()
+const { deleteSession: apiDeleteSession } = useApi()
 
 const filteredSessions = computed(() => {
   return props.sessions
@@ -195,6 +195,9 @@ const deleteSession = async (sessionId: string) => {
 
 .session-preview p {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .session-actions {

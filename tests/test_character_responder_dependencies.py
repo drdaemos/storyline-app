@@ -95,26 +95,12 @@ def test_dependencies_create_default(mock_logger, mock_memory, mock_claude, mock
     mock_cohere_instance = MockPromptProcessor("Cohere response")
     mock_openrouter_instance = MockPromptProcessor("OpenRouter response")
     mock_memory_instance = Mock()
-    mock_logger_instance = Mock()
 
     mock_claude.return_value = mock_claude_instance
     mock_cohere.return_value = mock_cohere_instance
     mock_openrouter.return_value = mock_openrouter_instance
     mock_memory.return_value = mock_memory_instance
-    mock_logger.return_value = mock_logger_instance
-
-    dependencies = CharacterResponderDependencies.create_default(
-        character_name="TestChar",
-        session_id="test-123",
-        use_persistent_memory=False,
-        logs_dir=None,
-        processor_type="claude"
-    )
-
-    assert dependencies.primary_processor is mock_claude_instance
-    assert dependencies.backup_processor is mock_openrouter_instance
-    assert dependencies.conversation_memory is None  # Because use_persistent_memory=False
-    assert dependencies.chat_logger is mock_logger_instance
+    mock_logger.return_value = mock_logger_instances
 
     # Test with persistent memory
     dependencies_with_memory = CharacterResponderDependencies.create_default(

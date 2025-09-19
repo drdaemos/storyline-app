@@ -36,7 +36,6 @@
 
         <ChatMessage
           v-for="message in messages"
-          :key="message.id"
           :message="message"
           :show-actions="isLastCharacterMessage(message)"
           @regenerate="regenerateLastMessage"
@@ -59,6 +58,18 @@
           </div>
         </div>
 
+        <!-- Thinking indicator -->
+        <div v-if="isThinking && !streamingContent" class="thinking-indicator">
+          <div class="thinking-content">
+            <div class="thinking-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span class="thinking-text">{{ thinkingMessage }}</span>
+          </div>
+        </div>
+
         <!-- Streaming message -->
         <ChatMessage
           v-if="isThinking && streamingContent"
@@ -70,11 +81,7 @@
       <ChatInput
         :disabled="isThinking"
         :character-name="characterName"
-        :can-rewind="messages.length >= 2"
-        :can-regenerate="canRegenerate"
         @send="sendMessage"
-        @rewind="rewindLastExchange"
-        @regenerate="regenerateLastMessage"
       />
     </div>
 
@@ -92,10 +99,10 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
 import { useLocalSettings } from '@/composables/useLocalSettings'
-import { generateSessionId } from '@/utils/formatters'
+import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatMessage from '@/components/ChatMessage.vue'
 import ChatInput from '@/components/ChatInput.vue'
-import type { ChatMessage as ChatMessageType, InteractRequest } from '@/types'
+import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails } from '@/types'
 
 interface Props {
   characterName: string
@@ -110,6 +117,8 @@ const {
   isConnected,
   error,
   streamingContent,
+  sessionId,
+  thinkingStage,
   connect,
   disconnect,
   clearStreamContent
@@ -136,12 +145,18 @@ const canRegenerate = computed(() => {
 
 const currentStreamingMessage = computed((): ChatMessageType => {
   return {
-    id: 'streaming',
     author: props.characterName,
     content: streamingContent.value,
     isUser: false,
     timestamp: new Date()
   }
+})
+
+const thinkingMessage = computed((): string => {
+  if (!thinkingStage.value) {
+    return `${props.characterName} is thinking...`
+  }
+  return getThinkingDescriptor(thinkingStage.value, props.characterName)
 })
 
 const isLastCharacterMessage = (message: ChatMessageType): boolean => {
@@ -154,7 +169,6 @@ const sendMessage = async (text: string) => {
 
   // Add user message
   const userMessage: ChatMessageType = {
-    id: generateSessionId(),
     author: 'User',
     content: text.trim(),
     isUser: true,
@@ -162,37 +176,29 @@ const sendMessage = async (text: string) => {
   }
 
   messages.value.push(userMessage)
-  await scrollToBottom()
 
   // Start thinking
   isThinking.value = true
   clearStreamContent()
 
-  try {
-    // Determine session ID
-    let sessionId = currentSessionId.value
-    if (props.sessionId === 'new' && !sessionId) {
-      sessionId = null // Backend will create new session
-    } else if (props.sessionId !== 'new') {
-      sessionId = props.sessionId
-    }
+  await scrollToBottom()
 
+  try {
     const payload: InteractRequest = {
       character_name: props.characterName,
       user_message: text.trim(),
-      session_id: sessionId,
+      session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor
     }
 
     // Start streaming response
-    const eventSource = await connect(payload)
+    await connect(payload)
 
     // Monitor streaming completion
     const checkCompletion = () => {
       if (!isConnected.value && streamingContent.value) {
         // Stream completed successfully
         const characterMessage: ChatMessageType = {
-          id: generateSessionId(),
           author: props.characterName,
           content: streamingContent.value,
           isUser: false,
@@ -204,14 +210,13 @@ const sendMessage = async (text: string) => {
         isThinking.value = false
 
         // Update session ID if this was a new session
-        if (props.sessionId === 'new' && !currentSessionId.value) {
-          currentSessionId.value = generateSessionId()
+        if (sessionId?.value !== '') {
           // Update URL without navigation
           router.replace({
             name: 'chat',
             params: {
               characterName: props.characterName,
-              sessionId: currentSessionId.value
+              sessionId: sessionId?.value
             }
           })
         }
@@ -307,6 +312,40 @@ const clearError = () => {
   }
 }
 
+const loadSessionHistory = async (sessionId: string) => {
+  try {
+    const response = await fetch(`/api/sessions/${sessionId}`)
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`Session ${sessionId} not found, starting fresh`)
+        return
+      }
+      throw new Error(`Failed to load session: ${response.status}`)
+    }
+
+    const sessionDetails: SessionDetails = await response.json()
+
+    // Convert session messages to ChatMessage format
+    const chatMessages: ChatMessageType[] = sessionDetails.last_messages.map(msg => ({
+      author: msg.role === 'user' ? 'User' : props.characterName,
+      content: msg.content,
+      isUser: msg.role === 'user',
+      timestamp: new Date(msg.created_at)
+    }))
+
+    // Set the messages
+    messages.value = chatMessages
+
+    // Auto-scroll to bottom after loading
+    await nextTick()
+    scrollToBottom()
+
+  } catch (err) {
+    console.error('Failed to load session history:', err)
+    // Don't show error to user for session loading failures, just start fresh
+  }
+}
+
 // Watch for streaming content changes and auto-scroll
 watch(streamingContent, () => {
   if (autoScroll.value) {
@@ -334,9 +373,10 @@ watch(error, (newError) => {
 }, { flush: 'post' })
 
 // Initialize session
-onMounted(() => {
+onMounted(async () => {
   if (props.sessionId !== 'new') {
     currentSessionId.value = props.sessionId
+    await loadSessionHistory(props.sessionId)
   }
 })
 
@@ -609,6 +649,74 @@ onUnmounted(() => {
   from {
     opacity: 0;
     transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.thinking-indicator {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s ease-in;
+}
+
+.thinking-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.thinking-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  animation: pulse 1.4s ease-in-out infinite both;
+}
+
+.thinking-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0;
+}
+
+.thinking-text {
+  font-size: 0.95rem;
+}
+
+@keyframes pulse {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
   }
   to {
     opacity: 1;

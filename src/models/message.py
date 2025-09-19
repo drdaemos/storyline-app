@@ -19,3 +19,5 @@ class ClaudeMessage(TypedDict):
 class GenericMessage(TypedDict):
     role: Literal["user", "assistant", "system", "developer"]
     content: str
+    type: Literal["conversation", "evaluation", "summary"]
+    created_at: str

@@ -57,8 +57,4 @@ Basically, pipeline operates on multiple levels:
 
 ## Frontend Bugs
 
-- Double generation of session id for new conversation - first exchange is lost.
-- Missing last history in the chat window
-- Missing last response in the session preview
-- Missing auto-scroll on new messages in the chat
 - Add "Summarizing" event when summarization happens before thinking. In general - add ability to change "thinking" message in the UI.

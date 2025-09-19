@@ -23,37 +23,6 @@
           <div v-else class="loading-spinner"></div>
         </button>
       </div>
-
-      <div v-if="disabled" class="thinking-indicator">
-        <div class="thinking-dots">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <span class="thinking-text">{{ characterName }} is thinking...</span>
-      </div>
-
-      <div class="input-actions">
-        <button
-          v-if="canRewind"
-          class="btn-secondary btn-sm"
-          @click="emit('rewind')"
-          :disabled="disabled"
-          title="Remove last exchange"
-        >
-          ↶ Rewind
-        </button>
-
-        <button
-          v-if="canRegenerate"
-          class="btn-secondary btn-sm"
-          @click="emit('regenerate')"
-          :disabled="disabled"
-          title="Regenerate last response"
-        >
-          🔄 Regenerate
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -64,16 +33,12 @@ import { ref, nextTick, onMounted } from 'vue'
 interface Props {
   disabled?: boolean
   characterName?: string
-  canRewind?: boolean
-  canRegenerate?: boolean
 }
 
 defineProps<Props>()
 
 const emit = defineEmits<{
   send: [message: string]
-  rewind: []
-  regenerate: []
 }>()
 
 const message = ref('')

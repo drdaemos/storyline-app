@@ -17,17 +17,16 @@ class CharacterResponderDependencies:
 
     primary_processor: PromptProcessor
     backup_processor: PromptProcessor
+    session_id: str
     conversation_memory: ConversationMemory | None = None
     summary_memory: SummaryMemory | None = None
     chat_logger: ChatLogger | None = None
-    session_id: str | None = None
 
     @classmethod
     def create_default(
         cls,
         character_name: str,
         session_id: str | None = None,
-        use_persistent_memory: bool = True,
         logs_dir: Path | None = None,
         processor_type: str = "claude"
     ) -> "CharacterResponderDependencies":
@@ -69,8 +68,8 @@ class CharacterResponderDependencies:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
 
         # Setup memory if requested
-        conversation_memory = ConversationMemory() if use_persistent_memory else None
-        summary_memory = SummaryMemory() if use_persistent_memory else None
+        conversation_memory = ConversationMemory()
+        summary_memory = SummaryMemory()
 
         if session_id is None:
             session_id = conversation_memory.create_session(character_name)

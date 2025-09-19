@@ -177,7 +177,7 @@ Select a character to start chatting with them!
 
     def _create_dependencies(self, character_name: str, session_id: str | None = None, use_persistent_memory: bool = True) -> CharacterResponderDependencies:
         """Create dependencies for CharacterResponder."""
-        return CharacterResponderDependencies.create_default(character_name=character_name, session_id=session_id, use_persistent_memory=use_persistent_memory, logs_dir=None, processor_type="google")
+        return CharacterResponderDependencies.create_default(character_name=character_name, session_id=session_id, logs_dir=None, processor_type="google")
 
     def _setup_character_session(self, character: Character) -> CharacterResponder:
         """Set up character session, checking for existing sessions and prompting user choice."""

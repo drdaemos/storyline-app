@@ -37,6 +37,20 @@ class SessionInfo(BaseModel):
     last_character_response: str | None = None
 
 
+class SessionMessage(BaseModel):
+    role: str
+    content: str
+    created_at: str
+
+
+class SessionDetails(BaseModel):
+    session_id: str
+    character_name: str
+    message_count: int
+    last_messages: list[SessionMessage]
+    last_message_time: str
+
+
 class HealthStatus(BaseModel):
     status: str
     conversation_memory: str
@@ -47,3 +61,19 @@ class HealthStatus(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+
+class ThinkingEvent(BaseModel):
+    type: str = "thinking"
+    stage: str = Field(..., description="Current processing stage: 'summarizing', 'deliberating', 'responding'")
+
+
+class StreamEvent(BaseModel):
+    type: str = Field(..., description="Event type: 'chunk', 'session', 'error', 'complete', 'thinking'")
+    # Optional fields for different event types
+    content: str | None = None
+    session_id: str | None = None
+    error: str | None = None
+    full_response: str | None = None
+    message_count: int | None = None
+    stage: str | None = None  # For thinking events

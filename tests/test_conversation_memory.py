@@ -159,7 +159,7 @@ class TestConversationMemory:
         for i in range(10):
             self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
 
-        recent = self.memory.get_recent_messages(self.character_id, session_id, limit=5)
+        recent = self.memory.get_recent_messages(session_id, limit=5)
 
         assert len(recent) == 5
         # Should get the last 5 messages in chronological order
@@ -170,7 +170,7 @@ class TestConversationMemory:
         """Test retrieving recent messages from empty session."""
         session_id = self.memory.create_session(self.character_id)
 
-        recent = self.memory.get_recent_messages(self.character_id, session_id)
+        recent = self.memory.get_recent_messages(session_id)
 
         assert recent == []
 
@@ -435,7 +435,7 @@ class TestConversationMemory:
             self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
 
         # Get recent messages
-        recent = self.memory.get_recent_messages(self.character_id, session_id, limit=3)
+        recent = self.memory.get_recent_messages(session_id, limit=3)
 
         assert len(recent) == 3
         # Should get the last 3 messages (7, 8, 9) in chronological order

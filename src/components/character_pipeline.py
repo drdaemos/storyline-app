@@ -1,4 +1,5 @@
 
+from datetime import datetime, timezone
 import re
 from collections.abc import Iterator
 from typing import TypedDict
@@ -166,8 +167,10 @@ Key Locations: {key_locations}
 Summary of previous interactions:
 {input["summary"]}
 
-{input['plans']}
-"""
+{input['plans']},
+""",
+            "type": "summary",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }]
 
         # Process the prompt

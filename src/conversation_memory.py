@@ -37,6 +37,7 @@ class ConversationMemory:
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     offset INTEGER NOT NULL DEFAULT 0,
+                    type TEXT NOT NULL DEFAULT 'conversation' CHECK(type IN ('conversation', 'evaluation')),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -55,6 +56,26 @@ class ConversationMemory:
                         WHERE m2.session_id = messages.session_id
                         AND m2.id <= messages.id
                     )
+                """)
+
+            # Add type column if it doesn't exist (migration)
+            cursor = conn.execute("PRAGMA table_info(messages)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'type' not in columns:
+                conn.execute("ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'conversation'")
+                # Update existing data based on the pattern:
+                # Each cycle of 3 messages -> user, assistant, assistant
+                # user message: 'conversation'
+                # first assistant message: 'evaluation'
+                # second assistant message: 'conversation'
+                conn.execute("""
+                    UPDATE messages
+                    SET type = CASE
+                        WHEN role = 'user' THEN 'conversation'
+                        WHEN role = 'assistant' AND (offset % 3) = 1 THEN 'evaluation'
+                        WHEN role = 'assistant' AND (offset % 3) = 2 THEN 'conversation'
+                        ELSE 'conversation'
+                    END
                 """)
 
             # Create indexes for better query performance
@@ -89,7 +110,7 @@ class ConversationMemory:
         # Session is created implicitly when first message is added
         return session_id
 
-    def add_message(self, character_id: str, session_id: str, role: str, content: str) -> int:
+    def add_message(self, character_id: str, session_id: str, role: str, content: str, message_type: str = 'conversation') -> int:
         """
         Add a message to the conversation memory.
 
@@ -98,6 +119,7 @@ class ConversationMemory:
             session_id: Session ID for this conversation
             role: Role of the message sender (user/assistant)
             content: Content of the message
+            message_type: Type of message ('conversation' or 'evaluation')
 
         Returns:
             The ID of the inserted message
@@ -112,9 +134,9 @@ class ConversationMemory:
             next_offset = cursor.fetchone()[0]
 
             cursor = conn.execute("""
-                INSERT INTO messages (character_id, session_id, role, content, offset, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (character_id, session_id, role, content, next_offset, datetime.now().isoformat()))
+                INSERT INTO messages (character_id, session_id, role, content, offset, type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (character_id, session_id, role, content, next_offset, message_type, datetime.now().isoformat()))
 
             conn.commit()
             return cursor.lastrowid or 0
@@ -141,21 +163,23 @@ class ConversationMemory:
             max_offset = cursor.fetchone()[0]
 
             # Prepare data with incremental offsets
-            data: list[tuple[str, str, str, str, int, str]] = []
+            data: list[tuple[str, str, str, str, int, str, str]] = []
             for i, msg in enumerate(messages):
+                message_type = msg.get("type", "conversation")
                 data.append((
                     character_id,
                     session_id,
                     msg["role"],
                     msg["content"],
                     max_offset + 1 + i,
+                    message_type,
                     datetime.now().isoformat()
                 ))
 
             cursor = conn.cursor()
             cursor.executemany("""
-                INSERT INTO messages (character_id, session_id, role, content, offset, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO messages (character_id, session_id, role, content, offset, type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, data)
             conn.commit()
             return cursor.lastrowid or 0
@@ -175,7 +199,7 @@ class ConversationMemory:
             conn.row_factory = sqlite3.Row
 
             query = """
-                SELECT role, content, offset, created_at
+                SELECT role, content, type, offset, created_at
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY offset ASC
@@ -190,7 +214,7 @@ class ConversationMemory:
             rows = cursor.fetchall()
 
             return [
-                {"role": row["role"], "content": row["content"]}
+                {"role": row["role"], "content": row["content"], "type": row["type"], "created_at": row["created_at"]}
                 for row in rows
             ]
 
@@ -231,12 +255,48 @@ class ConversationMemory:
                 for row in rows
             ]
 
-    def get_recent_messages(self, character_id: str, session_id: str, limit: int = 10) -> list[GenericMessage]:
+    def get_session_details(self, session_id: str) -> dict[str, Any] | None:
+        """
+        Get detailed information about a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Dictionary with session stats or None if session doesn't exist
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            cursor = conn.execute("""
+                SELECT
+                    character_id,
+                    COUNT(*) as message_count,
+                    MIN(created_at) as first_message_time,
+                    MAX(created_at) as last_message_time
+                FROM messages
+                WHERE session_id = ?
+                GROUP BY character_id, session_id
+            """, (session_id,))
+
+            row = cursor.fetchone()
+
+            if row:
+                return {
+                    "session_id": session_id,
+                    "character_id": row["character_id"],
+                    "message_count": row["message_count"],
+                    "first_message_time": row["first_message_time"],
+                    "last_message_time": row["last_message_time"]
+                }
+
+            return None
+
+    def get_recent_messages(self, session_id: str, limit: int = 10, type: str | None = None) -> list[GenericMessage]:
         """
         Get the most recent messages from a session.
 
         Args:
-            character_id: ID of the character
             session_id: Session ID
             limit: Number of recent messages to retrieve
 
@@ -245,23 +305,26 @@ class ConversationMemory:
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
+            type_filter = "type IS NOT NULL" if type is None else "type = ?"
+            params = (session_id, limit) if type is None else (session_id, type, limit)
 
-            cursor = conn.execute("""
-                SELECT role, content
+            cursor = conn.execute(f"""
+                SELECT role, content, type, created_at
                 FROM (
-                    SELECT role, content, offset
+                    SELECT role, content, type, created_at, offset
                     FROM messages
-                    WHERE character_id = ? AND session_id = ?
+                    WHERE session_id = ?
+                    AND {type_filter}
                     ORDER BY offset DESC
                     LIMIT ?
                 )
                 ORDER BY offset ASC
-            """, (character_id, session_id, limit))
+            """, params)
 
             rows = cursor.fetchall()
 
             return [
-                {"role": row["role"], "content": row["content"]}
+                {"role": row["role"], "content": row["content"], "type": row["type"], "created_at": row["created_at"]}
                 for row in rows
             ]
 

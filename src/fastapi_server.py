@@ -12,7 +12,7 @@ from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.conversation_memory import ConversationMemory
-from src.models.api_models import CreateCharacterRequest, CreateCharacterResponse, HealthStatus, InteractRequest, SessionInfo
+from src.models.api_models import CreateCharacterRequest, CreateCharacterResponse, HealthStatus, InteractRequest, SessionDetails, SessionInfo, SessionMessage
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.summary_memory import SummaryMemory
@@ -24,8 +24,6 @@ static_dir = Path(__file__).parent.parent / "static" / "assets"
 if static_dir.exists():
     app.mount("/assets", StaticFiles(directory=static_dir), name="assets")
 
-# Global variables to store character responders by session
-character_sessions: dict[str, CharacterResponder] = {}
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
 
@@ -163,15 +161,18 @@ async def list_sessions() -> list[SessionInfo]:
             character_sessions = conversation_memory.get_character_sessions(character_name, limit=50)
 
             for session_info in character_sessions:
-                # Get the last character response from this session
-                session_messages = conversation_memory.get_session_messages(session_info["session_id"], limit=1)
+                # Get the last character response from this session (conversation type only, not evaluations)
                 last_character_response = None
-
-                # Find the last message from the character (assistant role)
-                for message in reversed(session_messages):
-                    if message["role"] == "assistant":
-                        last_character_response = message["content"]
-                        break
+                try:
+                    recent_messages = conversation_memory.get_recent_messages(
+                        session_info["session_id"],
+                        limit=1,
+                        type="conversation"
+                    )
+                    last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
+                except Exception:
+                    # If there's an issue getting recent messages, just set to None
+                    last_character_response = None
 
                 sessions.append(SessionInfo(
                     session_id=session_info["session_id"],
@@ -189,17 +190,47 @@ async def list_sessions() -> list[SessionInfo]:
 
     return sessions
 
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str) -> SessionDetails:
+    """Get details of a specific session."""
+    memory = ConversationMemory()
+    session_details = memory.get_session_details(session_id)
+    if not session_details or session_details.get("message_count", 0) == 0:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+    try:
+        session_messages = memory.get_recent_messages(session_id, limit=50, type="conversation")
+
+        last_messages = [
+            SessionMessage(
+                role=msg["role"],
+                content=msg["content"],
+                created_at=msg["created_at"] # type: ignore
+            ) for msg in session_messages
+        ]
+
+        return SessionDetails(
+            session_id=session_id,
+            character_name=session_details["character_id"],
+            message_count=session_details["message_count"],
+            last_messages=last_messages,
+            last_message_time=session_details["last_message_time"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get session details: {str(e)}") from e
+
 
 @app.delete("/api/sessions/{session_id}")
 async def clear_session(session_id: str) -> dict[str, str]:
     """Clear a specific session."""
-    if session_id not in character_sessions:
+    memory = ConversationMemory()
+    messages = memory.get_session_messages(session_id, limit=1)  # Validate session exists
+    if len(messages) == 0:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
     try:
-        responder = character_sessions[session_id]
-        responder.clear_current_session()
-        del character_sessions[session_id]
+        memory.delete_session(session_id)
+        SummaryMemory().delete_session_summaries(session_id)
         return {"message": f"Session '{session_id}' cleared successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}") from e
@@ -212,42 +243,28 @@ async def interact(request: InteractRequest) -> StreamingResponse:
 
     The response will be streamed as Server-Sent Events with the following format:
     - data: {"type": "chunk", "content": "response_text"}
-    - data: {"type": "complete"}
+    - data: {"type": "session", "session_id": "session_id_value"}
+    - data: {"type": "thinking", "stage": "summarizing|deliberating|responding"}
+    - data: {"type": "error", "error": "error_message"}
+    - data: {"type": "complete", "full_response": "full_response_text", "message_count": n}
     """
     try:
-        # Load character if not already loaded
-        character = character_loader.load_character(request.character_name)
-        if not character:
-            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
-
-        # Generate session ID if not provided
-        session_id = request.session_id
-        if not session_id:
-            import uuid
-            session_id = str(uuid.uuid4())
-
-        # Get or create character responder for this session
-        if session_id not in character_sessions:
-            dependencies = CharacterResponderDependencies.create_default(
-                character_name=character.name,
-                session_id=session_id,
-                use_persistent_memory=True,
-                logs_dir=None,
-                processor_type=request.processor_type
-            )
-            character_sessions[session_id] = CharacterResponder(character, dependencies)
-
-        responder = character_sessions[session_id]
+        responder = get_character_responder(
+            session_id=request.session_id,
+            character_name=request.character_name,
+            processor_type=request.processor_type
+        )
 
         # Create async generator for streaming response
         async def generate_sse_response() -> AsyncGenerator[str, None]:
             """Generate Server-Sent Events for streaming response."""
             try:
                 # Send session info first
-                yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+                yield f"data: {json.dumps({'type': 'session', 'session_id': responder.session_id})}\n\n"
 
-                # Create a queue for streaming chunks
+                # Create queues for streaming chunks and events
                 chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
+                event_queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
                 character_response = ""
                 loop = asyncio.get_event_loop()
 
@@ -256,32 +273,60 @@ async def interact(request: InteractRequest) -> StreamingResponse:
                     # Use call_soon_threadsafe to safely add to queue from executor thread
                     loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
 
+                def event_callback(event_type: str, **kwargs: str) -> None:
+                    """Called by responder when an event occurs."""
+                    event_data = {"type": event_type, **kwargs}
+                    loop.call_soon_threadsafe(lambda: asyncio.create_task(event_queue.put(event_data)))
+
                 # Run the character response in a separate task
                 async def run_character_response() -> None:
                     nonlocal character_response
                     try:
                         character_response = await loop.run_in_executor(
                             None,
-                            lambda: responder.respond(request.user_message, streaming_callback)
+                            lambda: responder.respond(request.user_message, streaming_callback, event_callback)
                         )
                     finally:
                         # Signal completion
                         await chunk_queue.put(None)
+                        await event_queue.put(None)
 
                 # Start the character response task
                 response_task = asyncio.create_task(run_character_response())
 
-                # Stream chunks as they become available
-                while True:
-                    chunk = await chunk_queue.get()
-                    if chunk is None:  # Completion signal
+                # Stream chunks and events as they become available
+                chunk_done = False
+                event_done = False
+
+                while not (chunk_done and event_done):
+                    # Use asyncio.wait to handle both queues concurrently
+                    chunk_task = asyncio.create_task(chunk_queue.get()) if not chunk_done else None
+                    event_task = asyncio.create_task(event_queue.get()) if not event_done else None
+
+                    tasks = [task for task in [chunk_task, event_task] if task is not None]
+                    if not tasks:
                         break
 
-                    chunk_data = {
-                        "type": "chunk",
-                        "content": chunk
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+                    # Cancel pending tasks to avoid resource leaks
+                    for task in pending:
+                        task.cancel()
+
+                    for task in done:
+                        if task == chunk_task and chunk_task is not None:
+                            chunk = await chunk_task
+                            if chunk is None:  # Completion signal
+                                chunk_done = True
+                            else:
+                                chunk_data = {"type": "chunk", "content": chunk}
+                                yield f"data: {json.dumps(chunk_data)}\n\n"
+                        elif task == event_task and event_task is not None:
+                            event = await event_task
+                            if event is None:  # Completion signal
+                                event_done = True
+                            else:
+                                yield f"data: {json.dumps(event)}\n\n"
 
                 # Wait for response task to complete and send completion marker
                 await response_task
@@ -314,6 +359,21 @@ async def interact(request: InteractRequest) -> StreamingResponse:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
+
+def get_character_responder(session_id: str | None, character_name: str, processor_type: str) -> CharacterResponder:
+    # Load character if not already loaded
+    character = character_loader.load_character(character_name)
+    if not character:
+        raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
+    dependencies = CharacterResponderDependencies.create_default(
+        character_name=character.name,
+        session_id=session_id,
+        logs_dir=None,
+        processor_type=processor_type
+    )
+
+    session_id = dependencies.session_id
+    return CharacterResponder(character, dependencies)
 
 # Root route - serve the Vue.js app
 @app.get("/")
