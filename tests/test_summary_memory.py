@@ -1,10 +1,12 @@
 import tempfile
 import uuid
 from pathlib import Path
+from unittest.mock import patch
+import os
 
 import pytest
 
-from src.summary_memory import SummaryMemory
+from src.memory.summary_memory import SummaryMemory
 
 
 class TestSummaryMemory:
@@ -12,60 +14,22 @@ class TestSummaryMemory:
     def setup_method(self):
         """Set up a temporary memory directory with test database for each test."""
         self.temp_dir = tempfile.mkdtemp()
-        # Create custom memory instance that uses summaries_test.db
+        # Set environment variable to use test database
+        self.original_db_name = os.environ.get('DB_NAME')
+        os.environ['DB_NAME'] = 'summaries_test.db'
+        # Create custom memory instance that uses test database
         self.memory = SummaryMemory(memory_dir=Path(self.temp_dir))
-        # Override the db_path to use test database
-        self.memory.db_path = self.memory.memory_dir / "summaries_test.db"
-        # Initialize the test database
-        self.memory._init_database()
         self.character_id = "test_character"
         self.session_id = str(uuid.uuid4())
 
     def teardown_method(self):
-        """Clean up test database file."""
-        # Close any open connections first
-        self.memory.close()
-        # Remove the entire test database file
-        if self.memory.db_path.exists():
-            try:
-                self.memory.db_path.unlink()
-            except PermissionError:
-                # File might still be locked, ignore for now
-                pass
+        """Clean up test environment."""
+        # Restore original environment
+        if self.original_db_name is not None:
+            os.environ['DB_NAME'] = self.original_db_name
+        elif 'DB_NAME' in os.environ:
+            del os.environ['DB_NAME']
 
-    def test_init_default_directory(self):
-        """Test initialization with default directory."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            original_cwd = Path.cwd()
-            memory = None
-            try:
-                # Change to temp directory
-                import os
-                os.chdir(temp_dir)
-
-                memory = SummaryMemory()
-                expected_path = Path(temp_dir) / "memory" / "summaries.db"
-                # Resolve both paths to handle symlinks (like /var -> /private/var on macOS)
-                assert memory.db_path.resolve() == expected_path.resolve()
-                # Close the database connection to prevent permission errors on Windows
-                memory.close()
-                memory = None
-                # Force garbage collection to help with Windows file locking issues
-                import gc
-                gc.collect()
-            finally:
-                if memory:
-                    memory.close()
-                os.chdir(original_cwd)
-
-    def test_init_custom_directory(self):
-        """Test initialization with custom directory."""
-        custom_dir = Path(self.temp_dir) / "custom_summary_memory"
-        memory = SummaryMemory(memory_dir=custom_dir)
-
-        assert memory.memory_dir == custom_dir
-        assert memory.db_path == custom_dir / "summaries.db"
-        assert custom_dir.exists()
 
     def test_add_summary_valid(self):
         """Test adding a valid summary."""
@@ -346,7 +310,6 @@ class TestSummaryMemory:
 
         # Create new memory instance with same directory and test database
         new_memory = SummaryMemory(memory_dir=Path(self.temp_dir))
-        new_memory.db_path = new_memory.memory_dir / "summaries_test.db"
 
         # Verify data persists
         summaries = new_memory.get_session_summaries(self.session_id)

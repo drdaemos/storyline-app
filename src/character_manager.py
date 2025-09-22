@@ -1,18 +1,22 @@
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from .memory import CharacterRegistry
 from .models.character import Character
 
 
 class CharacterManager:
     """Service for managing character cards - creation, validation, and storage."""
 
-    def __init__(self, characters_dir: str = "characters") -> None:
+    def __init__(self, characters_dir: str = "characters", memory_dir: Path | None = None) -> None:
         self.characters_dir = Path(characters_dir)
         # Ensure characters directory exists
         self.characters_dir.mkdir(exist_ok=True)
+        self.registry = CharacterRegistry(memory_dir)
 
     def validate_character_data(self, data: dict[str, Any]) -> None:
         """
@@ -122,7 +126,212 @@ class CharacterManager:
         with open(character_file, 'w', encoding='utf-8') as file:
             yaml.dump(character_data, file, default_flow_style=False, allow_unicode=True)
 
+        # Also save to database
+        self.save_character_to_database(filename, character_data)
+
         return filename
+
+    def save_character_to_database(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1) -> bool:
+        """
+        Save character data to the database.
+
+        Args:
+            character_id: Character ID (same as filename)
+            character_data: Character data dictionary
+            schema_version: Schema version for the character data
+
+        Returns:
+            True if saved successfully
+        """
+        # Validate the data first
+        self.validate_character_data(character_data)
+
+        return self.registry.save_character(character_id, character_data, schema_version)
+
+    def load_character_from_file_to_database(self, character_id: str) -> bool:
+        """
+        Load character from file and save to database.
+
+        Args:
+            character_id: Character ID (filename without extension)
+
+        Returns:
+            True if loaded and saved successfully
+
+        Raises:
+            FileNotFoundError: If character file not found
+            ValueError: If character data is invalid
+        """
+        character_file = self.characters_dir / f"{character_id}.yaml"
+
+        if not character_file.exists():
+            raise FileNotFoundError(f"Character file not found: {character_file}")
+
+        with open(character_file, encoding='utf-8') as file:
+            character_data = yaml.safe_load(file)
+
+        if character_data is None:
+            raise ValueError("Character file is empty or invalid")
+
+        # Validate character data
+        self.validate_character_data(character_data)
+
+        # Save to database
+        return self.registry.save_character(character_id, character_data)
+
+    def _calculate_data_hash(self, data: dict[str, Any]) -> str:
+        """Calculate a hash of character data for comparison."""
+        # Sort keys to ensure consistent hashing
+        sorted_data = json.dumps(data, sort_keys=True, separators=(',', ':'))
+        return hashlib.sha256(sorted_data.encode()).hexdigest()
+
+    def sync_files_to_database(self) -> dict[str, Any]:
+        """
+        Sync all character files to the database.
+
+        Returns:
+            Dictionary with sync results:
+            {
+                "added": [list of character IDs added to database],
+                "updated": [list of character IDs updated in database],
+                "skipped": [list of character IDs that were unchanged],
+                "errors": [list of {"character_id": str, "error": str}]
+            }
+        """
+        results = {
+            "added": [],
+            "updated": [],
+            "skipped": [],
+            "errors": []
+        }
+
+        if not self.characters_dir.exists():
+            return results
+
+        # Get all YAML files
+        character_files = list(self.characters_dir.glob("*.yaml"))
+
+        for character_file in character_files:
+            character_id = character_file.stem
+            try:
+                # Load file data
+                with open(character_file, encoding='utf-8') as file:
+                    file_data = yaml.safe_load(file)
+
+                if file_data is None:
+                    results["errors"].append({
+                        "character_id": character_id,
+                        "error": "Character file is empty or invalid"
+                    })
+                    continue
+
+                # Validate file data
+                self.validate_character_data(file_data)
+
+                # Check if character exists in database
+                db_character = self.registry.get_character(character_id)
+
+                if db_character is None:
+                    # Character doesn't exist in database - add it
+                    self.registry.save_character(character_id, file_data)
+                    results["added"].append(character_id)
+                else:
+                    # Character exists - check if data is different
+                    db_data = db_character["character_data"]
+                    file_hash = self._calculate_data_hash(file_data)
+                    db_hash = self._calculate_data_hash(db_data)
+
+                    if file_hash != db_hash:
+                        # Data is different - update database
+                        self.registry.save_character(character_id, file_data)
+                        results["updated"].append(character_id)
+                    else:
+                        # Data is the same - skip
+                        results["skipped"].append(character_id)
+
+            except Exception as e:
+                results["errors"].append({
+                    "character_id": character_id,
+                    "error": str(e)
+                })
+
+        return results
+
+    def check_sync_status(self) -> dict[str, Any]:
+        """
+        Check the sync status between files and database without making changes.
+
+        Returns:
+            Dictionary with status information:
+            {
+                "file_only": [list of character IDs only in files],
+                "db_only": [list of character IDs only in database],
+                "both_same": [list of character IDs in both with same data],
+                "both_different": [list of character IDs in both with different data],
+                "file_errors": [list of {"character_id": str, "error": str}]
+            }
+        """
+        status = {
+            "file_only": [],
+            "db_only": [],
+            "both_same": [],
+            "both_different": [],
+            "file_errors": []
+        }
+
+        # Get all database characters
+        try:
+            db_characters = {char["id"]: char for char in self.registry.get_all_characters()}
+        except Exception:
+            db_characters = {}
+
+        # Get all file characters
+        file_characters = {}
+        if self.characters_dir.exists():
+            for character_file in self.characters_dir.glob("*.yaml"):
+                character_id = character_file.stem
+                try:
+                    with open(character_file, encoding='utf-8') as file:
+                        file_data = yaml.safe_load(file)
+
+                    if file_data is None:
+                        status["file_errors"].append({
+                            "character_id": character_id,
+                            "error": "Character file is empty or invalid"
+                        })
+                        continue
+
+                    self.validate_character_data(file_data)
+                    file_characters[character_id] = file_data
+
+                except Exception as e:
+                    status["file_errors"].append({
+                        "character_id": character_id,
+                        "error": str(e)
+                    })
+
+        # Compare file and database characters
+        all_character_ids = set(file_characters.keys()) | set(db_characters.keys())
+
+        for character_id in all_character_ids:
+            in_file = character_id in file_characters
+            in_db = character_id in db_characters
+
+            if in_file and not in_db:
+                status["file_only"].append(character_id)
+            elif not in_file and in_db:
+                status["db_only"].append(character_id)
+            elif in_file and in_db:
+                # Compare data
+                file_hash = self._calculate_data_hash(file_characters[character_id])
+                db_hash = self._calculate_data_hash(db_characters[character_id]["character_data"])
+
+                if file_hash == db_hash:
+                    status["both_same"].append(character_id)
+                else:
+                    status["both_different"].append(character_id)
+
+        return status
 
     def _validate_filename_collision(self, filename: str, character_name: str) -> None:
         """

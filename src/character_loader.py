@@ -1,41 +1,57 @@
 from pathlib import Path
 
-import yaml
-
+from .memory import CharacterRegistry
 from .models.character import Character
 
 
 class CharacterLoader:
-    def __init__(self, characters_dir: str = "characters") -> None:
-        self.characters_dir = Path(characters_dir)
+    def __init__(self, memory_dir: Path | None = None) -> None:
+        self.registry = CharacterRegistry(memory_dir)
 
     def load_character(self, character_name: str) -> Character:
-        character_file = self.characters_dir / f"{character_name}.yaml"
+        """
+        Load character from database.
 
-        if not character_file.exists():
-            raise FileNotFoundError(f"Character file not found: {character_file}")
+        Args:
+            character_name: Character ID/name to load
 
-        with open(character_file) as file:
-            character_data = yaml.safe_load(file)
+        Returns:
+            Character object
 
-        if character_data is None:
-            raise ValueError("Missing required fields: {'name', 'role', 'backstory'}")
+        Raises:
+            FileNotFoundError: If character not found in database
+            ValueError: If character data is invalid
+        """
+        db_character = self.registry.get_character(character_name)
+        if not db_character:
+            raise FileNotFoundError(f"Character '{character_name}' not found in database")
 
-        # Validate required fields
-        required_fields = {'name', 'role', 'backstory'}
-        missing_fields = required_fields - set(character_data.keys())
-        if missing_fields:
-            raise ValueError(f"Missing required fields: {missing_fields}")
-
+        character_data = db_character["character_data"]
         return Character.from_dict(character_data)
 
     def list_characters(self) -> list[str]:
-        if not self.characters_dir.exists():
+        """
+        List all available characters from database.
+
+        Returns:
+            List of character IDs/names
+        """
+        try:
+            db_chars = self.registry.get_all_characters()
+            return sorted([char["id"] for char in db_chars])
+        except Exception:
             return []
 
-        return [file.stem for file in self.characters_dir.glob("*.yaml") if file.is_file()]
-
     def get_character_info(self, character_name: str) -> Character | None:
+        """
+        Get character info, returning None if not found.
+
+        Args:
+            character_name: Character ID/name to get info for
+
+        Returns:
+            Character object or None if not found
+        """
         try:
             return self.load_character(character_name)
         except (FileNotFoundError, ValueError):

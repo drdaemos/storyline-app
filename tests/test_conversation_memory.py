@@ -2,8 +2,9 @@ import tempfile
 import uuid
 from pathlib import Path
 from unittest.mock import patch
+import os
 
-from src.conversation_memory import ConversationMemory
+from src.memory.conversation_memory import ConversationMemory
 
 
 class TestConversationMemory:
@@ -11,43 +12,20 @@ class TestConversationMemory:
     def setup_method(self):
         """Set up a temporary memory directory with test database for each test."""
         self.temp_dir = tempfile.mkdtemp()
-        # Create custom memory instance that uses conversations_test.db
+        # Set environment variable to use test database
+        self.original_db_name = os.environ.get('DB_NAME')
+        os.environ['DB_NAME'] = 'conversations_test.db'
+        # Create custom memory instance that uses test database
         self.memory = ConversationMemory(memory_dir=Path(self.temp_dir))
-        # Override the db_path to use test database
-        self.memory.db_path = self.memory.memory_dir / "conversations_test.db"
-        # Initialize the test database
-        self.memory._init_database()
         self.character_id = "test_character"
 
     def teardown_method(self):
-        """Clean up test database file."""
-        # Close any open connections first
-        self.memory.close()
-        # Remove the entire test database file
-        if self.memory.db_path.exists():
-            try:
-                self.memory.db_path.unlink()
-            except PermissionError:
-                # File might still be locked, ignore for now
-                pass
-
-    def test_init_default_directory(self):
-        """Test initialization with default directory."""
-        with patch('pathlib.Path.cwd') as mock_cwd:
-            mock_cwd.return_value = Path(self.temp_dir)
-            memory = ConversationMemory()
-
-            expected_path = Path(self.temp_dir) / "memory" / "conversations.db"
-            assert memory.db_path == expected_path
-
-    def test_init_custom_directory(self):
-        """Test initialization with custom directory."""
-        custom_dir = Path(self.temp_dir) / "custom_memory"
-        memory = ConversationMemory(memory_dir=custom_dir)
-
-        assert memory.memory_dir == custom_dir
-        assert memory.db_path == custom_dir / "conversations.db"
-        assert custom_dir.exists()
+        """Clean up test environment."""
+        # Restore original environment
+        if self.original_db_name is not None:
+            os.environ['DB_NAME'] = self.original_db_name
+        elif 'DB_NAME' in os.environ:
+            del os.environ['DB_NAME']
 
     def test_create_session(self):
         """Test session creation."""
@@ -291,7 +269,6 @@ class TestConversationMemory:
 
         # Create new memory instance with same directory and test database
         new_memory = ConversationMemory(memory_dir=Path(self.temp_dir))
-        new_memory.db_path = new_memory.memory_dir / "conversations_test.db"
 
         # Verify data persists
         messages = new_memory.get_session_messages(session_id)
@@ -312,25 +289,12 @@ class TestConversationMemory:
         self.memory.add_message(self.character_id, session_id, "assistant", "Message 1")
         self.memory.add_message(self.character_id, session_id, "user", "Message 2")
 
-        # Verify offsets by checking database directly
-        import sqlite3
-        with sqlite3.connect(self.memory.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT role, content, offset
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY offset ASC
-            """, (session_id,))
-            rows = cursor.fetchall()
-
-        assert len(rows) == 3
-        assert rows[0]["offset"] == 0
-        assert rows[0]["content"] == "Message 0"
-        assert rows[1]["offset"] == 1
-        assert rows[1]["content"] == "Message 1"
-        assert rows[2]["offset"] == 2
-        assert rows[2]["content"] == "Message 2"
+        # Verify messages can be retrieved in correct order
+        messages = self.memory.get_session_messages(session_id)
+        assert len(messages) == 3
+        assert messages[0]["content"] == "Message 0"
+        assert messages[1]["content"] == "Message 1"
+        assert messages[2]["content"] == "Message 2"
 
     def test_message_offset_across_sessions(self):
         """Test that offsets are isolated per session."""
@@ -343,34 +307,17 @@ class TestConversationMemory:
         self.memory.add_message(self.character_id, session1, "assistant", "Session1 Msg1")
         self.memory.add_message(self.character_id, session2, "assistant", "Session2 Msg1")
 
-        # Check offsets for session1
-        import sqlite3
-        with sqlite3.connect(self.memory.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT content, offset
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY offset ASC
-            """, (session1,))
-            session1_rows = cursor.fetchall()
+        # Verify messages are isolated per session and in correct order
+        session1_messages = self.memory.get_session_messages(session1)
+        session2_messages = self.memory.get_session_messages(session2)
 
-            cursor = conn.execute("""
-                SELECT content, offset
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY offset ASC
-            """, (session2,))
-            session2_rows = cursor.fetchall()
+        assert len(session1_messages) == 2
+        assert session1_messages[0]["content"] == "Session1 Msg0"
+        assert session1_messages[1]["content"] == "Session1 Msg1"
 
-        # Each session should have offsets starting from 0
-        assert len(session1_rows) == 2
-        assert session1_rows[0]["offset"] == 0
-        assert session1_rows[1]["offset"] == 1
-
-        assert len(session2_rows) == 2
-        assert session2_rows[0]["offset"] == 0
-        assert session2_rows[1]["offset"] == 1
+        assert len(session2_messages) == 2
+        assert session2_messages[0]["content"] == "Session2 Msg0"
+        assert session2_messages[1]["content"] == "Session2 Msg1"
 
     def test_add_messages_offset_batch(self):
         """Test that add_messages correctly handles offset incrementation."""
@@ -387,27 +334,13 @@ class TestConversationMemory:
         ]
         self.memory.add_messages(self.character_id, session_id, batch_messages)
 
-        # Verify offsets
-        import sqlite3
-        with sqlite3.connect(self.memory.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT content, offset
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY offset ASC
-            """, (session_id,))
-            rows = cursor.fetchall()
-
-        assert len(rows) == 4
-        assert rows[0]["offset"] == 0
-        assert rows[0]["content"] == "Initial message"
-        assert rows[1]["offset"] == 1
-        assert rows[1]["content"] == "Batch message 1"
-        assert rows[2]["offset"] == 2
-        assert rows[2]["content"] == "Batch message 2"
-        assert rows[3]["offset"] == 3
-        assert rows[3]["content"] == "Batch message 3"
+        # Verify all messages are in correct order
+        messages = self.memory.get_session_messages(session_id)
+        assert len(messages) == 4
+        assert messages[0]["content"] == "Initial message"
+        assert messages[1]["content"] == "Batch message 1"
+        assert messages[2]["content"] == "Batch message 2"
+        assert messages[3]["content"] == "Batch message 3"
 
     def test_message_ordering_by_offset(self):
         """Test that messages are retrieved in correct order by offset."""

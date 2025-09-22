@@ -2,13 +2,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.chat_logger import ChatLogger
-from src.conversation_memory import ConversationMemory
+from src.memory.conversation_memory import ConversationMemory
 from src.models.prompt_processor import PromptProcessor
 from src.processors.claude_prompt_processor import ClaudePromptProcessor
 from src.processors.cohere_prompt_processor import CoherePromptProcessor
 from src.processors.openai_prompt_processor import OpenAiPromptProcessor
 from src.processors.openrouter_prompt_processor import OpenRouterPromptProcessor
-from src.summary_memory import SummaryMemory
+from src.memory.summary_memory import SummaryMemory
 
 
 @dataclass

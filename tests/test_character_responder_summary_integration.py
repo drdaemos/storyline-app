@@ -2,10 +2,10 @@ import tempfile
 from pathlib import Path
 
 from src.character_responder import CharacterResponder
-from src.conversation_memory import ConversationMemory
+from src.memory.conversation_memory import ConversationMemory
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
-from src.summary_memory import SummaryMemory
+from src.memory.summary_memory import SummaryMemory
 
 
 class MockPromptProcessor:
@@ -52,25 +52,13 @@ class TestCharacterResponderSummaryIntegration:
         self.conversation_memory = ConversationMemory(memory_dir=self.memory_dir)
         self.summary_memory = SummaryMemory(memory_dir=self.memory_dir)
 
-        # Override DB paths for isolation
-        self.conversation_memory.db_path = self.memory_dir / "test_conversations.db"
-        self.summary_memory.db_path = self.memory_dir / "test_summaries.db"
-
-        # Initialize databases
-        self.conversation_memory._init_database()
-        self.summary_memory._init_database()
+        # Databases are initialized automatically via DatabaseConfig
 
         self.session_id = "test-session-123"
 
     def teardown_method(self):
         """Clean up test files."""
-        try:
-            if self.conversation_memory.db_path.exists():
-                self.conversation_memory.db_path.unlink()
-            if self.summary_memory.db_path.exists():
-                self.summary_memory.db_path.unlink()
-        except PermissionError:
-            pass
+        # SQLAlchemy handles cleanup automatically
 
     def create_dependencies_with_mock_responses(self, evaluation_response: str, summary_response: str) -> CharacterResponderDependencies:
         """Create dependencies with mock processors that return specific responses."""

@@ -12,7 +12,7 @@ from src.character_creator import CharacterCreator
 from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
-from src.conversation_memory import ConversationMemory
+from src.memory.conversation_memory import ConversationMemory
 from src.models.api_models import (
     CreateCharacterRequest,
     CreateCharacterResponse,
@@ -26,7 +26,7 @@ from src.models.api_models import (
 )
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
-from src.summary_memory import SummaryMemory
+from src.memory.summary_memory import SummaryMemory
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
 
@@ -51,7 +51,7 @@ async def health_check() -> HealthStatus:
         # Test conversation memory database
         conversation_memory = ConversationMemory()
         if conversation_memory.health_check():
-            details["conversation_db_path"] = str(conversation_memory.db_path)
+            details["conversation_db_status"] = "connected"
         else:
             conversation_status = "error"
             overall_status = "unhealthy"
@@ -65,7 +65,7 @@ async def health_check() -> HealthStatus:
         # Test summary memory database
         summary_memory = SummaryMemory()
         if summary_memory.health_check():
-            details["summary_db_path"] = str(summary_memory.db_path)
+            details["summary_db_status"] = "connected"
         else:
             summary_status = "error"
             overall_status = "unhealthy"
