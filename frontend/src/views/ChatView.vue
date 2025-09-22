@@ -337,7 +337,7 @@ const clearError = () => {
   }
 }
 
-const loadSessionHistory = async (sessionId: string) => {
+const loadSessionHistory = async (sessionId: string, retryAttempt = 0) => {
   try {
     const response = await fetch(`/api/sessions/${sessionId}`)
     if (!response.ok) {
@@ -345,6 +345,16 @@ const loadSessionHistory = async (sessionId: string) => {
         console.warn(`Session ${sessionId} not found, starting fresh`)
         return
       }
+
+      // Handle 502 Bad Gateway errors with silent retry
+      if (response.status === 502 && retryAttempt === 0) {
+        // Wait 5 seconds then retry silently
+        setTimeout(() => {
+          loadSessionHistory(sessionId, 1)
+        }, 5000)
+        return
+      }
+
       throw new Error(`Failed to load session: ${response.status}`)
     }
 

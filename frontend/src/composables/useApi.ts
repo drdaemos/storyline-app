@@ -13,12 +13,15 @@ export function useApi() {
   const handleResponse = async (response: Response) => {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+      const errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`
+      const error = new Error(errorMessage) as any
+      error.status = response.status
+      throw error
     }
     return response.json()
   }
 
-  const makeRequest = async <T>(url: string, options: RequestInit = {}): Promise<T> => {
+  const makeRequest = async <T>(url: string, options: RequestInit = {}, retryAttempt = 0): Promise<T> => {
     loading.value = true
     error.value = null
 
@@ -34,6 +37,18 @@ export function useApi() {
       const data = await handleResponse(response)
       return data
     } catch (err) {
+      // Handle 502 Bad Gateway errors with silent retry
+      const is502Error = err instanceof Error && (
+        err.message.includes('502') ||
+        ('status' in err && (err as any).status === 502)
+      )
+
+      if (is502Error && retryAttempt === 0) {
+        // Wait 5 seconds then retry silently
+        await new Promise(resolve => setTimeout(resolve, 5000))
+        return makeRequest<T>(url, options, 1)
+      }
+
       error.value = {
         message: err instanceof Error ? err.message : 'An unknown error occurred',
         status: err instanceof Error && 'status' in err ? (err as any).status : undefined
@@ -76,7 +91,7 @@ export function useApi() {
     })
   }
 
-  const handleInteraction = (payload: InteractRequest): EventSource => {
+  const handleInteraction = (payload: InteractRequest, retryAttempt = 0): EventSource => {
     const eventSource = new EventSource('/api/interact', {
 
     })
@@ -91,10 +106,27 @@ export function useApi() {
       body: JSON.stringify(payload)
     }).then(response => {
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        const error = new Error(errorMessage) as any
+        error.status = response.status
+        throw error
       }
       // The actual EventSource will be handled in the component
     }).catch(err => {
+      // Handle 502 Bad Gateway errors with silent retry
+      const is502Error = err instanceof Error && (
+        err.message.includes('502') ||
+        ('status' in err && (err as any).status === 502)
+      )
+
+      if (is502Error && retryAttempt === 0) {
+        // Wait 5 seconds then retry silently
+        setTimeout(() => {
+          handleInteraction(payload, 1)
+        }, 5000)
+        return
+      }
+
       error.value = {
         message: err instanceof Error ? err.message : 'Failed to start interaction',
         status: err instanceof Error && 'status' in err ? (err as any).status : undefined

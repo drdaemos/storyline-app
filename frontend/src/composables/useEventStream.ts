@@ -22,12 +22,14 @@ export function useEventStream() {
     thinkingStage.value = null
   }
 
-  const connect = async (payload: InteractRequest): Promise<EventSource> => {
+  const connect = async (payload: InteractRequest, retryAttempt = 0): Promise<EventSource> => {
     cleanup()
     error.value = null
     sessionId.value = ''
     streamingContent.value = ''
-    retryCount = 0
+    if (retryAttempt === 0) {
+      retryCount = 0
+    }
 
     return new Promise((resolve, reject) => {
       // Use fetch with streaming response for POST request
@@ -41,7 +43,10 @@ export function useEventStream() {
         body: JSON.stringify(payload)
       }).then(async response => {
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          const errorMessage = `HTTP ${response.status}: ${response.statusText}`
+          const error = new Error(errorMessage) as any
+          error.status = response.status
+          throw error
         }
 
         if (!response.body) {
@@ -131,7 +136,28 @@ export function useEventStream() {
         } as EventSource
 
         resolve(mockEventSource)
-      }).catch(err => {
+      }).catch(async err => {
+        // Handle 502 Bad Gateway errors with silent retry
+        const is502Error = err instanceof Error && (
+          err.message.includes('502') ||
+          ('status' in err && (err as any).status === 502)
+        )
+
+        if (is502Error && retryAttempt === 0) {
+          // Wait 5 seconds then retry silently
+          setTimeout(async () => {
+            try {
+              const eventSource = await connect(payload, 1)
+              resolve(eventSource)
+            } catch (retryErr) {
+              error.value = retryErr instanceof Error ? retryErr.message : 'Failed to connect to stream'
+              cleanup()
+              reject(retryErr)
+            }
+          }, 5000)
+          return
+        }
+
         error.value = err instanceof Error ? err.message : 'Failed to connect to stream'
         cleanup()
         reject(err)
