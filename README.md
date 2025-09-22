@@ -53,8 +53,3 @@ Basically, pipeline operates on multiple levels:
 - Additional prompt / logic to select the continuation option
 - Additional actions in the UI should just send the slash /command - no extra endpoints
 - Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.
-
-
-## Frontend Bugs
-
-- Add "Summarizing" event when summarization happens before thinking. In general - add ability to change "thinking" message in the UI.

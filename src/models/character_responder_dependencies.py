@@ -45,25 +45,22 @@ class CharacterResponderDependencies:
         """
 
         # Setup processors
+        backup_processor = OpenRouterPromptProcessor(model="deepseek/deepseek-chat-v3.1:free")
         match processor_type.lower():
             case "cohere":
                 primary_processor = CoherePromptProcessor()
-                backup_processor = OpenRouterPromptProcessor()
             case "claude":
                 primary_processor = ClaudePromptProcessor()
-                backup_processor = OpenRouterPromptProcessor()
             case "gpt":
                 primary_processor = OpenAiPromptProcessor()
-                backup_processor = OpenRouterPromptProcessor()
+            case "grok":
+                primary_processor = OpenRouterPromptProcessor(model="x-ai/grok-4-fast:free")
             case "deepseek":
-                primary_processor = OpenRouterPromptProcessor(model="deepseek/deepseek-chat-v3.1")
-                backup_processor = ClaudePromptProcessor()
+                primary_processor = OpenRouterPromptProcessor(model="deepseek/deepseek-v3.1-terminus")
             case "gpt-oss":
                 primary_processor = OpenRouterPromptProcessor(model="openai/gpt-oss-120b")
-                backup_processor = OpenRouterPromptProcessor()
             case "google":
                 primary_processor = OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
-                backup_processor = ClaudePromptProcessor()
             case _:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
 

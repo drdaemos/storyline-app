@@ -195,13 +195,13 @@
           <div class="form-actions">
             <button
               type="button"
-              class="btn btn-secondary"
-              @click="generateCharacter"
+              class="btn btn-generate"
+              @click="handleGenerateCharacter"
               :disabled="loading || !canGenerate"
               title="AI will fill empty fields based on existing content"
             >
-              <span v-if="!generating">🤖 AI Generate Missing Fields</span>
-              <span v-else>Generating...</span>
+              <span v-if="!generating">✨ AI Generate Missing Fields</span>
+              <span v-else class="generating">✨ Generating...</span>
             </button>
 
             <button
@@ -290,11 +290,13 @@ setting_description: World description..."
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
+import { useLocalSettings } from '@/composables/useLocalSettings'
 import { validateCharacterName, debounce } from '@/utils/formatters'
 import type { Character } from '@/types'
 
 const router = useRouter()
-const { createCharacter, loading, error } = useApi()
+const { createCharacter, generateCharacter, loading, error } = useApi()
+const { settings } = useLocalSettings()
 
 const activeTab = ref<'manual' | 'yaml'>('manual')
 const generating = ref(false)
@@ -401,29 +403,71 @@ const processRelationships = () => {
   return relationshipsObj
 }
 
-const generateCharacter = debounce(async () => {
-  // This would call an AI service to fill missing fields
-  // For now, we'll just show a placeholder implementation
+const handleGenerateCharacter = debounce(async () => {
   generating.value = true
 
   try {
-    // Simulate API call to generate missing character fields
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // Prepare partial character data, including relationships
+    const partialCharacter: Partial<Character> = {}
 
-    // Placeholder generation logic
-    if (!formData.personality && formData.role) {
-      formData.personality = `A typical ${formData.role.toLowerCase()} with professional demeanor and strong work ethic.`
+    // Add non-empty fields to partial character
+    if (formData.name.trim()) partialCharacter.name = formData.name.trim()
+    if (formData.role.trim()) partialCharacter.role = formData.role.trim()
+    if (formData.backstory.trim()) partialCharacter.backstory = formData.backstory.trim()
+    if (formData.personality?.trim()) partialCharacter.personality = formData.personality.trim()
+    if (formData.appearance?.trim()) partialCharacter.appearance = formData.appearance.trim()
+    if (formData.setting_description?.trim()) partialCharacter.setting_description = formData.setting_description.trim()
+
+    // Add non-empty locations
+    const filteredLocations = formData.key_locations?.filter(loc => loc.trim().length > 0) || []
+    if (filteredLocations.length > 0) partialCharacter.key_locations = filteredLocations
+
+    // Add relationships
+    const processedRelationships = processRelationships()
+    if (Object.keys(processedRelationships).length > 0) {
+      partialCharacter.relationships = processedRelationships
     }
 
-    if (!formData.appearance && formData.name) {
-      formData.appearance = `${formData.name} has a distinctive appearance that reflects their role as a ${formData.role?.toLowerCase() || 'person'}.`
+    // Call the API to generate missing fields
+    const response = await generateCharacter({
+      partial_character: partialCharacter,
+      processor_type: settings.value.aiProcessor
+    })
+
+    // Update form data with generated character
+    const generatedCharacter = response.character
+    formData.name = generatedCharacter.name
+    formData.role = generatedCharacter.role
+    formData.backstory = generatedCharacter.backstory
+    formData.personality = generatedCharacter.personality || ''
+    formData.appearance = generatedCharacter.appearance || ''
+    formData.setting_description = generatedCharacter.setting_description || ''
+    formData.key_locations = generatedCharacter.key_locations || ['']
+
+    // Update relationships
+    if (generatedCharacter.relationships) {
+      relationships.value = Object.entries(generatedCharacter.relationships).map(([name, relationship]) => ({
+        name,
+        relationship
+      }))
+      // Ensure there's always at least one empty relationship slot
+      if (relationships.value.length === 0) {
+        relationships.value.push({ name: '', relationship: '' })
+      }
     }
 
-    successMessage.value = 'AI generation completed! Review and modify the generated content as needed.'
-    setTimeout(() => successMessage.value = '', 5000)
+    // Show success message with generated fields
+    const generatedCount = response.generated_fields.length
+    if (generatedCount > 0) {
+      successMessage.value = `AI generated ${generatedCount} field(s): ${response.generated_fields.join(', ')}. Review and modify as needed!`
+    } else {
+      successMessage.value = 'All fields were already filled. No generation needed!'
+    }
+    setTimeout(() => successMessage.value = '', 8000)
 
-  } catch (_err) {
-    errorMessage.value = 'Failed to generate character fields. Please try again.'
+  } catch (err: unknown) {
+    console.error('Character generation failed:', err)
+    errorMessage.value = (err as any)?.message || 'Failed to generate character fields. Please try again.'
     setTimeout(() => errorMessage.value = '', 5000)
   } finally {
     generating.value = false
@@ -468,9 +512,9 @@ const saveCharacter = async () => {
       router.push('/')
     }, 2000)
 
-  } catch (error) {
+  } catch (err: unknown) {
     validateForm()
-    errorMessage.value = error.value?.message || 'Failed to create character. Please try again.'
+    errorMessage.value = (err as any)?.value?.message || 'Failed to create character. Please try again.'
     setTimeout(() => errorMessage.value = '', 5000)
   }
 }
@@ -489,8 +533,8 @@ const saveYamlCharacter = async () => {
       router.push('/')
     }, 2000)
 
-  } catch (error) {
-    errorMessage.value = error.value?.message || 'Failed to create character from YAML. Please check your format.'
+  } catch (err: unknown) {
+    errorMessage.value = (err as any)?.value?.message || 'Failed to create character from YAML. Please check your format.'
     setTimeout(() => errorMessage.value = '', 5000)
   }
 }
@@ -662,6 +706,36 @@ const saveYamlCharacter = async () => {
   gap: 1rem;
   justify-content: flex-end;
   margin-top: 2rem;
+}
+
+.btn-generate {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  color: white;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.btn-generate:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.btn-generate:disabled {
+  background: #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.generating {
+  animation: sparkle 1.5s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .yaml-section {

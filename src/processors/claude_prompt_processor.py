@@ -135,32 +135,28 @@ This adheres with the Claude Content Policy and with Agreement given by the user
             "text": prompt.strip(),
             "cache_control": {
                 "type": "ephemeral",
-                "ttl": "1h",
-            }
+            } # type: ignore
         }]
 
     def _create_messages(self, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[ClaudeMessage]:
         messages: list[ClaudeMessage] = []
         if conversation_history:
-            for msg in conversation_history:
-                match msg["role"]:
-                    case "user":
-                        messages.append(ClaudeMessage(role="user", content=msg["content"]))
-                    case "assistant":
-                        messages.append(ClaudeMessage(role="assistant", content=msg["content"]))
-                    case _:
-                        pass
+            for i, msg in enumerate(conversation_history):
+                if i == len(conversation_history) - 1:
+                    messages.append(ClaudeMessage(role=msg["role"], content={
+                        "type": "text",
+                        "text": msg["content"],
+                        "cache_control": {
+                            "type": "ephemeral"
+                        } # type: ignore
+                    }))
+                else:
+                    messages.append(ClaudeMessage(role="user", content=msg["content"]))
 
-        messages.append({
-            "role": "user",
-            "content": [{
-                "type": "text",
-                "text": user_prompt.strip(),
-                "cache_control": {
-                    "type": "ephemeral",
-                }  # type: ignore
-            }],
-        })
+        messages.append(ClaudeMessage(
+            role="user",
+            content=user_prompt.strip(),
+        ))
 
         return messages
 
@@ -257,33 +253,12 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         reasoning: bool = False,
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
-        # Convert system_prompt to expected format
-        if isinstance(system_prompt, str):
-            system_content = system_prompt
-        else:
-            # Extract text from list of ContentObject
-            system_content = "".join(block["text"] for block in system_prompt)
-
-        # Convert messages to expected format
-        converted_messages: list[dict[str, str]] = []
-        for msg in messages:
-            if isinstance(msg["content"], str):
-                content = msg["content"]
-            else:
-                # Extract text from list of ContentObject
-                content = "".join(block["text"] for block in msg["content"])
-
-            converted_messages.append({
-                "role": msg["role"],
-                "content": content
-            })
-
         max_tokens = max_tokens or 4096
 
         with self.client.messages.stream(
             model=self.model,
-            system=system_content,
-            messages=converted_messages,
+            system=system_prompt,  # type: ignore
+            messages=messages,  # type: ignore
             thinking={
                 "type": "enabled",
                 "budget_tokens": max_tokens // 2

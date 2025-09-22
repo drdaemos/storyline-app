@@ -18,9 +18,12 @@
             @change="updateAiProcessor"
           >
             <option value="google">Google (Gemini)</option>
-            <option value="openai">OpenAI (GPT)</option>
+            <option value="gpt">OpenAI (GPT)</option>
             <option value="cohere">Cohere</option>
-            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="claude">Anthropic (Claude)</option>
+            <option value="grok">xAI (Grok)</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="gpt-oss">GPT OSS</option>
           </select>
           <p class="setting-description">
             Choose which AI model to use for new conversations. Changes apply to new sessions only.

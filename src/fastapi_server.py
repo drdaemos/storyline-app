@@ -8,11 +8,22 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.character_creator import CharacterCreator
 from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.conversation_memory import ConversationMemory
-from src.models.api_models import CreateCharacterRequest, CreateCharacterResponse, HealthStatus, InteractRequest, SessionDetails, SessionInfo, SessionMessage
+from src.models.api_models import (
+    CreateCharacterRequest,
+    CreateCharacterResponse,
+    GenerateCharacterRequest,
+    GenerateCharacterResponse,
+    HealthStatus,
+    InteractRequest,
+    SessionDetails,
+    SessionInfo,
+    SessionMessage,
+)
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.summary_memory import SummaryMemory
@@ -142,6 +153,50 @@ async def create_character(request: CreateCharacterRequest) -> CreateCharacterRe
         raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}") from e
+
+
+@app.post("/api/characters/generate")
+async def generate_character(request: GenerateCharacterRequest) -> GenerateCharacterResponse:
+    """Generate a complete character from partial character data using AI."""
+    try:
+        # Get the appropriate prompt processor
+        from src.models.character_responder_dependencies import CharacterResponderDependencies
+        dependencies = CharacterResponderDependencies.create_default(
+            character_name="temp",  # Temp name for processor creation
+            processor_type=request.processor_type
+        )
+
+        # Create character creator with the selected processor
+        character_creator = CharacterCreator(
+            prompt_processor=dependencies.primary_processor,
+            character_manager=character_manager
+        )
+
+        # Track which fields were originally missing to report what was generated
+        original_fields = set(request.partial_character.keys())
+        all_character_fields = {'name', 'role', 'backstory', 'personality', 'appearance',
+                               'relationships', 'key_locations', 'setting_description'}
+
+        # Generate the complete character
+        complete_character = character_creator.generate(request.partial_character)
+
+        # Determine which fields were generated
+        generated_fields = []
+        character_dict = complete_character.model_dump()
+        for field in all_character_fields:
+            if field not in original_fields or not request.partial_character.get(field):
+                if character_dict.get(field):  # Field was populated
+                    generated_fields.append(field)
+
+        return GenerateCharacterResponse(
+            character=complete_character,
+            generated_fields=generated_fields
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate character: {str(e)}") from e
 
 
 @app.get("/api/sessions")

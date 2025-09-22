@@ -41,6 +41,16 @@ export interface CreateCharacterResponse {
   character_filename: string
 }
 
+export interface GenerateCharacterRequest {
+  partial_character: Partial<Character>
+  processor_type?: string
+}
+
+export interface GenerateCharacterResponse {
+  character: Character
+  generated_fields: string[]
+}
+
 export interface StreamEvent {
   type: 'chunk' | 'complete' | 'error' | 'session' | 'thinking' | 'command'
   session_id?: string

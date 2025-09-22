@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import type { SessionInfo, InteractRequest, CreateCharacterRequest, CreateCharacterResponse } from '@/types'
+import type { SessionInfo, InteractRequest, CreateCharacterRequest, CreateCharacterResponse, GenerateCharacterRequest, GenerateCharacterResponse } from '@/types'
 
 interface ApiError {
   message: string
@@ -63,6 +63,13 @@ export function useApi() {
     })
   }
 
+  const generateCharacter = async (payload: GenerateCharacterRequest): Promise<GenerateCharacterResponse> => {
+    return makeRequest<GenerateCharacterResponse>('/api/characters/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  }
+
   const deleteSession = async (sessionId: string): Promise<{ message: string }> => {
     return makeRequest<{ message: string }>(`/api/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE'
@@ -104,6 +111,7 @@ export function useApi() {
     getCharacterInfo,
     getSessions,
     createCharacter,
+    generateCharacter,
     deleteSession,
     handleInteraction
   }

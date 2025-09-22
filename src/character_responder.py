@@ -20,7 +20,7 @@ class StreamingCallback(Protocol):
 
 class CharacterResponder:
     """Character responder that uses PromptProcessor to handle character interactions with XML tag parsing."""
-    RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 20
+    RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 10
     EPOCH_MESSAGES = 3
     PROPAGATED_MEMORY_SIZE = RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * EPOCH_MESSAGES
 
@@ -145,11 +145,11 @@ class CharacterResponder:
         raw_evaluation = self.get_evaluation(user_message)
         eval_msg: GenericMessage = {"role": 'assistant', "content": raw_evaluation, "created_at": datetime.now(UTC).isoformat(), "type": "evaluation"}
 
-        # Extract character's idea of continuation
-        continuation_option = self._parse_xml_tag(raw_evaluation, "continuation")
-        option_text = self._parse_xml_tag(raw_evaluation, continuation_option) if continuation_option else None
-        if option_text is None:
-            raise ValueError("Failed to parse continuation option from evaluation response.")
+        # # Extract character's idea of continuation
+        # continuation_option = self._parse_xml_tag(raw_evaluation, "continuation")
+        # option_text = self._parse_xml_tag(raw_evaluation, continuation_option) if continuation_option else None
+        # if option_text is None:
+        #     raise ValueError("Failed to parse continuation option from evaluation response.")
 
         # If user mentioned their name - store it
         self.user_name = self._parse_xml_tag(raw_evaluation, "user_name") or self.user_name
@@ -158,7 +158,7 @@ class CharacterResponder:
         # status_update comes from the previous response
         if self.event_callback:
             self.event_callback("thinking", stage="responding")
-        character_response = self.get_character_response(user_message, option_text, self.status_update, self.user_name)
+        character_response = self.get_character_response(user_message, raw_evaluation, self.user_name)
 
         # Parse and extract status update from XML tags
         # Will be used on the next step
@@ -274,8 +274,8 @@ class CharacterResponder:
             "user_message": user_message,
             "character": self.character
         }
-        # pass only the most recent messages for context (use only user msg and character evals)
-        memory: list[GenericMessage] = [msg for msg in self.memory[-self.PROPAGATED_MEMORY_SIZE:] if msg["role"] == "user" or (msg["role"] == "assistant" and msg["type"] == "evaluation")]
+        # pass only the most recent messages for context (use only user msg and character comms)
+        memory: list[GenericMessage] = [msg for msg in self.memory[-self.PROPAGATED_MEMORY_SIZE:] if msg["type"] == "conversation"]
 
         # Process the prompt
         try:
@@ -332,35 +332,35 @@ class CharacterResponder:
 
         return plans
 
-    def get_character_response(self, user_message: str, continuation_option: str, scenario_state: str, user_name: str) -> str:
+    def get_character_response(self, user_message: str, scenario_state: str, user_name: str) -> str:
 
         fallback = False
         input: CharacterResponseInput = {
             "summary": self.memory_summary,
             "previous_response": self.memory[-1]["content"] if self.memory else "",
             "user_message": user_message,
-            "continuation_option": continuation_option,
             "scenario_state": scenario_state,
             "user_name": user_name,
             "character_name": self.character.name
         }
+        # pass only the most recent messages for context (use only user msg and character comms)
+        memory: list[GenericMessage] = [msg for msg in self.memory[-self.PROPAGATED_MEMORY_SIZE:] if msg["type"] == "conversation"]
 
         # Process the prompt
         try:
             stream = CharacterPipeline.get_character_response(
                 processor=self.processor,
-                input=input
+                input=input,
+                memory=memory  # pass only the most recent messages for context
             )
-            if stream is None:
-                raise ValueError("No response stream from primary processor.")
-        except Exception: # type: ignore
+        except Exception as inst: # type: ignore
+            self.chat_logger.log_exception(inst) if self.chat_logger else None
             fallback = True
             stream = CharacterPipeline.get_character_response(
                 processor=self.backup_processor,
-                input=input
+                input=input,
+                memory=memory  # pass only the most recent messages for context
             )
-            if stream is None:
-                raise ValueError("Failed to get character response from both primary and backup processors.") from None
 
         response = ""
         for chunk in stream:
