@@ -4,7 +4,7 @@
       <header class="view-header">
         <div class="header-main">
           <router-link to="/" class="back-button">
-            ← Back to Characters
+            <ArrowLeft :size="16" class="inline mr-1" /> Back to Characters
           </router-link>
           <h2>Create New Character</h2>
         </div>
@@ -135,7 +135,7 @@
                   @click="removeLocation(index)"
                   title="Remove location"
                 >
-                  ✕
+                  <X :size="14" />
                 </button>
               </div>
             </div>
@@ -178,7 +178,7 @@
                   @click="removeRelationship(index)"
                   title="Remove relationship"
                 >
-                  ✕
+                  <X :size="14" />
                 </button>
               </div>
             </div>
@@ -200,8 +200,12 @@
               :disabled="loading || !canGenerate"
               title="AI will fill empty fields based on existing content"
             >
-              <span v-if="!generating">✨ AI Generate Missing Fields</span>
-              <span v-else class="generating">✨ Generating...</span>
+              <span v-if="!generating">
+                <Wand2 :size="16" class="inline mr-1" /> AI Generate Missing Fields
+              </span>
+              <span v-else class="generating">
+                <Wand2 :size="16" class="inline mr-1" /> Generating...
+              </span>
             </button>
 
             <button
@@ -293,6 +297,7 @@ import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { validateCharacterName, debounce } from '@/utils/formatters'
 import type { Character } from '@/types'
+import { ArrowLeft, Wand2, X } from 'lucide-vue-next'
 
 const router = useRouter()
 const { createCharacter, generateCharacter, loading, error } = useApi()
@@ -853,5 +858,15 @@ const saveYamlCharacter = async () => {
   .form-section {
     padding: 1rem;
   }
+}
+
+/* Icon utility classes */
+.inline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
 }
 </style>

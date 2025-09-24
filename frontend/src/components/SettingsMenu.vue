@@ -3,7 +3,9 @@
     <div class="settings-menu" @click.stop>
       <header class="settings-header">
         <h3>Settings</h3>
-        <button class="close-button" @click="closeMenu">✕</button>
+        <button class="close-button" @click="closeMenu">
+          <X :size="18" />
+        </button>
       </header>
 
       <div class="settings-content">
@@ -76,6 +78,7 @@
 
 <script setup lang="ts">
 import { useLocalSettings } from '@/composables/useLocalSettings'
+import { X } from 'lucide-vue-next'
 
 interface Props {
   show: boolean

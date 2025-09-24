@@ -4,7 +4,7 @@
       <div class="header-content">
         <div class="character-info">
           <router-link to="/" class="back-button">
-            ← Back
+            <ArrowLeft :size="16" class="inline mr-1" /> Back
           </router-link>
           <div class="character-details">
             <h2>{{ characterName }}</h2>
@@ -46,16 +46,16 @@
         <!-- Error message -->
         <div v-if="error && !isThinking" class="error-message">
           <div class="error-content">
-            <span class="error-icon">⚠️</span>
+            <AlertTriangle :size="20" class="error-icon" />
             <div class="error-text">
               <strong>Error:</strong> {{ error }}
             </div>
             <button
-              class="error-dismiss"
-              @click="clearError"
-              title="Dismiss error"
+              class="error-regenerate"
+              @click="regenerateAfterError"
+              title="Regenerate response"
             >
-              ✕
+              <RefreshCw :size="16" class="inline mr-1" /> Regenerate
             </button>
           </div>
         </div>
@@ -89,7 +89,7 @@
 
     <div v-if="showScrollButton" class="scroll-to-bottom">
       <button class="btn btn-secondary" @click="scrollToBottom">
-        ↓ New messages
+        <ChevronDown :size="16" class="inline mr-1" /> New messages
       </button>
     </div>
   </div>
@@ -105,6 +105,7 @@ import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatMessage from '@/components/ChatMessage.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails } from '@/types'
+import { ArrowLeft, AlertTriangle, RefreshCw, ChevronDown } from 'lucide-vue-next'
 
 interface Props {
   characterName: string
@@ -123,7 +124,8 @@ const {
   thinkingStage,
   connect,
   disconnect,
-  clearStreamContent
+  clearStreamContent,
+  clearError
 } = useEventStream()
 
 const messages = ref<ChatMessageType[]>([])
@@ -132,6 +134,7 @@ const isThinking = ref(false)
 const currentSessionId = ref<string | null>(null)
 const showScrollButton = ref(false)
 const autoScroll = ref(true)
+const lastInteractPayload = ref<InteractRequest | null>(null)
 
 const displaySessionId = computed(() => {
   if (props.sessionId === 'new') {
@@ -203,6 +206,9 @@ const sendInteractRequest = async (userMessage: string) => {
       session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor
     }
+
+    // Store payload for potential regeneration
+    lastInteractPayload.value = payload
 
     // Start streaming response
     await connect(payload)
@@ -330,11 +336,14 @@ const handleScroll = () => {
   showScrollButton.value = !isNearBottom && messages.value.length > 0
 }
 
-const clearError = () => {
-  // Note: error is from useEventStream composable, may not be directly mutable
-  if (typeof error.value === 'object' && error.value) {
-    Object.assign(error.value, { value: null })
-  }
+const regenerateAfterError = async () => {
+  if (!lastInteractPayload.value || isThinking.value) return
+
+  // Clear the error and reattempt the last interact request
+  clearError()
+
+  // Use the stored payload to retry the request
+  await sendInteractRequest(lastInteractPayload.value.user_message)
 }
 
 const loadSessionHistory = async (sessionId: string, retryAttempt = 0) => {
@@ -663,21 +672,21 @@ onUnmounted(() => {
   color: #991b1b;
 }
 
-.error-dismiss {
-  background: none;
+.error-regenerate {
+  background: #dc2626;
   border: none;
-  color: #6b7280;
-  font-size: 1.25rem;
+  color: white;
+  font-size: 0.875rem;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.5rem 1rem;
   border-radius: var(--radius-sm);
   transition: all 0.2s;
   flex-shrink: 0;
+  font-weight: 500;
 }
 
-.error-dismiss:hover {
-  color: #dc2626;
-  background: rgba(239, 68, 68, 0.1);
+.error-regenerate:hover {
+  background: #b91c1c;
 }
 
 @keyframes slideIn {
@@ -757,5 +766,15 @@ onUnmounted(() => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Icon utility classes */
+.inline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
 }
 </style>

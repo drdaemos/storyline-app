@@ -198,6 +198,10 @@ export function useEventStream() {
     streamingContent.value = ''
   }
 
+  const clearError = () => {
+    error.value = null
+  }
+
   // Cleanup on component unmount
   onUnmounted(() => {
     cleanup()
@@ -213,6 +217,7 @@ export function useEventStream() {
     retry,
     disconnect,
     getStreamContent,
-    clearStreamContent
+    clearStreamContent,
+    clearError
   }
 }

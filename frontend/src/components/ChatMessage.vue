@@ -21,7 +21,7 @@
           @click="emit('rewind')"
           title="Remove this exchange"
         >
-          ⏏️
+          <Undo2 :size="16" />
         </button>
       </div>
     </div>
@@ -57,7 +57,7 @@
           @click="emit('regenerate')"
           title="Regenerate response"
         >
-          🔄
+          <RefreshCw :size="16" />
         </button>
       </div>
     </div>
@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import type { ChatMessage } from '@/types'
 import { formatMessageTime, parseMarkdown } from '@/utils/formatters'
+import { Undo2, RefreshCw } from 'lucide-vue-next'
 
 interface Props {
   message: ChatMessage

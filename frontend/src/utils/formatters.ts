@@ -96,51 +96,34 @@ export function debounce<T extends (...args: any[]) => any>(
 const THINKING_STAGE_DESCRIPTORS = {
   summarizing: [
     'summarizing',
-    'reviewing',
     'consolidating',
-    'processing',
-    'organizing',
-    'analyzing',
-    'synthesizing',
-    'compiling',
     'distilling',
-    'integrating'
   ],
   deliberating: [
     'deliberating',
+    'analyzing',
     'contemplating',
-    'considering',
-    'pondering',
     'evaluating',
-    'reflecting',
     'weighing',
-    'examining',
-    'mulling',
     'assessing'
   ],
   responding: [
+    'pondering',
     'responding',
     'formulating',
-    'crafting',
-    'composing',
-    'preparing',
-    'generating',
-    'creating',
-    'constructing',
-    'developing',
     'articulating'
   ]
 } as const
 
-export function getThinkingDescriptor(stage: string, characterName: string): string {
+export function getThinkingDescriptor(stage: string, _characterName: string): string {
   const descriptors = THINKING_STAGE_DESCRIPTORS[stage as keyof typeof THINKING_STAGE_DESCRIPTORS]
 
   if (!descriptors) {
-    return `${characterName} is thinking...`
+    return `...`
   }
 
   // Get random descriptor from the list
   const randomDescriptor = descriptors[Math.floor(Math.random() * descriptors.length)]
 
-  return `${characterName} is ${randomDescriptor}...`
+  return `${randomDescriptor}...`
 }

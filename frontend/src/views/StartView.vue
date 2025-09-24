@@ -8,7 +8,7 @@
             class="btn btn-secondary"
             @click="showSettings = !showSettings"
           >
-            ⚙️ Settings
+            <Settings :size="16" class="inline mr-1" /> Settings
           </button>
         </div>
 
@@ -47,7 +47,7 @@
       <div v-else class="session-section">
         <div class="back-navigation">
           <button class="btn btn-secondary" @click="deselectCharacter">
-            ← Back to Characters
+            <ArrowLeft :size="16" class="inline mr-1" /> Back to Characters
           </button>
         </div>
 
@@ -86,6 +86,7 @@ import CharacterCard from '@/components/CharacterCard.vue'
 import SessionList from '@/components/SessionList.vue'
 import SettingsMenu from '@/components/SettingsMenu.vue'
 import type { SessionInfo } from '@/types'
+import { Settings, ArrowLeft } from 'lucide-vue-next'
 
 const router = useRouter()
 const { getCharacters, getCharacterInfo, getSessions, loading, error } = useApi()
@@ -339,5 +340,15 @@ onMounted(() => {
   .selected-character-info h2 {
     font-size: 1.5rem;
   }
+}
+
+/* Icon utility classes */
+.inline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
 }
 </style>

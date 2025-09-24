@@ -17,9 +17,9 @@
           class="send-button"
           :disabled="disabled || !message.trim()"
           @click="sendMessage"
-          title="Send message (Ctrl+Enter)"
+          title="Send message (Enter)"
         >
-          <span v-if="!disabled">Send</span>
+          <Send v-if="!disabled" :size="16" />
           <div v-else class="loading-spinner"></div>
         </button>
       </div>
@@ -29,6 +29,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
+import { Send } from 'lucide-vue-next'
 
 interface Props {
   disabled?: boolean
@@ -82,30 +83,33 @@ onMounted(() => {
 .chat-input-container {
   position: sticky;
   bottom: 0;
-  background: var(--background-color);
-  border-top: 1px solid var(--border-color);
+  background: transparent;
   padding: 1rem;
+  margin: 0 1rem 1rem 1rem;
 }
 
 .chat-input {
   max-width: 800px;
   margin: 0 auto;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(8px);
 }
 
 .input-wrapper {
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  background: transparent;
+  border: none;
   padding: 0.75rem 1rem;
-  box-shadow: var(--shadow-sm);
 }
 
-.input-wrapper:focus-within {
+.chat-input:focus-within {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+  box-shadow: 0 4px 0 rgba(37, 99, 235, 0.3), 0 8px 0 rgba(37, 99, 235, 0.1), 0 0 0 3px rgb(37 99 235 / 0.1);
 }
 
 .message-input {
@@ -119,6 +123,8 @@ onMounted(() => {
   overflow-y: auto;
   background: transparent;
   font-family: inherit;
+  color: var(--text-primary);
+  min-height: 24px;
 }
 
 .message-input::placeholder {
@@ -130,12 +136,12 @@ onMounted(() => {
   color: white;
   border: none;
   border-radius: var(--radius-md);
-  padding: 0.75rem 1.5rem;
-  font-size: 0.875rem;
+  padding: 0.75rem;
+  font-size: 1.25rem;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
-  min-width: 80px;
+  min-width: 40px;
   height: 40px;
   display: flex;
   align-items: center;
@@ -216,7 +222,8 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .chat-input-container {
-    padding: 1rem 0.75rem;
+    padding: 1rem 0.5rem;
+    margin: 0 0.5rem 0.5rem 0.5rem;
   }
 
   .input-wrapper {
@@ -224,9 +231,10 @@ onMounted(() => {
   }
 
   .send-button {
-    padding: 0.625rem 1.25rem;
-    min-width: 70px;
+    padding: 0.625rem;
+    min-width: 36px;
     height: 36px;
+    font-size: 1.1rem;
   }
 
   .input-actions {
@@ -241,16 +249,24 @@ onMounted(() => {
 }
 
 @media (max-width: 480px) {
+  .chat-input-container {
+    margin: 0 0.25rem 0.5rem 0.25rem;
+  }
+
   .input-wrapper {
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.5rem;
-    align-items: stretch;
+    align-items: flex-end;
+    padding: 0.5rem 0.75rem;
   }
 
   .send-button {
     align-self: flex-end;
     width: auto;
-    min-width: 80px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0.5rem;
+    font-size: 1.1rem;
   }
 }
 </style>

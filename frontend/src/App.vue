@@ -3,7 +3,8 @@
     <header class="app-header">
       <div class="header-content">
         <h1 class="app-title">
-          <router-link to="/" class="title-link">Storyline</router-link>
+          <router-link to="/" class="title-link">
+            <SquareLibrary :size=32 class="inline mr-1" /> Storyline</router-link>
         </h1>
         <nav class="nav-menu">
           <router-link to="/" class="nav-link">Characters</router-link>
@@ -25,6 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useLocalSettings } from '@/composables/useLocalSettings'
+import { SquareLibrary } from 'lucide-vue-next'
 
 const { loadSettings } = useLocalSettings()
 const globalError = ref<string | null>(null)
@@ -70,14 +72,87 @@ window.addEventListener('error', (_event) => {
   --radius-lg: 0.5rem;
 }
 
-* {
+/* Box sizing rules */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+/* Prevent font size inflation */
+html {
+  -moz-text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+/* Remove default margin in favour of better control in authored CSS */
+body, h1, h2, h3, h4, p,
+figure, blockquote, dl, dd {
+  margin-block-end: 0;
+}
+
+/* Remove list styles on ul, ol elements with a list role, which suggests default styling will be removed */
+ul[role='list'],
+ol[role='list'] {
+  list-style: none;
+}
+
+/* Set core body defaults */
+body {
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* Set shorter line heights on headings and interactive elements */
+h1, h2, h3, h4,
+button, input, label {
+  line-height: 1.1;
+}
+
+/* Balance text wrapping on headings */
+h1, h2,
+h3, h4 {
+  text-wrap: balance;
+}
+
+/* A elements that don't have a class get default styles */
+a:not([class]) {
+  text-decoration-skip-ink: auto;
+  color: currentColor;
+}
+
+/* Make images easier to work with */
+img,
+picture {
+  max-width: 100%;
+  display: block;
+}
+
+/* Inherit fonts for inputs and buttons */
+input, button,
+textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Make sure textareas without a rows attribute are not tiny */
+textarea:not([rows]) {
+  min-height: 10em;
+}
+
+/* Anything that has been anchored to should have extra scroll margin */
+:target {
+  scroll-margin-block: 5ex;
+}
+
+* {
   margin: 0;
   padding: 0;
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: "Alan Sans", system-ui, -apple-system, BlinkMacSystemFont,  sans-serif;
   background-color: var(--background-color);
   color: var(--text-primary);
   line-height: 1.5;
@@ -116,6 +191,12 @@ body {
 .title-link {
   color: var(--primary-color);
   text-decoration: none;
+}
+
+.title-link svg {
+  vertical-align: text-bottom;
+  position: relative;
+  top: 1px;
 }
 
 .title-link:hover {

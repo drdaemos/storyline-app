@@ -45,7 +45,7 @@
             @click.stop="deleteSession(session.session_id)"
             :title="`Delete session ${formatSessionId(session.session_id)}`"
           >
-            🗑️
+            <Trash2 :size="16" />
           </button>
         </div>
       </div>
@@ -58,6 +58,7 @@ import { computed } from 'vue'
 import type { SessionInfo } from '@/types'
 import { formatRelativeTime, truncateText } from '@/utils/formatters'
 import { useApi } from '@/composables/useApi'
+import { Trash2 } from 'lucide-vue-next'
 
 interface Props {
   sessions: SessionInfo[]
