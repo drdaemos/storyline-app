@@ -27,6 +27,7 @@ class InteractRequest(BaseModel):
     user_message: str = Field(..., min_length=1, description="User's message to the character")
     session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
     processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
+    backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
 
 
 class SessionInfo(BaseModel):
@@ -89,6 +90,7 @@ class GenerateCharacterRequest(BaseModel):
         default="claude",
         description="AI processor type to use for generation (claude, openai, cohere, etc.)"
     )
+    backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
 
 
 class GenerateCharacterResponse(BaseModel):

@@ -29,6 +29,7 @@ export interface InteractRequest {
   user_message: string
   session_id?: string | null
   processor_type?: string
+  backup_processor_type?: string
 }
 
 export interface CreateCharacterRequest {
@@ -44,6 +45,7 @@ export interface CreateCharacterResponse {
 export interface GenerateCharacterRequest {
   partial_character: Partial<Character>
   processor_type?: string
+  backup_processor_type?: string
 }
 
 export interface GenerateCharacterResponse {
@@ -62,6 +64,7 @@ export interface StreamEvent {
 
 export interface LocalSettings {
   aiProcessor: string
+  backupProcessor: string
   theme: string
   lastSelectedCharacter?: string
 }

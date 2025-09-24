@@ -163,7 +163,8 @@ async def generate_character(request: GenerateCharacterRequest) -> GenerateChara
         from src.models.character_responder_dependencies import CharacterResponderDependencies
         dependencies = CharacterResponderDependencies.create_default(
             character_name="temp",  # Temp name for processor creation
-            processor_type=request.processor_type
+            processor_type=request.processor_type,
+            backup_processor_type=request.backup_processor_type
         )
 
         # Create character creator with the selected processor
@@ -307,7 +308,8 @@ async def interact(request: InteractRequest) -> StreamingResponse:
         responder = get_character_responder(
             session_id=request.session_id,
             character_name=request.character_name,
-            processor_type=request.processor_type
+            processor_type=request.processor_type,
+            backup_processor_type=request.backup_processor_type
         )
 
         # Create async generator for streaming response
@@ -416,7 +418,7 @@ async def interact(request: InteractRequest) -> StreamingResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
 
-def get_character_responder(session_id: str | None, character_name: str, processor_type: str) -> CharacterResponder:
+def get_character_responder(session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None) -> CharacterResponder:
     # Load character if not already loaded
     character = character_loader.load_character(character_name)
     if not character:
@@ -425,7 +427,8 @@ def get_character_responder(session_id: str | None, character_name: str, process
         character_name=character.name,
         session_id=session_id,
         logs_dir=None,
-        processor_type=processor_type
+        processor_type=processor_type,
+        backup_processor_type=backup_processor_type
     )
 
     session_id = dependencies.session_id

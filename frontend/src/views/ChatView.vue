@@ -19,9 +19,24 @@
           <div v-else-if="error" class="status-indicator error">
             {{ error }}
           </div>
+
+          <button
+            class="settings-button"
+            @click="showSettings = !showSettings"
+            title="Settings"
+          >
+            <Settings :size="20" />
+          </button>
         </div>
       </div>
     </header>
+
+    <!-- Settings Modal -->
+    <SettingsMenu
+      :show="showSettings"
+      @update:show="showSettings = $event"
+      @setting-changed="onSettingChanged"
+    />
 
     <div class="chat-container">
       <div
@@ -104,8 +119,9 @@ import { useLocalSettings } from '@/composables/useLocalSettings'
 import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatMessage from '@/components/ChatMessage.vue'
 import ChatInput from '@/components/ChatInput.vue'
+import SettingsMenu from '@/components/SettingsMenu.vue'
 import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails } from '@/types'
-import { ArrowLeft, AlertTriangle, RefreshCw, ChevronDown } from 'lucide-vue-next'
+import { ArrowLeft, AlertTriangle, RefreshCw, ChevronDown, Settings } from 'lucide-vue-next'
 
 interface Props {
   characterName: string
@@ -135,6 +151,7 @@ const currentSessionId = ref<string | null>(null)
 const showScrollButton = ref(false)
 const autoScroll = ref(true)
 const lastInteractPayload = ref<InteractRequest | null>(null)
+const showSettings = ref(false)
 
 const displaySessionId = computed(() => {
   if (props.sessionId === 'new') {
@@ -204,7 +221,8 @@ const sendInteractRequest = async (userMessage: string) => {
       character_name: props.characterName,
       user_message: userMessage,
       session_id: props.sessionId === 'new' ? null : props.sessionId,
-      processor_type: settings.value.aiProcessor
+      processor_type: settings.value.aiProcessor,
+      backup_processor_type: settings.value.backupProcessor
     }
 
     // Store payload for potential regeneration
@@ -416,6 +434,15 @@ watch(error, (newError) => {
   }
 }, { flush: 'post' })
 
+const onSettingChanged = (payload: { key: string; value: any }) => {
+  // Settings are automatically persisted by useLocalSettings
+  // Just close the modal for non-theme changes that don't need immediate feedback
+  if (payload.key !== 'theme') {
+    // Could show a toast notification here if desired
+    console.log(`Setting ${payload.key} changed to:`, payload.value)
+  }
+}
+
 // Initialize session
 onMounted(async () => {
   if (props.sessionId !== 'new') {
@@ -486,6 +513,7 @@ onUnmounted(() => {
 .chat-status {
   display: flex;
   align-items: center;
+  gap: 1rem;
 }
 
 .status-indicator {
@@ -776,5 +804,24 @@ onUnmounted(() => {
 
 .mr-1 {
   margin-right: 0.25rem;
+}
+
+/* Settings button styles */
+.settings-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-button:hover {
+  color: var(--primary-color);
+  background: #eff6ff;
 }
 </style>

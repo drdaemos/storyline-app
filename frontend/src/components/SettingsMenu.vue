@@ -33,6 +33,29 @@
         </div>
 
         <div class="setting-group">
+          <label class="setting-label" for="backup-processor">
+            Backup AI Processor
+          </label>
+          <select
+            id="backup-processor"
+            class="setting-select"
+            :value="settings.backupProcessor"
+            @change="updateBackupProcessor"
+          >
+            <option value="google">Google (Gemini)</option>
+            <option value="gpt">OpenAI (GPT)</option>
+            <option value="cohere">Cohere</option>
+            <option value="claude">Anthropic (Claude)</option>
+            <option value="grok">xAI (Grok)</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="gpt-oss">GPT OSS</option>
+          </select>
+          <p class="setting-description">
+            Choose which AI model to use as a fallback if the primary processor fails.
+          </p>
+        </div>
+
+        <div class="setting-group">
           <label class="setting-label" for="theme">
             Theme
           </label>
@@ -104,6 +127,13 @@ const updateAiProcessor = (event: Event) => {
   emit('setting-changed', { key: 'aiProcessor', value })
 }
 
+const updateBackupProcessor = (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  const value = target.value
+  updateSetting('backupProcessor', value)
+  emit('setting-changed', { key: 'backupProcessor', value })
+}
+
 const updateTheme = (event: Event) => {
   const target = event.target as HTMLSelectElement
   const value = target.value
@@ -114,10 +144,12 @@ const updateTheme = (event: Event) => {
 const clearSettings = () => {
   if (confirm('Are you sure you want to reset all settings to default values?')) {
     localStorage.removeItem('storyline_ai_processor')
+    localStorage.removeItem('storyline_backup_processor')
     localStorage.removeItem('storyline_theme')
     localStorage.removeItem('storyline_last_character')
 
     updateSetting('aiProcessor', 'google')
+    updateSetting('backupProcessor', 'deepseek')
     updateSetting('theme', 'light')
     updateSetting('lastSelectedCharacter', undefined)
 

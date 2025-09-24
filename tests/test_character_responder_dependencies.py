@@ -29,7 +29,8 @@ def test_character_responder_dependencies_creation():
         primary_processor=primary_processor,
         backup_processor=backup_processor,
         conversation_memory=None,
-        chat_logger=None
+        chat_logger=None,
+        session_id="test-session"
     )
 
     # Create CharacterResponder with dependencies
@@ -41,7 +42,7 @@ def test_character_responder_dependencies_creation():
     assert responder.persistent_memory is None
     assert responder.chat_logger is None
     assert responder.character is character
-    assert responder.session_id is None  # No session_id provided in dependencies
+    assert responder.session_id == "test-session"  # Session_id provided in dependencies
 
 
 @patch('src.processors.cohere_prompt_processor.CoherePromptProcessor')
@@ -83,34 +84,32 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
     assert responder.session_id == "default-session"
 
 
-@patch('src.models.character_responder_dependencies.OpenRouterPromptProcessor')
-@patch('src.models.character_responder_dependencies.CoherePromptProcessor')
-@patch('src.models.character_responder_dependencies.ClaudePromptProcessor')
+@patch('src.models.prompt_processor_factory.PromptProcessorFactory.create_processor')
+@patch('src.models.prompt_processor_factory.PromptProcessorFactory.get_default_backup_processor')
 @patch('src.models.character_responder_dependencies.ConversationMemory')
 @patch('src.models.character_responder_dependencies.ChatLogger')
-def test_dependencies_create_default(mock_logger, mock_memory, mock_claude, mock_cohere, mock_openrouter):
+def test_dependencies_create_default(mock_logger, mock_memory, mock_get_backup, mock_create_processor):
     """Test CharacterResponderDependencies.create_default method."""
     # Mock the dependencies
-    mock_claude_instance = MockPromptProcessor("Claude response")
-    mock_cohere_instance = MockPromptProcessor("Cohere response")
-    mock_openrouter_instance = MockPromptProcessor("OpenRouter response")
+    mock_primary_processor = MockPromptProcessor("Primary response")
+    mock_backup_processor = MockPromptProcessor("Backup response")
     mock_memory_instance = Mock()
+    mock_logger_instance = Mock()
 
-    mock_claude.return_value = mock_claude_instance
-    mock_cohere.return_value = mock_cohere_instance
-    mock_openrouter.return_value = mock_openrouter_instance
+    mock_create_processor.return_value = mock_primary_processor
+    mock_get_backup.return_value = mock_backup_processor
     mock_memory.return_value = mock_memory_instance
-    mock_logger.return_value = mock_logger_instances
+    mock_logger.return_value = mock_logger_instance
 
-    # Test with persistent memory
-    dependencies_with_memory = CharacterResponderDependencies.create_default(
+    # Mock the create_session method
+    mock_memory_instance.create_session.return_value = "test-session"
+
+    # Test dependencies creation
+    dependencies = CharacterResponderDependencies.create_default(
         character_name="TestChar2",
-        session_id="test-456",
-        use_persistent_memory=True,
-        logs_dir=None,
         processor_type="cohere"
     )
 
-    assert dependencies_with_memory.primary_processor is mock_cohere_instance
-    assert dependencies_with_memory.backup_processor is mock_openrouter_instance
-    assert dependencies_with_memory.conversation_memory is mock_memory_instance
+    assert dependencies.primary_processor is mock_primary_processor
+    assert dependencies.backup_processor is mock_backup_processor
+    assert dependencies.conversation_memory is mock_memory_instance

@@ -4,10 +4,7 @@ from pathlib import Path
 from src.chat_logger import ChatLogger
 from src.memory.conversation_memory import ConversationMemory
 from src.models.prompt_processor import PromptProcessor
-from src.processors.claude_prompt_processor import ClaudePromptProcessor
-from src.processors.cohere_prompt_processor import CoherePromptProcessor
-from src.processors.openai_prompt_processor import OpenAiPromptProcessor
-from src.processors.openrouter_prompt_processor import OpenRouterPromptProcessor
+from src.models.prompt_processor_factory import PromptProcessorFactory
 from src.memory.summary_memory import SummaryMemory
 
 
@@ -28,7 +25,8 @@ class CharacterResponderDependencies:
         character_name: str,
         session_id: str | None = None,
         logs_dir: Path | None = None,
-        processor_type: str = "claude"
+        processor_type: str = "claude",
+        backup_processor_type: str | None = None
     ) -> "CharacterResponderDependencies":
         """
         Create default dependencies with standard processor setup.
@@ -36,35 +34,22 @@ class CharacterResponderDependencies:
         Args:
             character_name: Name of the character for logging and memory
             session_id: Session ID for logging and memory
-            use_persistent_memory: Whether to create persistent memory
             logs_dir: Directory for chat logs
-            processor_type: Type of primary processor ("claude" or "cohere")
+            processor_type: Type of primary processor
+            backup_processor_type: Type of backup processor (uses default if not specified)
 
         Returns:
             CharacterResponderDependencies instance with default setup
         """
 
         # Setup processors
-        backup_processor = OpenRouterPromptProcessor(model="deepseek/deepseek-chat-v3.1:free")
-        match processor_type.lower():
-            case "cohere":
-                primary_processor = CoherePromptProcessor()
-            case "claude":
-                primary_processor = ClaudePromptProcessor()
-            case "gpt":
-                primary_processor = OpenAiPromptProcessor()
-            case "grok":
-                primary_processor = OpenRouterPromptProcessor(model="x-ai/grok-4-fast:free")
-            case "deepseek":
-                primary_processor = OpenRouterPromptProcessor(model="deepseek/deepseek-v3.1-terminus")
-            case "gpt-oss":
-                primary_processor = OpenRouterPromptProcessor(model="openai/gpt-oss-120b")
-            case "google":
-                primary_processor = OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
-            case _:
-                raise ValueError(f"Unsupported processor type: {processor_type}")
+        primary_processor = PromptProcessorFactory.create_processor(processor_type)
+        if backup_processor_type:
+            backup_processor = PromptProcessorFactory.create_processor(backup_processor_type)
+        else:
+            backup_processor = PromptProcessorFactory.get_default_backup_processor()
 
-        # Setup memory if requested
+        # Setup memory
         conversation_memory = ConversationMemory()
         summary_memory = SummaryMemory()
 
