@@ -3,8 +3,8 @@
     <header class="chat-header">
       <div class="header-content">
         <div class="character-info">
-          <router-link to="/" class="back-button">
-            <ArrowLeft :size="16" class="inline mr-1" /> Back
+          <router-link to="/" class="btn btn-secondary">
+            <ArrowLeft :size="20" />
           </router-link>
           <div class="character-details">
             <h2>{{ characterName }}</h2>

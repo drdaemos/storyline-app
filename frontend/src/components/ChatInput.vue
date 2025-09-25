@@ -101,6 +101,7 @@ onMounted(() => {
 .input-wrapper {
   display: flex;
   gap: 0.75rem;
+  flex-direction: row;
   align-items: center;
   background: transparent;
   border: none;
@@ -146,6 +147,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: flex-end;
 }
 
 .send-button:hover:not(:disabled) {
@@ -256,12 +258,10 @@ onMounted(() => {
   .input-wrapper {
     flex-direction: row;
     gap: 0.5rem;
-    align-items: flex-end;
     padding: 0.5rem 0.75rem;
   }
 
   .send-button {
-    align-self: flex-end;
     width: auto;
     min-width: 36px;
     height: 36px;

@@ -3,12 +3,15 @@
     <div class="start-content">
       <header class="view-header">
         <div class="header-main">
+          <button class="btn btn-secondary" @click="deselectCharacter">
+            <ArrowLeft :size="20" />
+          </button>
           <h2>Choose a Character</h2>
           <button
-            class="btn btn-secondary"
+            class="btn btn-secondary btn-settings"
             @click="showSettings = !showSettings"
           >
-            <Settings :size="16" class="inline mr-1" /> Settings
+            <Settings :size="20" />
           </button>
         </div>
 
@@ -45,12 +48,6 @@
 
       <!-- Session List -->
       <div v-else class="session-section">
-        <div class="back-navigation">
-          <button class="btn btn-secondary" @click="deselectCharacter">
-            <ArrowLeft :size="16" class="inline mr-1" /> Back to Characters
-          </button>
-        </div>
-
         <div class="selected-character-info">
           <h2>{{ selectedCharacter }}</h2>
           <p v-if="selectedCharacterInfo?.role">
@@ -78,7 +75,7 @@
 
 <script setup lang="ts">
 // biome-ignore lint/style/useNamingConvention: Vue template functions need specific names
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
@@ -178,12 +175,6 @@ const handleSettingChanged = (_payload: { key: string; value: any }) => {
   // Settings are automatically persisted via the composable
 }
 
-// Computed property for filtered sessions (used by SessionList)
-const characterSessions = computed(() => {
-  if (!selectedCharacter.value) return []
-  return sessions.value.filter(session => session.character_name === selectedCharacter.value)
-})
-
 onMounted(() => {
   loadCharacters()
 })
@@ -207,18 +198,8 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 
-.header-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.header-main h2 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 2rem;
-  font-weight: 600;
+.btn-settings {
+  margin-left: auto;
 }
 
 .loading-state,
@@ -254,10 +235,6 @@ onMounted(() => {
 
 .session-section {
   animation: fadeIn 0.3s ease-out;
-}
-
-.back-navigation {
-  margin-bottom: 2rem;
 }
 
 .selected-character-info {
@@ -299,9 +276,7 @@ onMounted(() => {
   }
 
   .header-main {
-    flex-direction: column;
     gap: 1rem;
-    text-align: center;
   }
 
   .header-main h2 {

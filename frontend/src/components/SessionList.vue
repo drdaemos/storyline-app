@@ -42,7 +42,7 @@
         <div class="session-actions">
           <button
             class="btn-icon delete-btn"
-            @click.stop="deleteSession(session.session_id)"
+            @click.stop="showDeleteConfirmation(session.session_id)"
             :title="`Delete session ${formatSessionId(session.session_id)}`"
           >
             <Trash2 :size="16" />
@@ -50,15 +50,25 @@
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :show="showConfirmModal"
+      title="Delete Session"
+      message="Are you sure you want to delete this session? This action cannot be undone."
+      confirm-text="Delete"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { SessionInfo } from '@/types'
 import { formatRelativeTime, truncateText } from '@/utils/formatters'
 import { useApi } from '@/composables/useApi'
 import { Trash2 } from 'lucide-vue-next'
+import ConfirmModal from './ConfirmModal.vue'
 
 interface Props {
   sessions: SessionInfo[]
@@ -75,6 +85,9 @@ const emit = defineEmits<{
 
 const { deleteSession: apiDeleteSession } = useApi()
 
+const showConfirmModal = ref(false)
+const sessionToDelete = ref<string | null>(null)
+
 const filteredSessions = computed(() => {
   return props.sessions
     .filter(session => session.character_name === props.characterName)
@@ -86,18 +99,28 @@ const formatSessionId = (sessionId: string): string => {
   return sessionId.substring(0, 8)
 }
 
-const deleteSession = async (sessionId: string) => {
-  if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
-    return
-  }
+const showDeleteConfirmation = (sessionId: string) => {
+  sessionToDelete.value = sessionId
+  showConfirmModal.value = true
+}
+
+const confirmDelete = async () => {
+  if (!sessionToDelete.value) return
 
   try {
-    await apiDeleteSession(sessionId)
-    emit('session-deleted', sessionId)
+    await apiDeleteSession(sessionToDelete.value)
+    emit('session-deleted', sessionToDelete.value)
   } catch (err) {
     console.error('Failed to delete session:', err)
     // Error will be shown via the error state from useApi
+  } finally {
+    cancelDelete()
   }
+}
+
+const cancelDelete = () => {
+  showConfirmModal.value = false
+  sessionToDelete.value = null
 }
 </script>
 

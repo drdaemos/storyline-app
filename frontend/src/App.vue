@@ -114,6 +114,7 @@ button, input, label {
 h1, h2,
 h3, h4 {
   text-wrap: balance;
+  font-family: "Playfair Display", serif;
 }
 
 /* A elements that don't have a class get default styles */
@@ -180,6 +181,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.header-main {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.header-main h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 2rem;
+  font-weight: 600;
 }
 
 .app-title {

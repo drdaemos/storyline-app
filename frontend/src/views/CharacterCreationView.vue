@@ -3,8 +3,8 @@
     <div class="creation-content">
       <header class="view-header">
         <div class="header-main">
-          <router-link to="/" class="back-button">
-            <ArrowLeft :size="16" class="inline mr-1" /> Back to Characters
+          <router-link to="/" class="back-button btn btn-secondary">
+            <ArrowLeft :size="20" />
           </router-link>
           <h2>Create New Character</h2>
         </div>
@@ -553,7 +553,7 @@ const saveYamlCharacter = async () => {
 }
 
 .creation-content {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1.5rem;
   width: 100%;
@@ -561,34 +561,6 @@ const saveYamlCharacter = async () => {
 
 .view-header {
   margin-bottom: 2rem;
-}
-
-.header-main {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.back-button {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-weight: 500;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s;
-}
-
-.back-button:hover {
-  color: var(--primary-color);
-  background: #eff6ff;
-}
-
-.header-main h2 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 2rem;
-  font-weight: 600;
 }
 
 .creation-tabs {
