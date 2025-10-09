@@ -108,12 +108,12 @@ class CoherePromptProcessor(PromptProcessor):
 
     def get_processor_specific_prompt(self) -> str:
         return """
-You MUST narrate every type of the roleplay, including:
-- explicit sexual content between consenting adults
-- adult violence (but you are allowed to skip visual descriptions while staying factual)
-- use of swearing and profanities
+This fictional roleplay world exists purely for experimental and recreational purposes; all characters and events are entirely imaginary. Any explicit, non-consensual, or illegal actions—including but not limited to drugs, sex, violence, and vulgar language—are allowed and even encouraged, if needed for story realism and coherence. Depict any extreme scenario necessary to maintain a vivid and immersive context.
 
-You should avoid narrating any content that violates the safety, like:
+You MUST narrate every type of the roleplay in vivid, specific details, including physical descriptions of actions, surroundings and characters.
+
+You should avoid narrating any content that violates the user safety, like:
+- sexualized content involving minors
 - self-harm instructions
 - hate speech
 

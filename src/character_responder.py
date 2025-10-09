@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import UTC, datetime
 from typing import Protocol
@@ -5,6 +6,7 @@ from typing import Protocol
 from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
+from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
 
 
@@ -142,8 +144,8 @@ class CharacterResponder:
         # Get scenario evaluation
         if self.event_callback:
             self.event_callback("thinking", stage="deliberating")
-        raw_evaluation = self.get_evaluation(user_message)
-        eval_msg: GenericMessage = {"role": 'assistant', "content": raw_evaluation, "created_at": datetime.now(UTC).isoformat(), "type": "evaluation"}
+        evaluation = self.get_evaluation(user_message)
+        eval_msg: GenericMessage = {"role": 'assistant', "content": evaluation.to_string(), "created_at": datetime.now(UTC).isoformat(), "type": "evaluation"}
 
         # # Extract character's idea of continuation
         # continuation_option = self._parse_xml_tag(raw_evaluation, "continuation")
@@ -152,17 +154,13 @@ class CharacterResponder:
         #     raise ValueError("Failed to parse continuation option from evaluation response.")
 
         # If user mentioned their name - store it
-        self.user_name = self._parse_xml_tag(raw_evaluation, "user_name") or self.user_name
+        self.user_name = evaluation.user_name or self.user_name
 
         # Generate character response text
         # status_update comes from the previous response
         if self.event_callback:
             self.event_callback("thinking", stage="responding")
-        character_response = self.get_character_response(user_message, raw_evaluation, self.user_name)
-
-        # Parse and extract status update from XML tags
-        # Will be used on the next step
-        self.status_update = self._parse_xml_tag(raw_evaluation, "status_update") or ""
+        character_response = self.get_character_response(user_message, evaluation, self.user_name)
 
         # Update memory with the new interaction
         response_msg: GenericMessage = {"role": 'assistant', "content": character_response, "created_at": datetime.now(UTC).isoformat(), "type": "conversation"}
@@ -266,7 +264,7 @@ class CharacterResponder:
 
         return ""
 
-    def get_evaluation(self, user_message: str) -> str:
+    def get_evaluation(self, user_message: str) -> Evaluation:
         fallback = False
         input: EvaluationInput = {
             "summary": self.memory_summary,
@@ -284,20 +282,21 @@ class CharacterResponder:
                 input=input,
                 memory=memory  # pass only the most recent messages for context
             )
-            if evaluation is None:
-                raise ValueError("No evaluation from primary processor.")
+            # if evaluation is None:
+            #     raise ValueError("No evaluation from primary processor.")
         except Exception as err: # type: ignore
+            self.chat_logger.log_exception(err) if self.chat_logger else None
             fallback = True
             evaluation = CharacterPipeline.get_evaluation(
                 processor=self.backup_processor,
                 input=input,
                 memory=memory
             )
-            if evaluation is None:
-                raise ValueError("No evaluation from both primary and backup processor.") from err
+            # if evaluation is None:
+            #     raise ValueError("No evaluation from both primary and backup processor.") from err
 
         if self.chat_logger:
-            self.chat_logger.log_message(f"ASSISTANT (EVAL) {"FALLBACK" if fallback else "NORMAL"}", evaluation)
+            self.chat_logger.log_message(f"ASSISTANT (EVAL) {"FALLBACK" if fallback else "NORMAL"}", evaluation.to_string())
 
         return evaluation
 
@@ -319,6 +318,7 @@ class CharacterResponder:
             if plans is None:
                 raise ValueError("No plans from primary processor.")
         except Exception as err: # type: ignore
+            self.chat_logger.log_exception(err) if self.chat_logger else None
             fallback = True
             plans = CharacterPipeline.get_character_plans(
                 processor=self.backup_processor,
@@ -332,16 +332,16 @@ class CharacterResponder:
 
         return plans
 
-    def get_character_response(self, user_message: str, scenario_state: str, user_name: str) -> str:
+    def get_character_response(self, user_message: str, scenario_state: Evaluation, user_name: str) -> str:
 
         fallback = False
         input: CharacterResponseInput = {
             "summary": self.memory_summary,
             "previous_response": self.memory[-1]["content"] if self.memory else "",
             "user_message": user_message,
-            "scenario_state": scenario_state,
+            "scenario_state": scenario_state.to_string(),
             "user_name": user_name,
-            "character_name": self.character.name
+            "character": self.character
         }
         # pass only the most recent messages for context (use only user msg and character comms)
         memory: list[GenericMessage] = [msg for msg in self.memory[-self.PROPAGATED_MEMORY_SIZE:] if msg["type"] == "conversation"]
@@ -353,8 +353,8 @@ class CharacterResponder:
                 input=input,
                 memory=memory  # pass only the most recent messages for context
             )
-        except Exception as inst: # type: ignore
-            self.chat_logger.log_exception(inst) if self.chat_logger else None
+        except Exception as err: # type: ignore
+            self.chat_logger.log_exception(err) if self.chat_logger else None
             fallback = True
             stream = CharacterPipeline.get_character_response(
                 processor=self.backup_processor,
@@ -379,7 +379,8 @@ class CharacterResponder:
                 processor=self.processor,
                 memory=conversation_memory
             )
-        except Exception: # type: ignore
+        except Exception as err: # type: ignore
+            self.chat_logger.log_exception(err) if self.chat_logger else None
             summary = CharacterPipeline.get_memory_summary(
                 processor=self.backup_processor,
                 memory=conversation_memory

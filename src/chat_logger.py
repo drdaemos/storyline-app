@@ -1,10 +1,11 @@
 
+import sys
 import logging
 from pathlib import Path
 
 
 class ChatLogger:
-    def __init__(self, character_id: str, session_id: str, logs_dir: Path | None = None) -> None:
+    def __init__(self, character_id: str, session_id: str, file_only: bool = True,logs_dir: Path | None = None) -> None:
         """
         Setup logging for conversation messages.
 
@@ -49,6 +50,13 @@ class ChatLogger:
 
         # Add handler to logger
         self.logger.addHandler(file_handler)
+
+        # Add console handler if not file_only
+        if not file_only:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
 
         # Prevent propagation to avoid duplicate logs
         self.logger.propagate = False

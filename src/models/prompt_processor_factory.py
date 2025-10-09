@@ -32,7 +32,7 @@ class PromptProcessorFactory:
             case "gpt":
                 return OpenAiPromptProcessor()
             case "grok":
-                return OpenRouterPromptProcessor(model="x-ai/grok-4-fast:free")
+                return OpenRouterPromptProcessor(model="x-ai/grok-4-fast")
             case "deepseek":
                 return OpenRouterPromptProcessor(model="deepseek/deepseek-v3.1-terminus")
             case "gpt-oss":

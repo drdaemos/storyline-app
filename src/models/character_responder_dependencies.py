@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 from src.chat_logger import ChatLogger
@@ -57,7 +58,8 @@ class CharacterResponderDependencies:
             session_id = conversation_memory.create_session(character_name)
 
         # Setup chat logger
-        chat_logger = ChatLogger(character_name, session_id, logs_dir)
+        file_only = os.getenv("LOG_TO_CONSOLE", "false").lower() != "true"
+        chat_logger = ChatLogger(character_name, session_id, file_only, logs_dir)
         primary_processor.set_logger(chat_logger)
         backup_processor.set_logger(chat_logger)
 
