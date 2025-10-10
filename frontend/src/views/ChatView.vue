@@ -131,7 +131,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const router = useRouter()
-const { settings } = useLocalSettings()
+const { settings, loadSettings } = useLocalSettings()
 const {
   isConnected,
   error,
@@ -445,6 +445,9 @@ const onSettingChanged = (payload: { key: string; value: any }) => {
 
 // Initialize session
 onMounted(async () => {
+  // Reload settings to pick up any changes made in SettingsMenu
+  loadSettings()
+
   if (props.sessionId !== 'new') {
     currentSessionId.value = props.sessionId
     await loadSessionHistory(props.sessionId)
@@ -767,7 +770,7 @@ onUnmounted(() => {
 }
 
 .thinking-dots span:nth-child(3) {
-  animation-delay: 0;
+  animation-delay: 0s;
 }
 
 .thinking-text {

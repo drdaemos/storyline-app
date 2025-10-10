@@ -60,3 +60,6 @@ Basically, pipeline operates on multiple levels:
 - Introduce scene intro message - either autogenerate or predefine via character card
 - Multi-group convos (LLM handle them, but probably there should be a different card format)
 - User profile / authentication / description
+- Generate user responses dynamically
+- Support image generation (DALL·E / Stable Diffusion) for character portraits, scenes etc.
+- AI-to-AI roleplay (two characters interacting without user input)

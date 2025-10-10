@@ -59,7 +59,7 @@
           :sessions="sessions"
           :character-name="selectedCharacter"
           @select-session="navigateToChat"
-          @new-session="startNewSession"
+          @open-scenario-modal="openScenarioModal"
           @session-deleted="handleSessionDeleted"
         />
       </div>
@@ -69,6 +69,13 @@
     <SettingsMenu
       v-model:show="showSettings"
       @setting-changed="handleSettingChanged"
+    />
+
+    <!-- Scenario Selection Modal -->
+    <ScenarioSelectionModal
+      :show="showScenarioModal"
+      :character-name="selectedCharacter || ''"
+      @close="closeScenarioModal"
     />
   </div>
 </template>
@@ -82,6 +89,7 @@ import { useLocalSettings } from '@/composables/useLocalSettings'
 import CharacterCard from '@/components/CharacterCard.vue'
 import SessionList from '@/components/SessionList.vue'
 import SettingsMenu from '@/components/SettingsMenu.vue'
+import ScenarioSelectionModal from '@/components/ScenarioSelectionModal.vue'
 import type { SessionInfo } from '@/types'
 import { Settings, ArrowLeft } from 'lucide-vue-next'
 
@@ -94,6 +102,7 @@ const sessions = ref<SessionInfo[]>([])
 const selectedCharacter = ref<string | null>(null)
 const selectedCharacterInfo = ref<Record<string, string> | null>(null)
 const showSettings = ref(false)
+const showScenarioModal = ref(false)
 
 const loadCharacters = async () => {
   try {
@@ -151,16 +160,12 @@ const navigateToChat = (sessionId: string) => {
   }
 }
 
-const startNewSession = () => {
-  if (selectedCharacter.value) {
-    router.push({
-      name: 'chat',
-      params: {
-        characterName: selectedCharacter.value,
-        sessionId: 'new'
-      }
-    })
-  }
+const openScenarioModal = () => {
+  showScenarioModal.value = true
+}
+
+const closeScenarioModal = () => {
+  showScenarioModal.value = false
 }
 
 const navigateToCreate = () => {

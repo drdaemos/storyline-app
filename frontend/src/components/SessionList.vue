@@ -4,7 +4,7 @@
       <h3>Chat Sessions</h3>
       <button
         class="btn btn-primary"
-        @click="emit('new-session')"
+        @click="emit('open-scenario-modal')"
       >
         Start New Session
       </button>
@@ -12,7 +12,7 @@
 
     <div v-if="filteredSessions.length === 0" class="no-sessions">
       <p>No sessions found for this character.</p>
-      <button class="btn btn-secondary" @click="emit('new-session')">
+      <button class="btn btn-secondary" @click="emit('open-scenario-modal')">
         Start your first conversation
       </button>
     </div>
@@ -79,7 +79,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'select-session': [sessionId: string]
-  'new-session': []
+  'open-scenario-modal': []
   'session-deleted': [sessionId: string]
 }>()
 

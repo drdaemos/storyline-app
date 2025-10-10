@@ -82,3 +82,35 @@ export interface SessionDetails {
   last_messages: SessionMessage[]
   last_message_time: string
 }
+
+export interface Scenario {
+  summary: string
+  intro_message: string
+  narrative_category: string
+}
+
+export interface GenerateScenariosRequest {
+  character_name: string
+  count: number
+  mood: string
+  processor_type?: string
+  backup_processor_type?: string
+}
+
+export interface GenerateScenariosResponse {
+  character_name: string
+  scenarios: Scenario[]
+}
+
+export interface StartSessionRequest {
+  character_name: string
+  intro_message: string
+  user_name: string
+  user_description: string
+  processor_type?: string
+  backup_processor_type?: string
+}
+
+export interface StartSessionResponse {
+  session_id: string
+}

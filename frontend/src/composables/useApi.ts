@@ -1,5 +1,16 @@
 import { ref, type Ref } from 'vue'
-import type { SessionInfo, InteractRequest, CreateCharacterRequest, CreateCharacterResponse, GenerateCharacterRequest, GenerateCharacterResponse } from '@/types'
+import type {
+  SessionInfo,
+  InteractRequest,
+  CreateCharacterRequest,
+  CreateCharacterResponse,
+  GenerateCharacterRequest,
+  GenerateCharacterResponse,
+  GenerateScenariosRequest,
+  GenerateScenariosResponse,
+  StartSessionRequest,
+  StartSessionResponse
+} from '@/types'
 
 interface ApiError {
   message: string
@@ -136,6 +147,20 @@ export function useApi() {
     return eventSource
   }
 
+  const generateScenarios = async (payload: GenerateScenariosRequest): Promise<GenerateScenariosResponse> => {
+    return makeRequest<GenerateScenariosResponse>('/api/scenarios/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  }
+
+  const startSessionWithScenario = async (payload: StartSessionRequest): Promise<StartSessionResponse> => {
+    return makeRequest<StartSessionResponse>('/api/sessions/start', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  }
+
   return {
     loading,
     error,
@@ -145,6 +170,8 @@ export function useApi() {
     createCharacter,
     generateCharacter,
     deleteSession,
-    handleInteraction
+    handleInteraction,
+    generateScenarios,
+    startSessionWithScenario
   }
 }

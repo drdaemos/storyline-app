@@ -36,13 +36,41 @@
         <div
           v-if="isStreaming"
           class="streaming-content"
-          v-html="parseMarkdown(message.content)"
+          v-html="parseMarkdown(parsedContent.visible)"
         ></div>
         <div
           v-else
           class="message-text"
-          v-html="parseMarkdown(message.content)"
+          v-html="parseMarkdown(parsedContent.visible)"
         ></div>
+
+        <!-- Hidden Context Section / Actions Footer -->
+        <div v-if="(parsedContent.hiddenContext && !message.isUser) || (showActions && !message.isUser && !isStreaming)" class="message-footer">
+          <button
+            v-if="parsedContent.hiddenContext"
+            class="btn-icon context-btn"
+            :class="{ active: hiddenContextRevealed }"
+            @click="toggleHiddenContext"
+            :title="hiddenContextRevealed ? 'Hide context' : 'Show context'"
+          >
+            <ReceiptText :size="16" />
+          </button>
+          <button
+            v-if="showActions && !isStreaming"
+            class="btn-icon regenerate-btn"
+            @click="emit('regenerate')"
+            title="Regenerate response"
+          >
+            <RefreshCw :size="16" />
+          </button>
+        </div>
+
+        <div
+          v-if="hiddenContextRevealed && parsedContent.hiddenContext"
+          class="hidden-context-content"
+        >
+          {{ parsedContent.hiddenContext }}
+        </div>
 
         <div v-if="isStreaming" class="typing-indicator">
           <span></span>
@@ -50,24 +78,15 @@
           <span></span>
         </div>
       </div>
-
-      <div v-if="showActions && !message.isUser && !isStreaming" class="message-actions">
-        <button
-          class="btn-icon regenerate-btn"
-          @click="emit('regenerate')"
-          title="Regenerate response"
-        >
-          <RefreshCw :size="16" />
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import type { ChatMessage } from '@/types'
 import { formatMessageTime, parseMarkdown } from '@/utils/formatters'
-import { Undo2, RefreshCw } from 'lucide-vue-next'
+import { Undo2, RefreshCw, ReceiptText } from 'lucide-vue-next'
 
 interface Props {
   message: ChatMessage
@@ -76,12 +95,37 @@ interface Props {
   showRewind?: boolean
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   regenerate: []
   rewind: []
 }>()
+
+const hiddenContextRevealed = ref(false)
+
+const parsedContent = computed(() => {
+  const content = props.message.content
+  const hiddenContextRegex = /<hidden_context>(.*?)<\/hidden_context>/is
+
+  const match = content.match(hiddenContextRegex)
+
+  if (match) {
+    return {
+      visible: content.replace(hiddenContextRegex, '').trim(),
+      hiddenContext: match[1].trim()
+    }
+  }
+
+  return {
+    visible: content,
+    hiddenContext: null
+  }
+})
+
+const toggleHiddenContext = () => {
+  hiddenContextRevealed.value = !hiddenContextRevealed.value
+}
 </script>
 
 <style scoped>
@@ -227,9 +271,11 @@ const emit = defineEmits<{
   }
 }
 
-.message-actions {
-  margin-top: 0.75rem;
+.message-footer {
+  margin-top: 1rem;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
 
@@ -242,6 +288,9 @@ const emit = defineEmits<{
   transition: background-color 0.2s;
   font-size: 0.875rem;
   opacity: 0.7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-icon:hover {
@@ -249,8 +298,17 @@ const emit = defineEmits<{
   opacity: 1;
 }
 
+.btn-icon.active {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
+}
+
 .user-message .btn-icon:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.user-message .btn-icon.active {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .avatar-actions {
@@ -289,6 +347,22 @@ const emit = defineEmits<{
 .message-text :deep(br),
 .streaming-content :deep(br) {
   line-height: 1.6;
+}
+
+/* Hidden Context Styling */
+.hidden-context-content {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  opacity: 0.7;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.user-message .hidden-context-content {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 @media (max-width: 768px) {

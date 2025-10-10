@@ -3,6 +3,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from src.character_utils import format_character_description
 from src.chat_logger import ChatLogger
 from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
 from src.models.character import Character
@@ -338,9 +339,9 @@ class TestCharacterPipeline:
 
         assert result == ""
 
-    def test_map_character_to_prompt_variables(self):
-        """Test mapping character to prompt variables."""
-        result = CharacterPipeline._map_character_to_prompt_variables(self.test_character)
+    def test_format_character_description(self):
+        """Test formatting character to prompt variables."""
+        result = format_character_description(self.test_character)
 
         expected = {
             "character_name": "Alice",
@@ -354,8 +355,8 @@ class TestCharacterPipeline:
 
         assert result == expected
 
-    def test_map_character_to_prompt_variables_missing_user_relationship(self):
-        """Test character mapping with empty relationships."""
+    def test_format_character_description_missing_user_relationship(self):
+        """Test character formatting with empty relationships."""
         character = Character(
             name="Bob",
             role="Engineer",
@@ -367,12 +368,12 @@ class TestCharacterPipeline:
             setting_description="Modern office environment"
         )
 
-        result = CharacterPipeline._map_character_to_prompt_variables(character)
+        result = format_character_description(character)
 
         assert result["relationships"] == ""
 
-    def test_map_character_to_prompt_variables_empty_locations(self):
-        """Test character mapping with empty key locations."""
+    def test_format_character_description_empty_locations(self):
+        """Test character formatting with empty key locations."""
         character = Character(
             name="Bob",
             role="Engineer",
@@ -384,7 +385,7 @@ class TestCharacterPipeline:
             setting_description="Modern office environment"
         )
 
-        result = CharacterPipeline._map_character_to_prompt_variables(character)
+        result = format_character_description(character)
 
         assert result["key_locations"] == ""
 

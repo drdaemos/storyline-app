@@ -291,7 +291,7 @@ setting_description: World description..."
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
@@ -301,7 +301,7 @@ import { ArrowLeft, Wand2, X } from 'lucide-vue-next'
 
 const router = useRouter()
 const { createCharacter, generateCharacter, loading, error } = useApi()
-const { settings } = useLocalSettings()
+const { settings, loadSettings } = useLocalSettings()
 
 const activeTab = ref<'manual' | 'yaml'>('manual')
 const generating = ref(false)
@@ -543,6 +543,11 @@ const saveYamlCharacter = async () => {
     setTimeout(() => errorMessage.value = '', 5000)
   }
 }
+
+// Reload settings on mount to pick up any changes
+onMounted(() => {
+  loadSettings()
+})
 </script>
 
 <style scoped>

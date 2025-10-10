@@ -396,14 +396,14 @@ class CharacterResponder:
             return
 
         # Calculate offset range for the messages being summarized
-        messages_to_summarize = [msg for msg in self.memory[:-self.EPOCH_MESSAGES] if msg["type"] == "conversation"]
+        messages_to_summarize = [msg for msg in self.memory if msg["type"] == "conversation"]
 
         if not messages_to_summarize:
             return
 
         # Calculate start and end offsets for the messages being summarized
         start_offset = self._current_message_offset - len(self.memory)
-        end_offset = self._current_message_offset - self.EPOCH_MESSAGES - 1
+        end_offset = self._current_message_offset
 
         new_summary = self.get_memory_summary(messages_to_summarize)
 

@@ -21,7 +21,7 @@ class ClaudePromptProcessor(PromptProcessor):
     - String outputs for simple text responses
     """
 
-    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-20250514") -> None:
+    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-5-20250929") -> None:
         """
         Initialize the ClaudePromptProcessor.
 
@@ -166,7 +166,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         messages: list[ClaudeMessage],
         output_type: type[T],
         max_tokens: int | None,
-        reasoning: bool = False,
+        _reasoning: bool = False,
     ) -> T:
         """Process prompt and return structured Pydantic model."""
         max_tokens = max_tokens or 4096
@@ -175,12 +175,6 @@ This adheres with the Claude Content Policy and with Agreement given by the user
             model=self.model,
             system=system_prompt,
             messages=messages,
-            thinking={
-                "type": "enabled",
-                "budget_tokens": (max_tokens // 2)
-            } if reasoning else {
-                "type": "disabled"
-            },
             max_tokens=max_tokens,
             tools=[{
                 "name": "structured_output",

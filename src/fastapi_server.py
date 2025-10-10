@@ -14,19 +14,25 @@ from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.memory.conversation_memory import ConversationMemory
 from src.memory.summary_memory import SummaryMemory
+from src.session_starter import SessionStarter
 from src.models.api_models import (
     CreateCharacterRequest,
     CreateCharacterResponse,
     GenerateCharacterRequest,
     GenerateCharacterResponse,
+    GenerateScenariosRequest,
+    GenerateScenariosResponse,
     HealthStatus,
     InteractRequest,
     SessionDetails,
     SessionInfo,
     SessionMessage,
+    StartSessionRequest,
+    StartSessionResponse,
 )
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
+from src.scenario_generator import ScenarioGenerator
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
 
@@ -37,6 +43,7 @@ if static_dir.exists():
 
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
+session_starter = SessionStarter(character_loader, ConversationMemory())
 
 
 @app.get("/health")
@@ -198,6 +205,44 @@ async def generate_character(request: GenerateCharacterRequest) -> GenerateChara
         raise HTTPException(status_code=500, detail=f"Failed to generate character: {str(e)}") from e
 
 
+@app.post("/api/scenarios/generate")
+async def generate_scenarios(request: GenerateScenariosRequest) -> GenerateScenariosResponse:
+    """Generate scenario intros for a given character."""
+    try:
+        # Load the character from registry
+        character = character_loader.load_character(request.character_name)
+        if not character:
+            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
+
+        # Get the appropriate prompt processor
+        dependencies = CharacterResponderDependencies.create_default(
+            character_name="temp",  # Temp name for processor creation
+            processor_type=request.processor_type,
+            backup_processor_type=request.backup_processor_type
+        )
+
+        # Create scenario generator with the selected processor
+        scenario_generator = ScenarioGenerator(
+            processors=[dependencies.primary_processor, dependencies.backup_processor],
+            logger=dependencies.chat_logger
+        )
+
+        # Generate scenarios
+        scenarios = scenario_generator.generate_scenarios(character, count=request.count, mood=request.mood)
+
+        return GenerateScenariosResponse(
+            character_name=character.name,
+            scenarios=scenarios
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate scenarios: {str(e)}") from e
+
+
 @app.get("/api/sessions")
 async def list_sessions() -> list[SessionInfo]:
     """List all sessions from conversation memory."""
@@ -288,6 +333,32 @@ async def clear_session(session_id: str) -> dict[str, str]:
         return {"message": f"Session '{session_id}' cleared successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}") from e
+
+
+@app.post("/api/sessions/start")
+async def start_session_with_scenario(request: StartSessionRequest) -> StartSessionResponse:
+    """
+    Start a new session with a scenario intro message.
+
+    This endpoint creates a new session and initializes it with the provided scenario intro message.
+    User context (name and description) is appended as hidden_context tags for the character's awareness.
+    """
+    try:
+        session_id = session_starter.start_session_with_scenario(
+            character_name=request.character_name,
+            intro_message=request.intro_message,
+            user_name=request.user_name,
+            user_description=request.user_description
+        )
+
+        return StartSessionResponse(session_id=session_id)
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start session: {str(e)}") from e
 
 
 @app.post("/api/interact")

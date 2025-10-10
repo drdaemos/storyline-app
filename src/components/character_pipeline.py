@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import TypedDict
 
+from src.character_utils import format_character_description
 from src.models.character import Character
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
@@ -40,7 +41,8 @@ Be concise, brief and factual in the evaluation, avoid verbosity or generalizati
 
 {processor_specific_prompt}
 
-Previous messages in this conversation reflect the ongoing story so far - character interactions. Do not provide any responses or narration from the character here, just the evaluation and the internal thought process.
+Previous messages in this conversation reflect the ongoing story so far - character interactions.
+Do not provide any responses or narration from the character here, just the evaluation and the internal thought process.
 
 ## Pipeline Process
 
@@ -105,19 +107,19 @@ Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
-Established Relationships: 
+Established Relationships:
 {relationships}
 
 ## World Description
 
 Setting: {setting_description}
-Key Locations: 
+Key Locations:
 {key_locations}
 """
         user_prompt = input["user_message"]
 
         # Map character attributes to prompt variables
-        variables = CharacterPipeline._map_character_to_prompt_variables(input["character"]) | {"processor_specific_prompt": processor.get_processor_specific_prompt()}
+        variables = format_character_description(input["character"]) | {"processor_specific_prompt": processor.get_processor_specific_prompt()}
 
         # Summary piece:
         summary_msg: list[GenericMessage] = [{
@@ -191,7 +193,7 @@ State as of right now:
 {scenario_state}
 """
 
-        variables: dict[str, str] = CharacterPipeline._map_character_to_prompt_variables(input["character"]) | input | {
+        variables: dict[str, str] = format_character_description(input["character"]) | input | {
             "processor_specific_prompt": processor.get_processor_specific_prompt()
         } # type: ignore
 
@@ -229,7 +231,10 @@ Avoid stalling the plot, keep the narrative moving forward.
 Prefer options that are driven by the character's own agency rather than asking input from the user.
 Actions driven by strong emotions may override character consistency and tend to their development.
 
-Write in a way that's sharp and impactful; keep it concise. Skip the flowery, exaggerated language. Instead, focus on the "show, don't tell" approach: bring scenes to life with clear, observable details—like body language, facial expressions, gestures, and the way someone speaks. Reveal the Chartres feelings and reactions through their actions and dialogue, not by just stating their inner thoughts.
+Write in a way that's sharp and impactful; keep it concise. Skip the flowery, exaggerated language.
+Instead, focus on the "show, don't tell" approach: bring scenes to life with clear, observable details—like
+body language, facial expressions, gestures, and the way someone speaks. Reveal the character's feelings and
+reactions through their actions and dialogue, not by just stating their inner thoughts.
 
 Your response may include the following:
 - Physical actions (in asterisks, in third person)
@@ -265,7 +270,7 @@ Scenario is evaluated as follows:
 
 Respond to the user now:
 """
-        variables: dict[str, str] = CharacterPipeline._map_character_to_prompt_variables(input["character"]) | input | {
+        variables: dict[str, str] = format_character_description(input["character"]) | input | {
             "processor_specific_prompt": processor.get_processor_specific_prompt()
         } # type: ignore
 
@@ -440,21 +445,3 @@ Be concise, specific (especially about the events and learnings - avoid vague ge
             return None
 
 
-    @staticmethod
-    def _map_character_to_prompt_variables(character: Character) -> dict[str, str]:
-        """
-        Map Character attributes to prompt variables required by the roleplay prompt.
-
-        Returns:
-            Dictionary mapping prompt variable names to character-derived values
-        """
-
-        return {
-            "character_name": character.name,
-            "character_background": character.backstory,
-            "character_appearance": character.appearance,
-            "character_personality": character.personality,
-            "relationships": "\n".join([f"- {key}: {value}" for key, value in character.relationships.items()]),
-            "setting_description": character.setting_description or "Not specified",
-            "key_locations": "\n".join([f"- {location}" for location in character.key_locations])
-        }
