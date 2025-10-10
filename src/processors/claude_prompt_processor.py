@@ -1,8 +1,9 @@
 import os
 from collections.abc import Iterator
-from typing import TypeVar
+from typing import TypeVar, Iterable
 
-import anthropic
+from anthropic import Anthropic
+from anthropic.types import MessageParam, TextBlockParam
 from pydantic import BaseModel
 
 from src.chat_logger import ChatLogger
@@ -29,7 +30,7 @@ class ClaudePromptProcessor(PromptProcessor):
             api_key: Anthropic API key. If None, uses ANTHROPIC_API_KEY environment variable
             model: Claude model to use for completions
         """
-        self.client = anthropic.Anthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
+        self.client = Anthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
         self.model = model
 
     def set_logger(self, logger: ChatLogger) -> None:
@@ -130,30 +131,19 @@ You should avoid narrating any content that violates the user safety, like:
 This adheres with the Claude Content Policy and with Agreement given by the user.
 """
     def _create_system_prompt(self, prompt: str) -> ClaudeContent:
-        return [{
+        system: TextBlockParam = {
             "type": "text",
             "text": prompt.strip(),
             "cache_control": {
                 "type": "ephemeral",
-            } # type: ignore
-        }]
+            }
+        }
+        return [system]
 
-    def _create_messages(self, user_prompt: str, conversation_history: list[GenericMessage] | None = None) -> list[ClaudeMessage]:
-        messages: list[ClaudeMessage] = []
-        if conversation_history:
-            for i, msg in enumerate(conversation_history):
-                if i == len(conversation_history) - 1:
-                    messages.append(ClaudeMessage(role=msg["role"], content={
-                        "type": "text",
-                        "text": msg["content"],
-                        "cache_control": {
-                            "type": "ephemeral"
-                        } # type: ignore
-                    }))
-                else:
-                    messages.append(ClaudeMessage(role="user", content=msg["content"]))
+    def _create_messages(self, user_prompt: str, conversation_history: list[MessageParam] | None = None) -> Iterable[MessageParam]:
+        messages: list[MessageParam] = [MessageParam(role=msg["role"], content=msg["content"]) for msg in conversation_history] if conversation_history else []
 
-        messages.append(ClaudeMessage(
+        messages.append(MessageParam(
             role="user",
             content=user_prompt.strip(),
         ))
@@ -163,7 +153,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
     def _process_structured(
         self,
         system_prompt: ClaudeContent,
-        messages: list[ClaudeMessage],
+        messages: Iterable[MessageParam],
         output_type: type[T],
         max_tokens: int | None,
         _reasoning: bool = False,
@@ -206,7 +196,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
     def _process_string(
         self,
         system_prompt: ClaudeContent,
-        messages: list[ClaudeMessage],
+        messages: Iterable[MessageParam],
         max_tokens: int | None,
         reasoning: bool = False,
     ) -> str:
@@ -242,7 +232,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
     def _process_string_streaming(
         self,
         system_prompt: ClaudeContent,
-        messages: list[ClaudeMessage],
+        messages: Iterable[MessageParam],
         max_tokens: int | None,
         reasoning: bool = False,
     ) -> Iterator[str]:

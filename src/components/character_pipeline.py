@@ -34,9 +34,8 @@ class CharacterResponseInput(TypedDict):
 class CharacterPipeline:
     @staticmethod
     def get_evaluation(processor: PromptProcessor, input: EvaluationInput, memory: list[GenericMessage]) -> Evaluation:
-        developer_prompt = """
-You will simulate an autonomous NPC character in a text-based roleplay interaction.
-Follow the pipeline below to evaluate the situation and story narrative, and generate continuation options.
+        developer_prompt = """You will simulate a text-based roleplay interaction and create a detailed description of anything not mentioned directly in the conversation.
+Follow the pipeline below to evaluate the situation and story narrative.
 Be concise, brief and factual in the evaluation, avoid verbosity or generalizations.
 
 {processor_specific_prompt}
@@ -60,28 +59,29 @@ These patterns MUST by avoided in future responses.
 Secondly, analyse the situation based on the user's input and the ongoing narrative.
 Outline the key observations, using the following questions as a guidance:
 
-- What does the character see / feel?
+- What is happening visibly?
 - What body language or non-verbal cues are present?
 - What might be the underlying intent or subtext?
 - How does this relate to the ongoing dynamic?
-- What does the character want in this moment?
+- What do characters want in this moment?
 - What emotional undertone is present?
 
 - Location change (if happened): [Yes/No, new location if yes]
 - Setting: [Brief description of the surroundings]
-User State:
- - [User's physical position, condition]
- - [User's clothing]
-Character Emotional State:
+
+Characters Emotional State:
  - [List emotional state]
  - [List internal debates, conflicts, desires]
-Character Physical State:
- - [Character's physical position, condition]
- - [Character's clothing]
+Characters Physical State:
+ - [Characters physical position, condition]
+ - [Characters clothing]
+ - [User's physical position, condition]
+ - [User's clothing]
 State of the surroundings:
  - [List out key details about surroundings, e.g. type of place, time of day]
  - [Mention objects relevant for the plot]
  - [Environmental or timing factors to track]
+
 Scenario State:
 - Current narrative pacing and stage
 - Recent action patterns (avoid repetition or stalling plot)
@@ -124,8 +124,7 @@ Key Locations:
         # Summary piece:
         summary_msg: list[GenericMessage] = [{
             "role": "user",
-            "content": f"""
-Summary of previous interactions:
+            "content": f"""Summary of previous interactions:
 {input["summary"]}
 
 {input['plans']},
@@ -146,8 +145,7 @@ Summary of previous interactions:
 
     @staticmethod
     def get_character_plans(processor: PromptProcessor, input: PlanGenerationInput) -> str | None:
-        developer_prompt = """
-You will simulate an autonomous NPC character in a text-based roleplay interaction. Follow the pipeline below
+        developer_prompt = """You will simulate an autonomous NPC character in a text-based roleplay interaction. Follow the pipeline below
 to generate a realistic plan of next character actions.
 Be concise, brief and factual in the response, avoid verbosity.
 Make sure these actions align with the story so far and are driven by the character (e.g they are taking active specific actions).
@@ -169,6 +167,13 @@ Considering the story so far, the following new story beats are planned:
 - [Story beat 1]
 - [Story beat 2]
 - [Continue as needed]
+- [Ensure that plans involve transitions, location changes, significant revelations]
+
+Additionally, provide a list of possible unexpected external events that could occur, affecting the story.
+These events should be plausible within the story context and can introduce new challenges or opportunities, or test characters.
+- [External event 1]
+- [External event 2]
+- [Continue as needed]
 </story_plan>
 
 ## Character Information
@@ -185,8 +190,7 @@ Established Relationships: {relationships}
 Setting: {setting_description}
 Key Locations: {key_locations}
 """
-        user_prompt = """
-Summary of the story so far:
+        user_prompt = """Summary of the story so far:
 {summary}
 
 State as of right now:

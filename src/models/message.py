@@ -1,4 +1,5 @@
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, Iterable
+from anthropic.types import TextBlockParam
 
 
 class CacheControl(TypedDict):
@@ -10,7 +11,7 @@ class ContentObject(TypedDict):
     type: str
     cache_control: CacheControl | None
 
-type ClaudeContent = str | list[ContentObject]
+type ClaudeContent = str | Iterable[TextBlockParam]
 
 class ClaudeMessage(TypedDict):
     role: str
