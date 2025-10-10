@@ -36,7 +36,7 @@ class TestPromptProcessorFactory:
         """Test creating Grok processor."""
         processor = PromptProcessorFactory.create_processor("grok")
         assert isinstance(processor, OpenRouterPromptProcessor)
-        assert processor.model == "x-ai/grok-4-fast:free"
+        assert processor.model == "x-ai/grok-4-fast"
 
     @patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test_key'})
     def test_create_deepseek_processor(self) -> None:

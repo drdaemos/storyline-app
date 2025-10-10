@@ -44,12 +44,19 @@ Basically, pipeline operates on multiple levels:
 - Character works with the lowest level: dialogue, actions, internal thinking - following user input and their own idea of story beats the fit the scene
 - (every N exchanges) The scene is reevaluated based on the idea of point in narrative (e.g. is there a rising conflict / tension / escalation?). Act transition may be planned here. Next plot beats are generated for the following scene.
 
+### Commands
+
+```
+/rewind - removes last turn of conversation (user message and character response)
+/regenerate - recreates the last character response
+```
+
 ## Things not yet explored
 
 - Using randomized external events to move the story and make both characters react
 - Using /commands to enable out of character / story transition actions (outside the default pipeline)
-- /rewind command to go back one step (remove last exchange from memory)
-- Remove evaluation from memory (to save tokens / avoid extra response generation in eval)
 - Additional prompt / logic to select the continuation option
-- Additional actions in the UI should just send the slash /command - no extra endpoints
 - Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.
+- Introduce scene intro message - either autogenerate or predefine via character card
+- Multi-group convos (LLM handle them, but probably there should be a different card format)
+- User profile / authentication / description

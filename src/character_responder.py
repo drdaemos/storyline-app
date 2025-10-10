@@ -1,4 +1,3 @@
-import json
 import re
 from datetime import UTC, datetime
 from typing import Protocol
@@ -205,7 +204,7 @@ class CharacterResponder:
         last_user_message = self.memory[last_user_idx]["content"]
 
         # Remove last round of conversation (user + assistant)
-        messages_to_remove = len(self.memory) - last_user_idx 
+        messages_to_remove = len(self.memory) - last_user_idx
         self.memory = self.memory[:last_user_idx]
 
         # Update persistent memory and message offset if enabled

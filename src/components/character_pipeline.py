@@ -1,8 +1,7 @@
 
-from datetime import datetime, timezone
-import json
 import re
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import TypedDict
 
 from src.models.character import Character
@@ -130,7 +129,7 @@ Summary of previous interactions:
 {input['plans']},
 """,
             "type": "summary",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }]
 
         # Process the prompt

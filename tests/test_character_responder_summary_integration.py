@@ -3,9 +3,9 @@ from pathlib import Path
 
 from src.character_responder import CharacterResponder
 from src.memory.conversation_memory import ConversationMemory
+from src.memory.summary_memory import SummaryMemory
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
-from src.memory.summary_memory import SummaryMemory
 
 
 class MockPromptProcessor:
@@ -60,11 +60,13 @@ class TestCharacterResponderSummaryIntegration:
         """Clean up test files."""
         # SQLAlchemy handles cleanup automatically
 
-    def create_dependencies_with_mock_responses(self, evaluation_response: str, summary_response: str) -> CharacterResponderDependencies:
+    def create_dependencies_with_mock_responses(self, evaluation_response, summary_response: str) -> CharacterResponderDependencies:
         """Create dependencies with mock processors that return specific responses."""
         # Create a mock that can return different responses for different calls
+        from src.models.evaluation import Evaluation
+
         class MockProcessorWithSummary:
-            def __init__(self, eval_response: str, summary_response: str):
+            def __init__(self, eval_response, summary_response: str):
                 self.eval_response = eval_response
                 self.summary_response = summary_response
                 self.logger = None
@@ -76,11 +78,12 @@ class TestCharacterResponderSummaryIntegration:
             def set_logger(self, logger) -> None:
                 self.logger = logger
 
-            def respond_with_model(self, prompt: str, user_prompt: str, output_type, conversation_history=None, max_tokens=None):
-                # Return summary response if this looks like a summary call
-                if "Summary of previous interactions" in prompt or "previous interactions" in prompt.lower():
-                    return self.summary_response
-                return self.eval_response
+            def respond_with_model(self, prompt: str, user_prompt: str, output_type, conversation_history=None, max_tokens=None, reasoning=False):
+                # Return Evaluation object for evaluation calls
+                if output_type == Evaluation:
+                    return self.eval_response
+                # For other model responses, return string
+                return self.summary_response
 
             def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None, reasoning=False) -> str:
                 # Return summary response if this looks like a summary call
@@ -89,14 +92,14 @@ class TestCharacterResponderSummaryIntegration:
                     "Summary of previous interactions" in prompt or
                     "Story main genre" in prompt):
                     return self.summary_response
-                return self.eval_response
+                return str(self.eval_response)
 
-            def respond_with_stream(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None):
+            def respond_with_stream(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None, reasoning=False):
                 # Return summary response if this looks like a summary call
                 if "Summary of previous interactions" in prompt or "previous interactions" in prompt.lower():
                     yield from self.summary_response
                 else:
-                    yield from self.eval_response
+                    yield from str(self.eval_response)
 
         primary_processor = MockProcessorWithSummary(evaluation_response, summary_response)
         backup_processor = MockProcessorWithSummary(evaluation_response, summary_response)
@@ -113,12 +116,14 @@ class TestCharacterResponderSummaryIntegration:
     def test_summary_storage_during_compression(self):
         """Test that summaries are properly stored with offsets during memory compression."""
         # Mock responses for evaluation and summarization
-        evaluation_response = """
-        <user_name>TestUser</user_name>
-        <continuation>option_1</continuation>
-        <option_1>Continue conversation naturally</option_1>
-        <status_update>Normal conversation state</status_update>
-        """
+        from src.models.evaluation import Evaluation
+
+        evaluation_response = Evaluation(
+            patterns_to_avoid="None",
+            status_update="Normal conversation state",
+            user_name="TestUser",
+            time_passed="5 seconds"
+        )
 
         summary_response = "User and assistant had a brief conversation about testing. The user introduced themselves as TestUser."
 
@@ -126,13 +131,14 @@ class TestCharacterResponderSummaryIntegration:
         responder = CharacterResponder(self.character, dependencies)
 
         # Simulate enough interactions to trigger summarization
+        from datetime import datetime, UTC
         for i in range(CharacterResponder.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER + 1):
             user_message = f"Test message {i}"
-            # Mock the character response by directly adding messages
+            # Mock the character response by directly adding messages (with type field)
             responder.memory.extend([
-                {"role": "user", "content": user_message},
-                {"role": "assistant", "content": f"Evaluation {i}"},
-                {"role": "assistant", "content": f"Response {i}"}
+                {"role": "user", "content": user_message, "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                {"role": "assistant", "content": f"Evaluation {i}", "type": "evaluation", "created_at": datetime.now(UTC).isoformat()},
+                {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()}
             ])
             responder._current_message_offset += 3
 
@@ -142,9 +148,9 @@ class TestCharacterResponderSummaryIntegration:
                     responder.character.name,
                     responder.session_id,
                     [
-                        {"role": "user", "content": user_message},
-                        {"role": "assistant", "content": f"Evaluation {i}"},
-                        {"role": "assistant", "content": f"Response {i}"}
+                        {"role": "user", "content": user_message, "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                        {"role": "assistant", "content": f"Evaluation {i}", "type": "evaluation", "created_at": datetime.now(UTC).isoformat()},
+                        {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()}
                     ]
                 )
 
@@ -266,11 +272,12 @@ class TestCharacterResponderSummaryIntegration:
         # Should initialize with empty memory_summary
         assert responder.memory_summary == ""
 
-        # Add messages to trigger compression
+        # Add messages to trigger compression (with proper message structure including "type")
+        from datetime import datetime, UTC
         for i in range(CharacterResponder.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER + 5):
             responder.memory.extend([
-                {"role": "user", "content": f"Message {i}"},
-                {"role": "assistant", "content": f"Response {i}"}
+                {"role": "user", "content": f"Message {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()}
             ])
 
         # Compress memory should work without errors even without summary memory

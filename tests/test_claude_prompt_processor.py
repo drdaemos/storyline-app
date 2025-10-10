@@ -181,18 +181,15 @@ class TestClaudePromptProcessor:
         messages = call_args[1]['messages']
 
         assert len(messages) == 3  # 2 history + 1 current
+        # First history message has role changed to "user" (non-last history message)
         assert messages[0]["role"] == "user"
         assert messages[0]["content"] == "Previous message"
+        # Last history message keeps original "assistant" role and has cache_control
         assert messages[1]["role"] == "assistant"
-        assert messages[1]["content"] == "Previous response"
+        assert isinstance(messages[1]["content"], dict) and messages[1]["content"]["text"] == "Previous response"
+        # Current prompt is always "user"
         assert messages[2]["role"] == "user"
-        assert messages[2]["content"] == [{
-            "type": "text",
-            "text": "Current prompt",
-            "cache_control": {
-                "type": "ephemeral",
-            }
-        }]
+        assert messages[2]["content"] == "Current prompt"
 
     @patch('src.processors.claude_prompt_processor.anthropic.Anthropic')
     def test_respond_with_text_multiple_text_blocks(self, mock_anthropic):

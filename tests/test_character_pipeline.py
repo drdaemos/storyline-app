@@ -14,7 +14,7 @@ T = TypeVar('T', bound=BaseModel)
 class MockPromptProcessor(PromptProcessor):
     """Test implementation of PromptProcessor for testing."""
 
-    def __init__(self, response: str | Iterator[str] = "Mock response"):
+    def __init__(self, response: str | Iterator[str] | BaseModel = "Mock response"):
         self.response = response
         self.call_history: list[dict[str, Any]] = []
         self.logger = None
@@ -35,7 +35,18 @@ class MockPromptProcessor(PromptProcessor):
         conversation_history: list[GenericMessage] | None = None,
         max_tokens: int | None = None
     ) -> T:
-        raise NotImplementedError("Model response not implemented")
+        # Record the call for verification
+        self.call_history.append({
+            "prompt": prompt,
+            "user_prompt": user_prompt,
+            "output_type": output_type,
+            "conversation_history": conversation_history,
+            "max_tokens": max_tokens
+        })
+        # Return the response if it's already a model, otherwise raise error
+        if isinstance(self.response, BaseModel):
+            return self.response # type: ignore
+        raise NotImplementedError("Model response not provided")
 
     def respond_with_text(
         self,
@@ -60,14 +71,16 @@ class MockPromptProcessor(PromptProcessor):
         prompt: str,
         user_prompt: str,
         conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
+        max_tokens: int | None = None,
+        reasoning: bool = False
     ) -> Iterator[str]:
         # Record the call for verification
         self.call_history.append({
             "prompt": prompt,
             "user_prompt": user_prompt,
             "conversation_history": conversation_history,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
+            "reasoning": reasoning
         })
         if isinstance(self.response, str):
             # Convert string to iterator by yielding character by character (to simulate streaming)
@@ -92,44 +105,15 @@ class TestCharacterPipeline:
 
     def test_get_evaluation_success(self):
         """Test successful evaluation generation."""
-        # Mock processor response with required XML tags
-        evaluation_response = """
-        Time skip: morning meeting scheduled
-        Setting: office conference room
-        Character drinking coffee, reviewing case files
+        from src.models.evaluation import Evaluation
 
-        Importance Level: MEDIUM
-        Response Needed: Yes
-        Emotional Shift: Focus +1, Curiosity +2
-
-        <option A>
-        Character action: Review case files thoroughly - "Let me check these details again."
-        Consequence: Better understanding of case
-        </option A>
-
-        <option B>
-        Character action: Ask direct questions - "What aren't you telling me?"
-        Consequence: Confrontational approach
-        </option B>
-
-        <option C>
-        Character action: Suggest meeting postponement - "We should reschedule this."
-        Consequence: Delay investigation
-        </option C>
-
-        Internal State: Something feels off about this case. Need more information.
-
-        <continuation>
-        option A
-        </continuation>
-
-        <status_update>
-        User State: Sitting across desk, nervous fidgeting
-        Character Emotional State: Focused, slightly suspicious
-        Character Physical State: Leaning forward, hands clasped
-        State of the surroundings: Office environment, morning light
-        </status_update>
-        """
+        # Mock processor response with Evaluation model
+        evaluation_response = Evaluation(
+            patterns_to_avoid="Avoid being too confrontational without evidence",
+            status_update="Alice is in her office reviewing case files. User appears nervous and needs help with something important.",
+            time_passed="A few minutes have passed since the last interaction",
+            user_name="Unknown"
+        )
 
         mock_processor = MockPromptProcessor(evaluation_response)
 
@@ -148,6 +132,7 @@ class TestCharacterPipeline:
         result = CharacterPipeline.get_evaluation(mock_processor, input_data, memory)
 
         assert result == evaluation_response
+        assert isinstance(result, Evaluation)
 
         # Verify processor was called with correct arguments
         assert len(mock_processor.call_history) == 1
@@ -163,27 +148,6 @@ class TestCharacterPipeline:
         # Check conversation history was included
         assert len(call['conversation_history']) >= 2
 
-    def test_get_evaluation_missing_continuation_tag(self):
-        """Test evaluation fails when <continuation> tag is missing."""
-        evaluation_response = """
-        Basic evaluation without continuation tag.
-
-        Importance Level: MEDIUM
-        Response Needed: Yes
-        """
-
-        mock_processor = MockPromptProcessor(evaluation_response)
-
-        input_data: EvaluationInput = {
-            "summary": "",
-            "plans": "",
-            "user_message": "Test message",
-            "character": self.test_character
-        }
-
-        result = CharacterPipeline.get_evaluation(mock_processor, input_data, [])
-
-        assert result is None
 
     def test_get_character_plans_success(self):
         """Test successful character plan generation."""
@@ -245,38 +209,30 @@ class TestCharacterPipeline:
 
     def test_get_character_response_success(self):
         """Test successful character response generation."""
-        character_response = """
-        <character_response>
-        *Alice looks up from the case files, her green eyes sharp with focus*
-
-        "I've reviewed what you've given me, and there are definitely some inconsistencies here. The timeline doesn't add up, and there are gaps in the witness statements."
-
-        *She leans back in her chair, tapping her pen against the desk*
-
-        "Before we proceed, I need you to be completely honest with me. Is there anything else you haven't told me about this case?"
-        </character_response>
-        """
+        character_response = "*Alice looks up from the case files, her green eyes sharp with focus*\n\n\"I've reviewed what you've given me, and there are definitely some inconsistencies here.\""
 
         mock_processor = MockPromptProcessor(character_response)
 
         input_data: CharacterResponseInput = {
             "summary": "Discussion about missing person case",
             "previous_response": "I understand you need help",
-            "character_name": "Alice",
+            "character": self.test_character,
             "user_name": "John",
             "user_message": "Here are the case files",
-            "continuation_option": "Review case files thoroughly",
             "scenario_state": "Office meeting, files on desk"
         }
 
-        result = CharacterPipeline.get_character_response(mock_processor, input_data)
+        memory: list[GenericMessage] = [
+            {"role": "user", "content": "I need help with a case"},
+            {"role": "assistant", "content": "I can help you with that"}
+        ]
+
+        result = CharacterPipeline.get_character_response(mock_processor, input_data, memory)
 
         # Just check that result is not None and collect the content from the generator
         assert result is not None
         content = "".join(result)
-        assert "*Alice looks up from the case files" in content
-        assert "timeline doesn't add up" in content
-        assert "completely honest with me" in content
+        assert "Alice looks up" in content
 
         # Verify processor was called
         assert len(mock_processor.call_history) == 1
@@ -286,25 +242,6 @@ class TestCharacterPipeline:
         assert "Alice" in call['prompt']
         assert "John" in call['prompt']
 
-    def test_get_character_response_missing_character_response_tag(self):
-        """Test character response fails when <character_response> tag is missing."""
-        response_text = "Just some response without character response tags."
-
-        mock_processor = MockPromptProcessor(response_text)
-
-        input_data: CharacterResponseInput = {
-            "summary": "Discussion about missing person case",
-            "previous_response": "",
-            "character_name": "Alice",
-            "user_name": "John",
-            "user_message": "Test message",
-            "continuation_option": "Test option",
-            "scenario_state": "Test state"
-        }
-
-        result = CharacterPipeline.get_character_response(mock_processor, input_data)
-
-        assert result is None
 
     def test_get_memory_summary(self):
         """Test memory summarization."""
@@ -410,15 +347,15 @@ class TestCharacterPipeline:
             "character_background": "Former police officer turned private investigator",
             "character_appearance": "Tall, auburn hair, piercing green eyes",
             "character_personality": "Sharp, analytical, slightly cynical but caring",
-            "relationship_status": "professional acquaintance",
-            "key_locations": "downtown office; crime scenes; local diner",
+            "relationships": "- user: professional acquaintance",
+            "key_locations": "- downtown office\n- crime scenes\n- local diner",
             "setting_description": "Urban detective story setting"
         }
 
         assert result == expected
 
     def test_map_character_to_prompt_variables_missing_user_relationship(self):
-        """Test character mapping with missing user relationship."""
+        """Test character mapping with empty relationships."""
         character = Character(
             name="Bob",
             role="Engineer",
@@ -432,7 +369,7 @@ class TestCharacterPipeline:
 
         result = CharacterPipeline._map_character_to_prompt_variables(character)
 
-        assert result["relationship_status"] == "unknown"
+        assert result["relationships"] == ""
 
     def test_map_character_to_prompt_variables_empty_locations(self):
         """Test character mapping with empty key locations."""

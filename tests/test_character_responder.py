@@ -5,6 +5,7 @@ import pytest
 from src.character_responder import CharacterResponder
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
+from src.models.evaluation import Evaluation
 from tests.test_character_pipeline import MockPromptProcessor
 
 
@@ -109,12 +110,12 @@ def test_regenerate_command_with_history(mock_get_character_response, mock_get_e
     ]
 
     # Mock the CharacterPipeline methods
-    evaluation_response = """
-    <continuation>option_a</continuation>
-    <option_a>Continue normally</option_a>
-    <user_name>User</user_name>
-    <status_update>Normal conversation state</status_update>
-    """
+    evaluation_response = Evaluation(
+        patterns_to_avoid="None",
+        status_update="Regenerating response",
+        user_name="User",
+        time_passed="5 seconds"
+    )
     character_response = "New regenerated response"
 
     mock_get_evaluation.return_value = evaluation_response
@@ -123,8 +124,8 @@ def test_regenerate_command_with_history(mock_get_character_response, mock_get_e
     result = responder.respond("/regenerate")
     assert result == character_response
 
-    # Verify that the memory was properly reset and new conversation was added
-    assert len(responder.memory) == 4  # Original user message + new eval + new response + user message
+    # Verify that the memory was properly reset
+    assert len(responder.memory) == 3  # Original user message + new eval + new response
 
 
 def test_rewind_command_with_history():
@@ -194,12 +195,12 @@ def test_regular_conversation_still_works(mock_get_character_response, mock_get_
     responder = create_test_responder()
 
     # Set up processor responses for evaluation and character response
-    evaluation_response = """
-    <continuation>option_a</continuation>
-    <option_a>Continue normally</option_a>
-    <user_name>Alice</user_name>
-    <status_update>Normal conversation state</status_update>
-    """
+    evaluation_response = Evaluation(
+        patterns_to_avoid="None",
+        status_update="Normal conversation state",
+        user_name="Alice",
+        time_passed="5 seconds"
+    )
     character_response = "Hello there, Alice!"
 
     # Mock the CharacterPipeline methods

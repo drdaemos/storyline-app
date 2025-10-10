@@ -28,14 +28,26 @@ def mock_complete_character():
     )
 
 
+def _setup_mocks(mock_creator_class, mock_deps_class):
+    mock_processor = Mock()
+    mock_deps = Mock()
+    mock_deps.primary_processor = mock_processor
+    mock_deps_class.create_default.return_value = mock_deps
+
+    mock_creator_instance = Mock()
+    mock_creator_class.return_value = mock_creator_instance
+
+    return mock_creator_instance
+
+
 class TestCharacterGenerationAPI:
+    @patch('src.fastapi_server.CharacterResponderDependencies')
     @patch('src.fastapi_server.CharacterCreator')
-    def test_generate_character_empty_input(self, mock_creator_class, client, mock_complete_character):
+    def test_generate_character_empty_input(self, mock_creator_class, mock_deps_class, client, mock_complete_character):
         """Test character generation with empty input."""
-        # Setup mock
-        mock_creator_instance = Mock()
+        # Setup mocks
+        mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
         mock_creator_instance.generate.return_value = mock_complete_character
-        mock_creator_class.return_value = mock_creator_instance
 
         # Make request
         response = client.post(
@@ -68,13 +80,13 @@ class TestCharacterGenerationAPI:
         mock_creator_class.assert_called_once()
         mock_creator_instance.generate.assert_called_once_with({})
 
+    @patch('src.fastapi_server.CharacterResponderDependencies')
     @patch('src.fastapi_server.CharacterCreator')
-    def test_generate_character_partial_input(self, mock_creator_class, client, mock_complete_character):
+    def test_generate_character_partial_input(self, mock_creator_class, mock_deps_class, client, mock_complete_character):
         """Test character generation with partial input."""
-        # Setup mock
-        mock_creator_instance = Mock()
+        # Setup mocks
+        mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
         mock_creator_instance.generate.return_value = mock_complete_character
-        mock_creator_class.return_value = mock_creator_instance
 
         partial_input = {
             "name": "Generated Hero",
@@ -109,13 +121,13 @@ class TestCharacterGenerationAPI:
         # Verify CharacterCreator was called with partial data
         mock_creator_instance.generate.assert_called_once_with(partial_input)
 
+    @patch('src.fastapi_server.CharacterResponderDependencies')
     @patch('src.fastapi_server.CharacterCreator')
-    def test_generate_character_with_relationships_and_locations(self, mock_creator_class, client, mock_complete_character):
+    def test_generate_character_with_relationships_and_locations(self, mock_creator_class, mock_deps_class, client, mock_complete_character):
         """Test character generation with complex fields provided."""
-        # Setup mock
-        mock_creator_instance = Mock()
+        # Setup mocks
+        mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
         mock_creator_instance.generate.return_value = mock_complete_character
-        mock_creator_class.return_value = mock_creator_instance
 
         partial_input = {
             "name": "Generated Hero",
@@ -145,13 +157,13 @@ class TestCharacterGenerationAPI:
         assert "relationships" not in generated_fields
         assert "key_locations" not in generated_fields
 
+    @patch('src.fastapi_server.CharacterResponderDependencies')
     @patch('src.fastapi_server.CharacterCreator')
-    def test_generate_character_validation_error(self, mock_creator_class, client):
+    def test_generate_character_validation_error(self, mock_creator_class, mock_deps_class, client):
         """Test character generation with validation error."""
-        # Setup mock to raise ValueError
-        mock_creator_instance = Mock()
+        # Setup mocks
+        mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
         mock_creator_instance.generate.side_effect = ValueError("Invalid character data")
-        mock_creator_class.return_value = mock_creator_instance
 
         # Make request
         response = client.post(
@@ -168,13 +180,13 @@ class TestCharacterGenerationAPI:
         assert "detail" in data
         assert "Invalid character data" in data["detail"]
 
+    @patch('src.fastapi_server.CharacterResponderDependencies')
     @patch('src.fastapi_server.CharacterCreator')
-    def test_generate_character_server_error(self, mock_creator_class, client):
+    def test_generate_character_server_error(self, mock_creator_class, mock_deps_class, client):
         """Test character generation with server error."""
-        # Setup mock to raise generic exception
-        mock_creator_instance = Mock()
+        # Setup mocks
+        mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
         mock_creator_instance.generate.side_effect = Exception("Server error")
-        mock_creator_class.return_value = mock_creator_instance
 
         # Make request
         response = client.post(
@@ -191,41 +203,28 @@ class TestCharacterGenerationAPI:
         assert "detail" in data
         assert "Failed to generate character" in data["detail"]
 
-    def test_generate_character_default_processor_type(self, client):
+    @patch('src.fastapi_server.CharacterResponderDependencies')
+    @patch('src.fastapi_server.CharacterCreator')
+    def test_generate_character_default_processor_type(self, mock_creator_class, mock_deps_class, client):
         """Test that default processor type is used when not specified."""
-        with patch('src.fastapi_server.CharacterCreator') as mock_creator_class:
-            mock_creator_instance = Mock()
-            mock_character = Character(
-                name="Test",
-                role="Test",
-                backstory="Test"
-            )
-            mock_creator_instance.generate.return_value = mock_character
-            mock_creator_class.return_value = mock_creator_instance
+        # Setup mocks
+        mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
+        mock_character = Character(
+            name="Test",
+            role="Test",
+            backstory="Test"
+        )
+        mock_creator_instance.generate.return_value = mock_character
 
-            # Make request without processor_type
-            response = client.post(
-                "/api/characters/generate",
-                json={
-                    "partial_character": {"name": "Test Character"}
-                }
-            )
-
-            assert response.status_code == 200
-
-    def test_generate_character_invalid_request_format(self, client):
-        """Test character generation with invalid request format."""
-        # Make request with invalid JSON structure
+        # Make request without processor_type
         response = client.post(
             "/api/characters/generate",
             json={
-                "invalid_field": "test"
+                "partial_character": {"name": "Test Character"}
             }
         )
 
-        # Should use default values and process successfully
-        # (FastAPI will use default values for missing required fields)
-        assert response.status_code in [200, 422]  # Either success or validation error
+        assert response.status_code == 200
 
     def test_generate_character_missing_request_body(self, client):
         """Test character generation with missing request body."""

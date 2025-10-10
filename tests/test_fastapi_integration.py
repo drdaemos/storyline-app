@@ -57,7 +57,7 @@ class TestFastAPIEndpoints:
         """Test character listing endpoint."""
         mock_loader.list_characters.return_value = ["TestBot", "Alice"]
 
-        response = client.get("/characters")
+        response = client.get("/api/characters")
         assert response.status_code == 200
         assert response.json() == ["TestBot", "Alice"]
 
@@ -66,7 +66,7 @@ class TestFastAPIEndpoints:
         """Test character listing endpoint with error."""
         mock_loader.list_characters.side_effect = Exception("Test error")
 
-        response = client.get("/characters")
+        response = client.get("/api/characters")
         assert response.status_code == 500
 
     @patch('src.fastapi_server.character_loader')
@@ -74,7 +74,7 @@ class TestFastAPIEndpoints:
         """Test getting character info."""
         mock_loader.get_character_info.return_value = mock_character
 
-        response = client.get("/characters/TestBot")
+        response = client.get("/api/characters/TestBot")
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "TestBot"
@@ -86,12 +86,12 @@ class TestFastAPIEndpoints:
         """Test getting info for non-existent character."""
         mock_loader.get_character_info.return_value = None
 
-        response = client.get("/characters/NonExistent")
+        response = client.get("/api/characters/NonExistent")
         assert response.status_code == 404
 
     def test_list_sessions(self, client):
         """Test listing sessions."""
-        response = client.get("/sessions")
+        response = client.get("/api/sessions")
         assert response.status_code == 200
         sessions = response.json()
         assert isinstance(sessions, list)
@@ -106,7 +106,7 @@ class TestFastAPIEndpoints:
 
     def test_clear_nonexistent_session(self, client):
         """Test clearing a session that doesn't exist."""
-        response = client.delete("/sessions/nonexistent-session")
+        response = client.delete("/api/sessions/nonexistent-session")
         assert response.status_code == 404
 
 
@@ -120,16 +120,19 @@ class TestInteractEndpoint:
         mock_loader.load_character.return_value = mock_character
 
         mock_dependencies = Mock()
+        mock_dependencies.session_id = "test-session-123"
         mock_deps_class.create_default.return_value = mock_dependencies
 
         mock_responder = Mock()
         mock_responder.character = mock_character
+        mock_responder.session_id = "test-session-123"
         mock_responder.memory = []
         mock_responder.respond.return_value = "Hello there!"
+        mock_responder.chat_logger = None
         mock_responder_class.return_value = mock_responder
 
         # Make request
-        response = client.post("/interact", json={
+        response = client.post("/api/interact", json={
             "character_name": "TestBot",
             "user_message": "Hello!",
             "processor_type": "google"
@@ -149,7 +152,7 @@ class TestInteractEndpoint:
         """Test interaction with non-existent character."""
         mock_loader.load_character.return_value = None
 
-        response = client.post("/interact", json={
+        response = client.post("/api/interact", json={
             "character_name": "NonExistent",
             "user_message": "Hello!",
             "processor_type": "google"
@@ -159,7 +162,7 @@ class TestInteractEndpoint:
 
     def test_interact_invalid_request(self, client):
         """Test interaction with invalid request data."""
-        response = client.post("/interact", json={
+        response = client.post("/api/interact", json={
             "user_message": "Hello!"
             # Missing required character_name
         })
@@ -175,16 +178,19 @@ class TestInteractEndpoint:
         mock_loader.load_character.return_value = mock_character
 
         mock_dependencies = Mock()
+        mock_dependencies.session_id = "test-session-123"
         mock_deps_class.create_default.return_value = mock_dependencies
 
         mock_responder = Mock()
         mock_responder.character = mock_character
+        mock_responder.session_id = "test-session-123"
         mock_responder.memory = []
         mock_responder.respond.return_value = "Hello there!"
+        mock_responder.chat_logger = None
         mock_responder_class.return_value = mock_responder
 
         # First request to create session
-        response1 = client.post("/interact", json={
+        response1 = client.post("/api/interact", json={
             "character_name": "TestBot",
             "user_message": "Hello!",
             "session_id": "test-session-123",
@@ -214,7 +220,7 @@ class TestSessionManagement:
         mock_responder_class.return_value = mock_responder
 
         # Create interaction to establish session
-        response = client.post("/interact", json={
+        response = client.post("/api/interact", json={
             "character_name": "TestBot",
             "user_message": "Hello!",
             "session_id": "test-session-456",
@@ -224,13 +230,13 @@ class TestSessionManagement:
         assert response.status_code == 200
 
         # List sessions
-        response = client.get("/sessions")
+        response = client.get("/api/sessions")
         assert response.status_code == 200
         sessions = response.json()
         assert len(sessions) >= 0  # Session might be created
 
         # Try to clear the test session we created (might not exist in the sessions list since it only shows persisted sessions)
-        response = client.delete("/sessions/test-session-456")
+        response = client.delete("/api/sessions/test-session-456")
         # The session might not exist in character_sessions dict, so 404 is acceptable
         assert response.status_code in [200, 404]
 
@@ -248,7 +254,7 @@ class TestRequestValidation:
         ]
 
         for test_data in test_cases:
-            response = client.post("/interact", json=test_data)
+            response = client.post("/api/interact", json=test_data)
             assert response.status_code == 422, f"Failed for data: {test_data}"
 
     def test_interact_request_optional_fields(self, client):
@@ -257,7 +263,7 @@ class TestRequestValidation:
         with patch('src.fastapi_server.character_loader') as mock_loader:
             mock_loader.load_character.return_value = None  # Will cause 404
 
-            response = client.post("/interact", json={
+            response = client.post("/api/interact", json={
                 "character_name": "TestBot",
                 "user_message": "Hello!",
                 "session_id": "custom-session",
@@ -273,7 +279,7 @@ class TestErrorHandling:
         """Test error handling when character loading fails."""
         mock_loader.load_character.side_effect = Exception("File system error")
 
-        response = client.post("/interact", json={
+        response = client.post("/api/interact", json={
             "character_name": "TestBot",
             "user_message": "Hello!",
             "processor_type": "google"
@@ -288,7 +294,7 @@ class TestErrorHandling:
         mock_loader.load_character.return_value = mock_character
         mock_deps_class.create_default.side_effect = Exception("Dependencies error")
 
-        response = client.post("/interact", json={
+        response = client.post("/api/interact", json={
             "character_name": "TestBot",
             "user_message": "Hello!",
             "processor_type": "google"

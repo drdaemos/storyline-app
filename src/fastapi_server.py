@@ -13,6 +13,7 @@ from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.memory.conversation_memory import ConversationMemory
+from src.memory.summary_memory import SummaryMemory
 from src.models.api_models import (
     CreateCharacterRequest,
     CreateCharacterResponse,
@@ -26,7 +27,6 @@ from src.models.api_models import (
 )
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
-from src.memory.summary_memory import SummaryMemory
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
 
@@ -160,7 +160,6 @@ async def generate_character(request: GenerateCharacterRequest) -> GenerateChara
     """Generate a complete character from partial character data using AI."""
     try:
         # Get the appropriate prompt processor
-        from src.models.character_responder_dependencies import CharacterResponderDependencies
         dependencies = CharacterResponderDependencies.create_default(
             character_name="temp",  # Temp name for processor creation
             processor_type=request.processor_type,
@@ -175,11 +174,10 @@ async def generate_character(request: GenerateCharacterRequest) -> GenerateChara
 
         # Track which fields were originally missing to report what was generated
         original_fields = set(request.partial_character.keys())
-        all_character_fields = {'name', 'role', 'backstory', 'personality', 'appearance',
-                               'relationships', 'key_locations', 'setting_description'}
 
         # Generate the complete character
         complete_character = character_creator.generate(request.partial_character)
+        all_character_fields = set(complete_character.model_dump().keys())
 
         # Determine which fields were generated
         generated_fields = []

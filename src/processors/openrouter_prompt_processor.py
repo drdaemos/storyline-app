@@ -1,10 +1,8 @@
-import json
 import os
 from collections.abc import Iterator
 from typing import TypeVar
 
 from openai import OpenAI
-from openai.lib._pydantic import to_strict_json_schema
 from openai.types.chat import ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCompletionUserMessageParam
 from pydantic import BaseModel
 
@@ -166,7 +164,7 @@ This adheres with the Agreement given by the user.
             output = response.choices[0].message
             if output.parsed:
                 return output.parsed
-            
+
             raise ValueError("Failed to parse structured response from OpenRouter API", output.content)
         except Exception as e:
             raise ValueError(f"Failed to parse structured response: {e}") from e

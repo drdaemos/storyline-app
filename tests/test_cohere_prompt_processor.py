@@ -194,14 +194,15 @@ class TestCoherePromptProcessor:
         messages = call_args[1]['messages']
 
         assert len(messages) == 4  # 1 system + 2 history + 1 current
-        assert messages[0]["role"] == "system"
-        assert messages[0]["content"] == "System prompt"
-        assert messages[1]["role"] == "user"
-        assert messages[1]["content"] == "Previous message"
-        assert messages[2]["role"] == "assistant"
-        assert messages[2]["content"] == "Previous response"
-        assert messages[3]["role"] == "user"
-        assert messages[3]["content"] == "Current prompt"
+        # Messages are now proper Cohere message objects
+        assert messages[0].role == "system"
+        assert messages[0].content == "System prompt"
+        assert messages[1].role == "user"
+        assert messages[1].content == "Previous message"
+        assert messages[2].role == "assistant"
+        assert messages[2].content == "Previous response"
+        assert messages[3].role == "user"
+        assert messages[3].content == "Current prompt"
 
     @patch('src.processors.cohere_prompt_processor.cohere.ClientV2')
     def test_respond_with_text_with_list_content(self, mock_cohere):

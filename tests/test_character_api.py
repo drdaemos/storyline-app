@@ -39,7 +39,7 @@ class TestCharacterAPI:
             "is_yaml_text": False
         }
 
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
 
         assert response.status_code == 200
         response_data = response.json()
@@ -64,7 +64,7 @@ personality: YAML test personality
             "is_yaml_text": True
         }
 
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
 
         assert response.status_code == 200
         response_data = response.json()
@@ -84,7 +84,7 @@ personality: YAML test personality
             "is_yaml_text": False
         }
 
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
 
         # Pydantic validation will return 422 for missing required fields
         assert response.status_code == 422
@@ -102,7 +102,7 @@ backstory: [unclosed bracket
             "is_yaml_text": True
         }
 
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
 
         assert response.status_code == 400
         assert "Invalid YAML format" in response.json()["detail"]
@@ -121,11 +121,11 @@ backstory: [unclosed bracket
         }
 
         # Create character first time
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
         assert response.status_code == 200
 
         # Try to create again - should fail
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"]
 
@@ -136,7 +136,7 @@ backstory: [unclosed bracket
             "is_yaml_text": False  # But we're saying it's not YAML
         }
 
-        response = self.client.post("/characters", json=request_payload)
+        response = self.client.post("/api/characters", json=request_payload)
 
         # This will cause a 500 error because isinstance check fails in our code
         # Let's check for the expected error response
@@ -158,7 +158,7 @@ backstory: [unclosed bracket
             "is_yaml_text": False
         }
 
-        response1 = self.client.post("/characters", json=request_payload1)
+        response1 = self.client.post("/api/characters", json=request_payload1)
         assert response1.status_code == 200
 
         # Try to create second character with different name but same sanitized filename
@@ -173,7 +173,7 @@ backstory: [unclosed bracket
             "is_yaml_text": False
         }
 
-        response2 = self.client.post("/characters", json=request_payload2)
+        response2 = self.client.post("/api/characters", json=request_payload2)
         assert response2.status_code == 400
         assert "Filename collision detected" in response2.json()["detail"]
 
@@ -191,7 +191,7 @@ backstory: [unclosed bracket
             "is_yaml_text": False
         }
 
-        response1 = self.client.post("/characters", json=request_payload1)
+        response1 = self.client.post("/api/characters", json=request_payload1)
         assert response1.status_code == 200
 
         # Try to create second character with YAML text that would collision
@@ -206,6 +206,6 @@ backstory: Different backstory
             "is_yaml_text": True
         }
 
-        response2 = self.client.post("/characters", json=request_payload2)
+        response2 = self.client.post("/api/characters", json=request_payload2)
         assert response2.status_code == 400
         assert "Filename collision detected" in response2.json()["detail"]

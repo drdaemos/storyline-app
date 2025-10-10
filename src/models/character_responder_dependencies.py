@@ -1,12 +1,12 @@
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from src.chat_logger import ChatLogger
 from src.memory.conversation_memory import ConversationMemory
+from src.memory.summary_memory import SummaryMemory
 from src.models.prompt_processor import PromptProcessor
 from src.models.prompt_processor_factory import PromptProcessorFactory
-from src.memory.summary_memory import SummaryMemory
 
 
 @dataclass

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Simple integration test for character database functionality."""
 
-import tempfile
 import os
+import tempfile
 from pathlib import Path
+
 
 # Test the integration
 def test_character_integration():
@@ -13,8 +14,8 @@ def test_character_integration():
         os.environ['DB_NAME'] = 'test_characters.db'
 
         try:
-            from src.character_manager import CharacterManager
             from src.character_loader import CharacterLoader
+            from src.character_manager import CharacterManager
 
             # Create manager and loader
             manager = CharacterManager(characters_dir=f"{temp_dir}/characters", memory_dir=Path(temp_dir))

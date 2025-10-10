@@ -1,10 +1,6 @@
-import tempfile
-import uuid
-from pathlib import Path
-from unittest.mock import patch
 import os
-
-import pytest
+import tempfile
+from pathlib import Path
 
 from src.memory.character_registry import CharacterRegistry
 

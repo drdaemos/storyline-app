@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 import yaml
 from click.testing import CliRunner
 
+from src.character_loader import CharacterLoader
 from src.cli import analyze, chat, cli
 from src.interactive_chat import InteractiveChatCLI
 from src.models.character import Character
@@ -38,37 +39,24 @@ class TestInteractiveChatCLI:
     @patch("src.interactive_chat.Prompt.ask")
     def test_select_character_with_valid_choice(self, mock_ask):
         with tempfile.TemporaryDirectory() as temp_dir:
-            chars_dir = Path(temp_dir) / "characters"
-            chars_dir.mkdir()
+            # Create character data and save to database
+            from src.memory.character_registry import CharacterRegistry
 
-            # Create a minimal character file
             character_data = {
                 "name": "Test Character",
                 "role": "Test Role",
                 "backstory": "Test backstory",
                 "appearance": "Test appearance",
-                "autonomy": "independent",
-                "safety": "secure",
-                "openmindedness": "high",
-                "emotional_stability": "stable",
-                "attachment_pattern": "secure",
-                "conscientiousness": "organized",
-                "sociability": "extraverted",
-                "social_trust": "trusting",
-                "risk_approach": "balanced",
-                "conflict_approach": "collaborative",
-                "leadership_style": "democratic",
-                "stress_level": "low",
-                "energy_level": "medium",
-                "mood": "neutral",
+                "personality": "Test personality"
             }
 
-            char_file = chars_dir / "test.yaml"
-            with open(char_file, "w") as f:
-                yaml.dump(character_data, f)
+            # Save character to database
+            registry = CharacterRegistry(Path(temp_dir))
+            registry.save_character("test_character", character_data)
 
+            # Create CLI with custom memory directory
             cli = InteractiveChatCLI()
-            cli.loader.characters_dir = chars_dir
+            cli.loader = CharacterLoader(Path(temp_dir))
 
             mock_ask.return_value = "1"
 
@@ -124,6 +112,8 @@ class TestInteractiveChatCLI:
     def test_setup_character_session_continue_existing(self, mock_deps_memory_class: Mock, mock_memory_class: Mock):
         """Test setting up character session when choosing to continue existing session."""
         # Create a mock memory instance
+        from datetime import datetime, UTC
+
         mock_memory_instance = Mock()
         mock_memory_instance.get_character_sessions.return_value = [{
             "session_id": 'test-session',
@@ -132,17 +122,25 @@ class TestInteractiveChatCLI:
         }]
         mock_memory_instance.get_recent_messages.return_value = [{
             "role": 'user',
-            "content": 'test'
+            "content": 'test',
+            "type": 'conversation',
+            "created_at": datetime.now(UTC).isoformat()
         },{
             "role": 'assistant',
-            "content": 'response'
+            "content": 'response',
+            "type": 'conversation',
+            "created_at": datetime.now(UTC).isoformat()
         }]
         mock_memory_instance.get_session_messages.return_value = [{
             "role": 'user',
-            "content": 'test'
+            "content": 'test',
+            "type": 'conversation',
+            "created_at": datetime.now(UTC).isoformat()
         },{
             "role": 'assistant',
-            "content": 'response'
+            "content": 'response',
+            "type": 'conversation',
+            "created_at": datetime.now(UTC).isoformat()
         }]
 
         # Mock both ConversationMemory constructors to return the same mock instance
