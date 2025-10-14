@@ -30,7 +30,6 @@ class MockPromptProcessor:
 
 
 class TestCharacterResponderSummaryIntegration:
-
     def setup_method(self):
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
@@ -39,13 +38,13 @@ class TestCharacterResponderSummaryIntegration:
         # Create test character
         self.character = Character(
             name="TestBot",
-            role="Assistant",
+            tagline="Assistant",
             backstory="Test character for summary integration",
             personality="Helpful and direct",
             appearance="Digital assistant",
             relationships={"user": "helper"},
             key_locations=["digital space"],
-            setting_description="Test digital environment"
+            setting_description="Test digital environment",
         )
 
         # Create memory instances with test directory
@@ -87,10 +86,7 @@ class TestCharacterResponderSummaryIntegration:
 
             def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None, reasoning=False) -> str:
                 # Return summary response if this looks like a summary call
-                if ("summarize" in prompt.lower() or
-                    "compress" in prompt.lower() or
-                    "Summary of previous interactions" in prompt or
-                    "Story main genre" in prompt):
+                if "summarize" in prompt.lower() or "compress" in prompt.lower() or "Summary of previous interactions" in prompt or "Story main genre" in prompt:
                     return self.summary_response
                 return str(self.eval_response)
 
@@ -110,7 +106,7 @@ class TestCharacterResponderSummaryIntegration:
             conversation_memory=self.conversation_memory,
             summary_memory=self.summary_memory,
             chat_logger=None,
-            session_id=self.session_id
+            session_id=self.session_id,
         )
 
     def test_summary_storage_during_compression(self):
@@ -118,12 +114,7 @@ class TestCharacterResponderSummaryIntegration:
         # Mock responses for evaluation and summarization
         from src.models.evaluation import Evaluation
 
-        evaluation_response = Evaluation(
-            patterns_to_avoid="None",
-            status_update="Normal conversation state",
-            user_name="TestUser",
-            time_passed="5 seconds"
-        )
+        evaluation_response = Evaluation(patterns_to_avoid="None", status_update="Normal conversation state", user_name="TestUser", time_passed="5 seconds")
 
         summary_response = "User and assistant had a brief conversation about testing. The user introduced themselves as TestUser."
 
@@ -131,15 +122,18 @@ class TestCharacterResponderSummaryIntegration:
         responder = CharacterResponder(self.character, dependencies)
 
         # Simulate enough interactions to trigger summarization
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         for i in range(CharacterResponder.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER + 1):
             user_message = f"Test message {i}"
             # Mock the character response by directly adding messages (with type field)
-            responder.memory.extend([
-                {"role": "user", "content": user_message, "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
-                {"role": "assistant", "content": f"Evaluation {i}", "type": "evaluation", "created_at": datetime.now(UTC).isoformat()},
-                {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()}
-            ])
+            responder.memory.extend(
+                [
+                    {"role": "user", "content": user_message, "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                    {"role": "assistant", "content": f"Evaluation {i}", "type": "evaluation", "created_at": datetime.now(UTC).isoformat()},
+                    {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                ]
+            )
             responder._current_message_offset += 3
 
             # Save to persistent memory to maintain offset tracking
@@ -150,15 +144,15 @@ class TestCharacterResponderSummaryIntegration:
                     [
                         {"role": "user", "content": user_message, "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
                         {"role": "assistant", "content": f"Evaluation {i}", "type": "evaluation", "created_at": datetime.now(UTC).isoformat()},
-                        {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()}
-                    ]
+                        {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                    ],
                 )
 
         # Manually trigger compression to test summary storage
         responder.compress_memory()
 
         # Verify summary was stored
-        summaries = self.summary_memory.get_session_summaries(self.session_id)
+        summaries = self.summary_memory.get_session_summaries(self.session_id, "anonymous")
         assert len(summaries) == 1
 
         stored_summary = summaries[0]
@@ -171,21 +165,9 @@ class TestCharacterResponderSummaryIntegration:
     def test_existing_summaries_loading(self):
         """Test that existing summaries are properly loaded and concatenated on initialization."""
         # Pre-populate summary memory with test summaries
-        self.summary_memory.add_summary(
-            character_id="TestBot",
-            session_id=self.session_id,
-            summary="First summary of early conversation",
-            start_offset=0,
-            end_offset=5
-        )
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary="First summary of early conversation", start_offset=0, end_offset=5)
 
-        self.summary_memory.add_summary(
-            character_id="TestBot",
-            session_id=self.session_id,
-            summary="Second summary of middle conversation",
-            start_offset=6,
-            end_offset=11
-        )
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary="Second summary of middle conversation", start_offset=6, end_offset=11)
 
         # Create responder which should load existing summaries
         dependencies = self.create_dependencies_with_mock_responses("test", "test")
@@ -201,20 +183,14 @@ class TestCharacterResponderSummaryIntegration:
     def test_clear_session_removes_summaries(self):
         """Test that clearing session also removes associated summaries."""
         # Add test summaries
-        self.summary_memory.add_summary(
-            character_id="TestBot",
-            session_id=self.session_id,
-            summary="Test summary to be cleared",
-            start_offset=0,
-            end_offset=2
-        )
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary="Test summary to be cleared", start_offset=0, end_offset=2)
 
         # Create responder and clear session
         dependencies = self.create_dependencies_with_mock_responses("test", "test")
         responder = CharacterResponder(self.character, dependencies)
 
         # Verify summary exists initially
-        summaries_before = self.summary_memory.get_session_summaries(self.session_id)
+        summaries_before = self.summary_memory.get_session_summaries(self.session_id, "anonymous")
         assert len(summaries_before) == 1
 
         # Clear session
@@ -222,7 +198,7 @@ class TestCharacterResponderSummaryIntegration:
         assert cleared is True
 
         # Verify summaries were cleared
-        summaries_after = self.summary_memory.get_session_summaries(self.session_id)
+        summaries_after = self.summary_memory.get_session_summaries(self.session_id, "anonymous")
         assert len(summaries_after) == 0
 
         # Verify memory_summary was reset
@@ -241,17 +217,13 @@ class TestCharacterResponderSummaryIntegration:
             {"role": "assistant", "content": "Response 1"},
         ]
 
-        responder.persistent_memory.add_messages(
-            responder.character.name,
-            responder.session_id,
-            initial_messages
-        )
+        responder.persistent_memory.add_messages(responder.character.name, responder.session_id, initial_messages)
 
         # Create new responder to load existing messages
         responder2 = CharacterResponder(self.character, dependencies)
 
         # Verify offset tracking matches actual message count
-        all_messages = responder2.persistent_memory.get_session_messages(responder2.session_id)
+        all_messages = responder2.persistent_memory.get_session_messages(responder2.session_id, "anonymous")
         assert len(all_messages) == 4
         assert responder2._current_message_offset == 4
 
@@ -264,7 +236,7 @@ class TestCharacterResponderSummaryIntegration:
             conversation_memory=self.conversation_memory,
             summary_memory=None,  # No summary memory
             chat_logger=None,
-            session_id=self.session_id
+            session_id=self.session_id,
         )
 
         responder = CharacterResponder(self.character, dependencies)
@@ -273,12 +245,15 @@ class TestCharacterResponderSummaryIntegration:
         assert responder.memory_summary == ""
 
         # Add messages to trigger compression (with proper message structure including "type")
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         for i in range(CharacterResponder.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER + 5):
-            responder.memory.extend([
-                {"role": "user", "content": f"Message {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
-                {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()}
-            ])
+            responder.memory.extend(
+                [
+                    {"role": "user", "content": f"Message {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                    {"role": "assistant", "content": f"Response {i}", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+                ]
+            )
 
         # Compress memory should work without errors even without summary memory
         try:
@@ -294,10 +269,7 @@ class TestCharacterResponderSummaryIntegration:
 
         # Add some initial messages and create first summary
         for i in range(5):
-            responder.memory.extend([
-                {"role": "user", "content": f"Message {i}"},
-                {"role": "assistant", "content": f"Response {i}"}
-            ])
+            responder.memory.extend([{"role": "user", "content": f"Message {i}"}, {"role": "assistant", "content": f"Response {i}"}])
             responder._current_message_offset += 2
 
         # Manually create first summary to establish baseline
@@ -306,7 +278,7 @@ class TestCharacterResponderSummaryIntegration:
             session_id=responder.session_id,
             summary="First summary",
             start_offset=0,
-            end_offset=9  # Covered first 10 messages (0-9)
+            end_offset=9,  # Covered first 10 messages (0-9)
         )
 
         # Should not trigger with few messages after last summary
@@ -329,7 +301,7 @@ class TestCharacterResponderSummaryIntegration:
             conversation_memory=self.conversation_memory,
             summary_memory=None,  # No summary memory
             chat_logger=None,
-            session_id=self.session_id
+            session_id=self.session_id,
         )
 
         responder = CharacterResponder(self.character, dependencies)

@@ -11,13 +11,13 @@ def test_character_responder_dependencies_creation():
     # Create test character
     character = Character(
         name="TestBot",
-        role="Assistant",
+        tagline="Assistant",
         backstory="Test character for dependency injection",
         personality="Helpful and direct",
         appearance="Digital assistant",
         relationships={"user": "helper"},
         key_locations=["digital space"],
-        setting_description="Test digital environment"
+        setting_description="Test digital environment",
     )
 
     # Create mock processors
@@ -25,13 +25,7 @@ def test_character_responder_dependencies_creation():
     backup_processor = MockPromptProcessor("Backup response")
 
     # Create dependencies without memory or logger
-    dependencies = CharacterResponderDependencies(
-        primary_processor=primary_processor,
-        backup_processor=backup_processor,
-        conversation_memory=None,
-        chat_logger=None,
-        session_id="test-session"
-    )
+    dependencies = CharacterResponderDependencies(primary_processor=primary_processor, backup_processor=backup_processor, conversation_memory=None, chat_logger=None, session_id="test-session")
 
     # Create CharacterResponder with dependencies
     responder = CharacterResponder(character, dependencies)
@@ -45,8 +39,8 @@ def test_character_responder_dependencies_creation():
     assert responder.session_id == "test-session"  # Session_id provided in dependencies
 
 
-@patch('src.processors.cohere_prompt_processor.CoherePromptProcessor')
-@patch('src.processors.claude_prompt_processor.ClaudePromptProcessor')
+@patch("src.processors.cohere_prompt_processor.CoherePromptProcessor")
+@patch("src.processors.claude_prompt_processor.ClaudePromptProcessor")
 def test_character_responder_default_dependencies(mock_claude, mock_cohere):
     """Test that CharacterResponder creates default dependencies correctly."""
     # Mock the processors
@@ -55,22 +49,18 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
 
     character = Character(
         name="DefaultBot",
-        role="Assistant",
+        tagline="Assistant",
         backstory="Test character with defaults",
         personality="Standard assistant",
         appearance="Default appearance",
         relationships={"user": "client"},
         key_locations=["office"],
-        setting_description="Default office environment"
+        setting_description="Default office environment",
     )
 
     # Create dependencies manually
     dependencies = CharacterResponderDependencies(
-        primary_processor=MockPromptProcessor("Claude response"),
-        backup_processor=MockPromptProcessor("Cohere response"),
-        conversation_memory=None,
-        chat_logger=None,
-        session_id="default-session"
+        primary_processor=MockPromptProcessor("Claude response"), backup_processor=MockPromptProcessor("Cohere response"), conversation_memory=None, chat_logger=None, session_id="default-session"
     )
 
     # Create CharacterResponder with dependencies
@@ -84,10 +74,10 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
     assert responder.session_id == "default-session"
 
 
-@patch('src.models.prompt_processor_factory.PromptProcessorFactory.create_processor')
-@patch('src.models.prompt_processor_factory.PromptProcessorFactory.get_default_backup_processor')
-@patch('src.models.character_responder_dependencies.ConversationMemory')
-@patch('src.models.character_responder_dependencies.ChatLogger')
+@patch("src.models.prompt_processor_factory.PromptProcessorFactory.create_processor")
+@patch("src.models.prompt_processor_factory.PromptProcessorFactory.get_default_backup_processor")
+@patch("src.models.character_responder_dependencies.ConversationMemory")
+@patch("src.models.character_responder_dependencies.ChatLogger")
 def test_dependencies_create_default(mock_logger, mock_memory, mock_get_backup, mock_create_processor):
     """Test CharacterResponderDependencies.create_default method."""
     # Mock the dependencies
@@ -105,10 +95,7 @@ def test_dependencies_create_default(mock_logger, mock_memory, mock_get_backup, 
     mock_memory_instance.create_session.return_value = "test-session"
 
     # Test dependencies creation
-    dependencies = CharacterResponderDependencies.create_default(
-        character_name="TestChar2",
-        processor_type="cohere"
-    )
+    dependencies = CharacterResponderDependencies.create_default(character_name="TestChar2", processor_type="cohere")
 
     assert dependencies.primary_processor is mock_primary_processor
     assert dependencies.backup_processor is mock_backup_processor

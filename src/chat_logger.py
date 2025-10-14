@@ -1,11 +1,10 @@
-
 import logging
 import sys
 from pathlib import Path
 
 
 class ChatLogger:
-    def __init__(self, character_id: str, session_id: str, file_only: bool = True,logs_dir: Path | None = None) -> None:
+    def __init__(self, character_id: str, session_id: str, file_only: bool = True, logs_dir: Path | None = None) -> None:
         """
         Setup logging for conversation messages.
 
@@ -19,7 +18,7 @@ class ChatLogger:
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
         # Create character-specific directory
-        safe_character_id = "".join(c for c in character_id if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_character_id = "".join(c for c in character_id if c.isalnum() or c in (" ", "-", "_")).rstrip()
         character_logs_dir = self.logs_dir / safe_character_id
         character_logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -38,14 +37,11 @@ class ChatLogger:
             self.logger.removeHandler(handler)
 
         # Create file handler
-        file_handler = logging.FileHandler(self.log_file_path, encoding='utf-8')
+        file_handler = logging.FileHandler(self.log_file_path, encoding="utf-8")
         file_handler.setLevel(logging.INFO)
 
         # Create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        formatter = logging.Formatter("%(asctime)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         file_handler.setFormatter(formatter)
 
         # Add handler to logger
@@ -80,7 +76,7 @@ class ChatLogger:
 
     def close_logger(self) -> None:
         """Close the logger and release file handles."""
-        if hasattr(self, 'logger'):
+        if hasattr(self, "logger"):
             for handler in self.logger.handlers[:]:
                 handler.close()
                 self.logger.removeHandler(handler)

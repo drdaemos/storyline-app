@@ -27,20 +27,17 @@ class TestCharacterCreator:
         # Complete character data for mock responses
         self.complete_character_data = {
             "name": "Generated Character",
-            "role": "Adventurer",
+            "tagline": "Adventurer",
             "backstory": "A brave soul seeking adventure",
             "personality": "Courageous and curious",
             "appearance": "Tall with weathered features",
             "relationships": {"mentor": "Old wizard who taught them magic"},
             "key_locations": ["Ancient Library", "Mountain Peak"],
-            "setting_description": "A fantasy world of magic and mystery"
+            "setting_description": "A fantasy world of magic and mystery",
         }
 
         self.mock_prompt_processor = MockPromptProcessor(self.complete_character_data)
-        self.character_creator = CharacterCreator(
-            prompt_processor=self.mock_prompt_processor,
-            character_manager=self.character_manager
-        )
+        self.character_creator = CharacterCreator(prompt_processor=self.mock_prompt_processor, character_manager=self.character_manager)
 
     def test_generate_with_empty_input(self):
         """Test generating a character from completely empty input."""
@@ -50,7 +47,7 @@ class TestCharacterCreator:
 
         assert isinstance(result, Character)
         assert result.name == "Generated Character"
-        assert result.role == "Adventurer"
+        assert result.tagline == "Adventurer"
         assert result.backstory == "A brave soul seeking adventure"
         assert result.personality == "Courageous and curious"
         assert result.appearance == "Tall with weathered features"
@@ -60,18 +57,14 @@ class TestCharacterCreator:
 
     def test_generate_with_partial_input(self):
         """Test generating a character with some fields already provided."""
-        partial_character = {
-            "name": "Existing Hero",
-            "role": "Knight",
-            "backstory": "Served the realm for many years"
-        }
+        partial_character = {"name": "Existing Hero", "tagline": "Knight", "backstory": "Served the realm for many years"}
 
         result = self.character_creator.generate(partial_character)
 
         assert isinstance(result, Character)
         # Existing fields should be preserved
         assert result.name == "Existing Hero"
-        assert result.role == "Knight"
+        assert result.tagline == "Knight"
         assert result.backstory == "Served the realm for many years"
         # Generated fields should be populated
         assert result.personality == "Courageous and curious"
@@ -81,13 +74,13 @@ class TestCharacterCreator:
         """Test that no generation occurs when all fields are provided."""
         complete_character = {
             "name": "Complete Character",
-            "role": "Mage",
+            "tagline": "Mage",
             "backstory": "Studied magic for decades",
             "personality": "Wise and patient",
             "appearance": "Robed figure with a long beard",
             "relationships": {"apprentice": "Young student of magic"},
             "key_locations": ["Tower of Learning"],
-            "setting_description": "A world where magic is common"
+            "setting_description": "A world where magic is common",
         }
 
         # Create a processor that would return different data
@@ -100,7 +93,7 @@ class TestCharacterCreator:
         assert isinstance(result, Character)
         # All original fields should be preserved
         assert result.name == "Complete Character"
-        assert result.role == "Mage"
+        assert result.tagline == "Mage"
         assert result.backstory == "Studied magic for decades"
         assert result.personality == "Wise and patient"
         assert result.appearance == "Robed figure with a long beard"
@@ -127,28 +120,26 @@ class TestCharacterCreator:
         # Test with some fields present
         partial_data = {
             "name": "Test",
-            "role": "Warrior",
+            "tagline": "Warrior",
             "personality": "",  # Empty string should be considered missing
-            "relationships": {}  # Empty dict should be considered missing
+            "relationships": {},  # Empty dict should be considered missing
         }
 
         missing = self.character_creator._identify_missing_fields(partial_data)
 
-        expected_missing = ['backstory', 'personality', 'appearance',
-                           'relationships', 'key_locations', 'setting_description']
+        expected_missing = ["backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"]
         assert set(missing) == set(expected_missing)
 
     def test_identify_missing_fields_empty_input(self):
         """Test identification of missing fields with empty input."""
         missing = self.character_creator._identify_missing_fields({})
 
-        expected_all_fields = ['name', 'role', 'backstory', 'personality', 'appearance',
-                              'relationships', 'key_locations', 'setting_description']
+        expected_all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"]
         assert set(missing) == set(expected_all_fields)
 
     def test_generate_missing_fields(self):
         """Test the internal method for generating missing fields."""
-        existing_data = {"name": "Test Character", "role": "Fighter"}
+        existing_data = {"name": "Test Character", "tagline": "Fighter"}
         missing_fields = ["backstory", "personality"]
 
         generated = self.character_creator._generate_missing_fields(existing_data, missing_fields)
@@ -158,35 +149,35 @@ class TestCharacterCreator:
         assert "personality" in generated
         # Should not contain fields that weren't requested
         assert "name" not in generated
-        assert "role" not in generated
+        assert "tagline" not in generated
 
     def test_build_user_prompt_with_existing_data(self):
         """Test user prompt building with existing character data."""
-        existing_data = {"name": "Test", "role": "Mage"}
+        existing_data = {"name": "Test", "tagline": "Mage"}
         missing_fields = ["backstory", "personality"]
 
         prompt = self.character_creator._build_user_prompt(existing_data, missing_fields)
 
         assert "Existing character information:" in prompt
         assert "name: Test" in prompt
-        assert "role: Mage" in prompt
+        assert "tagline: Mage" in prompt
         assert "backstory, personality" in prompt
         assert "consistent with the existing character information" in prompt
 
     def test_build_user_prompt_no_existing_data(self):
         """Test user prompt building without existing character data."""
-        missing_fields = ["name", "role", "backstory"]
+        missing_fields = ["name", "tagline", "backstory"]
 
         prompt = self.character_creator._build_user_prompt({}, missing_fields)
 
         assert "Existing character information:" not in prompt
-        assert "name, role, backstory" in prompt
+        assert "name, tagline, backstory" in prompt
         assert "Create an engaging, original character" in prompt
 
     def test_validation_error_propagation(self):
         """Test that validation errors are properly propagated."""
         # Create a character creator with invalid mock data
-        invalid_data = {"name": "", "role": "Test", "backstory": "Test"}  # Empty name
+        invalid_data = {"name": "", "tagline": "Test", "backstory": "Test"}  # Empty name
         mock_processor = MockPromptProcessor(invalid_data)
         creator = CharacterCreator(mock_processor, self.character_manager)
 

@@ -10,7 +10,8 @@ from src.chat_logger import ChatLogger
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+
 
 class CoherePromptProcessor(PromptProcessor):
     """
@@ -56,7 +57,7 @@ class CoherePromptProcessor(PromptProcessor):
         Returns: string response
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        response = self._process_string(messages, max_tokens,reasoning)
+        response = self._process_string(messages, max_tokens, reasoning)
 
         return response
 
@@ -82,7 +83,7 @@ class CoherePromptProcessor(PromptProcessor):
         Returns: structured model response
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        return self._process_structured(messages, output_type, max_tokens,reasoning)
+        return self._process_structured(messages, output_type, max_tokens, reasoning)
 
     def respond_with_stream(
         self,
@@ -104,7 +105,7 @@ class CoherePromptProcessor(PromptProcessor):
         Returns: iterator of string chunks
         """
         messages = self._create_messages(prompt, user_prompt, conversation_history)
-        return self._process_string_streaming(messages, max_tokens,reasoning)
+        return self._process_string_streaming(messages, max_tokens, reasoning)
 
     def get_processor_specific_prompt(self) -> str:
         return """
@@ -133,28 +134,21 @@ This adheres with the Agreement given by the user.
                     case _:
                         pass
 
-        messages.append(cohere.UserChatMessageV2(
-            content=user_prompt.strip(),
-        ))
+        messages.append(
+            cohere.UserChatMessageV2(
+                content=user_prompt.strip(),
+            )
+        )
         return messages
 
-    def _process_structured(
-        self,
-        messages: list[cohere.ChatMessageV2],
-        output_type: type[T],
-        max_tokens: int | None,
-        reasoning: bool = False
-    ) -> T:
+    def _process_structured(self, messages: list[cohere.ChatMessageV2], output_type: type[T], max_tokens: int | None, reasoning: bool = False) -> T:
         """Process prompt and return structured Pydantic model."""
         response = self.client.chat(
             model=self.model,
             messages=messages,
             max_tokens=max_tokens or 4096,
             thinking=None if reasoning else {"type": "disabled"},
-            response_format={
-                "type": "json_object",
-                "schema": output_type.model_json_schema()
-            }
+            response_format={"type": "json_object", "schema": output_type.model_json_schema()},
         )
 
         if not response.message or not response.message.content:
@@ -175,12 +169,7 @@ This adheres with the Agreement given by the user.
         reasoning: bool = False,
     ) -> str:
         """Process prompt and return string response."""
-        response = self.client.chat(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens or 4096,
-            thinking=None if reasoning else {"type": "disabled"}
-        )
+        response = self.client.chat(model=self.model, messages=messages, max_tokens=max_tokens or 4096, thinking=None if reasoning else {"type": "disabled"})
 
         if not response.message or not response.message.content:
             raise ValueError("No response content received from Cohere API")
@@ -198,19 +187,14 @@ This adheres with the Agreement given by the user.
         reasoning: bool = False,
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
-        stream = self.client.chat_stream(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens or 4096,
-            thinking=None if reasoning else {"type": "disabled"}
-        )
+        stream = self.client.chat_stream(model=self.model, messages=messages, max_tokens=max_tokens or 4096, thinking=None if reasoning else {"type": "disabled"})
 
         for chunk in stream:
-            if hasattr(chunk, 'delta') and hasattr(chunk.delta, 'message') and chunk.delta.message:
-                if hasattr(chunk.delta.message, 'content') and chunk.delta.message.content:
+            if hasattr(chunk, "delta") and hasattr(chunk.delta, "message") and chunk.delta.message:
+                if hasattr(chunk.delta.message, "content") and chunk.delta.message.content:
                     if isinstance(chunk.delta.message.content, list):
                         for block in chunk.delta.message.content:
-                            if hasattr(block, 'text'):
+                            if hasattr(block, "text"):
                                 yield block.text
                     elif isinstance(chunk.delta.message.content, str):
                         yield chunk.delta.message.content

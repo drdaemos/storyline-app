@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 from src.models.message import GenericMessage
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+
 
 class PromptProcessor(ABC):
     @abstractmethod

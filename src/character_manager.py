@@ -35,38 +35,38 @@ class CharacterManager:
             raise ValueError("Character data cannot be empty")
 
         # Validate required fields
-        required_fields = {'name', 'role', 'backstory'}
+        required_fields = {"name", "tagline", "backstory"}
         missing_fields = required_fields - set(data.keys())
         if missing_fields:
             raise ValueError(f"Missing required fields: {missing_fields}")
 
         # Validate field types
-        if not isinstance(data.get('name'), str) or not data['name'].strip():
+        if not isinstance(data.get("name"), str) or not data["name"].strip():
             raise ValueError("'name' must be a non-empty string")
 
-        if not isinstance(data.get('role'), str) or not data['role'].strip():
-            raise ValueError("'role' must be a non-empty string")
+        if not isinstance(data.get("tagline"), str) or not data["tagline"].strip():
+            raise ValueError("'tagline' must be a non-empty string")
 
-        if not isinstance(data.get('backstory'), str) or not data['backstory'].strip():
+        if not isinstance(data.get("backstory"), str) or not data["backstory"].strip():
             raise ValueError("'backstory' must be a non-empty string")
 
         # Validate optional fields if present
-        optional_string_fields = ['personality', 'appearance', 'setting_description']
+        optional_string_fields = ["personality", "appearance", "setting_description"]
         for field in optional_string_fields:
             if field in data and not isinstance(data[field], str):
                 raise ValueError(f"'{field}' must be a string")
 
-        if 'relationships' in data:
-            if not isinstance(data['relationships'], dict):
+        if "relationships" in data:
+            if not isinstance(data["relationships"], dict):
                 raise ValueError("'relationships' must be a dictionary")
-            for key, value in data['relationships'].items():
+            for key, value in data["relationships"].items():
                 if not isinstance(key, str) or not isinstance(value, str):
                     raise ValueError("All keys and values in 'relationships' must be strings")
 
-        if 'key_locations' in data:
-            if not isinstance(data['key_locations'], list):
+        if "key_locations" in data:
+            if not isinstance(data["key_locations"], list):
                 raise ValueError("'key_locations' must be a list")
-            for location in data['key_locations']:
+            for location in data["key_locations"]:
                 if not isinstance(location, str):
                     raise ValueError("All items in 'key_locations' must be strings")
 
@@ -94,12 +94,13 @@ class CharacterManager:
         self.validate_character_data(data)
         return data
 
-    def create_character_file(self, character_data: dict[str, Any]) -> str:
+    def create_character_file(self, character_data: dict[str, Any], user_id: str = "anonymous") -> str:
         """
         Create a character file from validated data.
 
         Args:
             character_data: Validated character data dictionary
+            user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             The filename of the created character file (without extension)
@@ -123,15 +124,15 @@ class CharacterManager:
         character_file = self.characters_dir / f"{filename}.yaml"
 
         # Write character data to YAML file
-        with open(character_file, 'w', encoding='utf-8') as file:
+        with open(character_file, "w", encoding="utf-8") as file:
             yaml.dump(character_data, file, default_flow_style=False, allow_unicode=True)
 
         # Also save to database
-        self.save_character_to_database(filename, character_data)
+        self.save_character_to_database(filename, character_data, user_id=user_id)
 
         return filename
 
-    def save_character_to_database(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1) -> bool:
+    def save_character_to_database(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1, user_id: str = "anonymous") -> bool:
         """
         Save character data to the database.
 
@@ -139,6 +140,7 @@ class CharacterManager:
             character_id: Character ID (same as filename)
             character_data: Character data dictionary
             schema_version: Schema version for the character data
+            user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             True if saved successfully
@@ -146,7 +148,7 @@ class CharacterManager:
         # Validate the data first
         self.validate_character_data(character_data)
 
-        return self.registry.save_character(character_id, character_data, schema_version)
+        return self.registry.save_character(character_id, character_data, schema_version, user_id)
 
     def load_character_from_file_to_database(self, character_id: str) -> bool:
         """
@@ -167,7 +169,7 @@ class CharacterManager:
         if not character_file.exists():
             raise FileNotFoundError(f"Character file not found: {character_file}")
 
-        with open(character_file, encoding='utf-8') as file:
+        with open(character_file, encoding="utf-8") as file:
             character_data = yaml.safe_load(file)
 
         if character_data is None:
@@ -182,7 +184,7 @@ class CharacterManager:
     def _calculate_data_hash(self, data: dict[str, Any]) -> str:
         """Calculate a hash of character data for comparison."""
         # Sort keys to ensure consistent hashing
-        sorted_data = json.dumps(data, sort_keys=True, separators=(',', ':'))
+        sorted_data = json.dumps(data, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(sorted_data.encode()).hexdigest()
 
     def sync_files_to_database(self) -> dict[str, Any]:
@@ -198,12 +200,7 @@ class CharacterManager:
                 "errors": [list of {"character_id": str, "error": str}]
             }
         """
-        results = {
-            "added": [],
-            "updated": [],
-            "skipped": [],
-            "errors": []
-        }
+        results = {"added": [], "updated": [], "skipped": [], "errors": []}
 
         if not self.characters_dir.exists():
             return results
@@ -215,21 +212,18 @@ class CharacterManager:
             character_id = character_file.stem
             try:
                 # Load file data
-                with open(character_file, encoding='utf-8') as file:
+                with open(character_file, encoding="utf-8") as file:
                     file_data = yaml.safe_load(file)
 
                 if file_data is None:
-                    results["errors"].append({
-                        "character_id": character_id,
-                        "error": "Character file is empty or invalid"
-                    })
+                    results["errors"].append({"character_id": character_id, "error": "Character file is empty or invalid"})
                     continue
 
                 # Validate file data
                 self.validate_character_data(file_data)
 
-                # Check if character exists in database
-                db_character = self.registry.get_character(character_id)
+                # Check if character exists in database (use 'anonymous' for sync operations)
+                db_character = self.registry.get_character(character_id, "anonymous")
 
                 if db_character is None:
                     # Character doesn't exist in database - add it
@@ -250,10 +244,7 @@ class CharacterManager:
                         results["skipped"].append(character_id)
 
             except Exception as e:
-                results["errors"].append({
-                    "character_id": character_id,
-                    "error": str(e)
-                })
+                results["errors"].append({"character_id": character_id, "error": str(e)})
 
         return results
 
@@ -271,17 +262,11 @@ class CharacterManager:
                 "file_errors": [list of {"character_id": str, "error": str}]
             }
         """
-        status = {
-            "file_only": [],
-            "db_only": [],
-            "both_same": [],
-            "both_different": [],
-            "file_errors": []
-        }
+        status = {"file_only": [], "db_only": [], "both_same": [], "both_different": [], "file_errors": []}
 
-        # Get all database characters
+        # Get all database characters (use 'anonymous' for sync operations)
         try:
-            db_characters = {char["id"]: char for char in self.registry.get_all_characters()}
+            db_characters = {char["id"]: char for char in self.registry.get_all_characters("anonymous")}
         except Exception:
             db_characters = {}
 
@@ -291,24 +276,18 @@ class CharacterManager:
             for character_file in self.characters_dir.glob("*.yaml"):
                 character_id = character_file.stem
                 try:
-                    with open(character_file, encoding='utf-8') as file:
+                    with open(character_file, encoding="utf-8") as file:
                         file_data = yaml.safe_load(file)
 
                     if file_data is None:
-                        status["file_errors"].append({
-                            "character_id": character_id,
-                            "error": "Character file is empty or invalid"
-                        })
+                        status["file_errors"].append({"character_id": character_id, "error": "Character file is empty or invalid"})
                         continue
 
                     self.validate_character_data(file_data)
                     file_characters[character_id] = file_data
 
                 except Exception as e:
-                    status["file_errors"].append({
-                        "character_id": character_id,
-                        "error": str(e)
-                    })
+                    status["file_errors"].append({"character_id": character_id, "error": str(e)})
 
         # Compare file and database characters
         all_character_ids = set(file_characters.keys()) | set(db_characters.keys())
@@ -353,15 +332,15 @@ class CharacterManager:
 
         # File exists - check if it's the same character name
         try:
-            with open(character_file, encoding='utf-8') as file:
+            with open(character_file, encoding="utf-8") as file:
                 existing_data = yaml.safe_load(file)
 
             # If existing file has the same character name, it's a duplicate character
-            if existing_data and existing_data.get('name') == character_name:
+            if existing_data and existing_data.get("name") == character_name:
                 raise FileExistsError(f"Character '{character_name}' already exists")
 
             # Different character name but same filename - collision detected
-            existing_name = existing_data.get('name', 'Unknown') if existing_data else 'Unknown'
+            existing_name = existing_data.get("name", "Unknown") if existing_data else "Unknown"
             raise ValueError(
                 f"Filename collision detected: Character name '{character_name}' would generate "
                 f"filename '{filename}' which is already used by character '{existing_name}'. "
@@ -393,11 +372,12 @@ class CharacterManager:
         sanitized = name.lower().strip()
         # Replace spaces and special characters with underscores
         import re
-        sanitized = re.sub(r'[^\w\-_]', '_', sanitized)
+
+        sanitized = re.sub(r"[^\w\-_]", "_", sanitized)
         # Remove consecutive underscores
-        sanitized = re.sub(r'_+', '_', sanitized)
+        sanitized = re.sub(r"_+", "_", sanitized)
         # Remove leading/trailing underscores
-        sanitized = sanitized.strip('_')
+        sanitized = sanitized.strip("_")
 
         if not sanitized:
             raise ValueError("Character name produces empty filename")

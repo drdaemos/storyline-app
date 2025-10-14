@@ -8,14 +8,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.auth import UserIdDep
 from src.character_creator import CharacterCreator
 from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.memory.conversation_memory import ConversationMemory
 from src.memory.summary_memory import SummaryMemory
-from src.session_starter import SessionStarter
 from src.models.api_models import (
+    CharacterSummary,
     CreateCharacterRequest,
     CreateCharacterResponse,
     GenerateCharacterRequest,
@@ -33,6 +34,7 @@ from src.models.api_models import (
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.scenario_generator import ScenarioGenerator
+from src.session_starter import SessionStarter
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
 
@@ -82,12 +84,7 @@ async def health_check() -> HealthStatus:
         overall_status = "unhealthy"
         details["summary_error"] = str(e)
 
-    return HealthStatus(
-        status=overall_status,
-        conversation_memory=conversation_status,
-        summary_memory=summary_status,
-        details=details
-    )
+    return HealthStatus(status=overall_status, conversation_memory=conversation_status, summary_memory=summary_status, details=details)
 
 
 @app.get("/api")
@@ -97,29 +94,29 @@ async def api_info() -> dict[str, str]:
 
 
 @app.get("/api/characters")
-async def list_characters() -> list[str]:
-    """List available characters."""
+async def list_characters(user_id: UserIdDep) -> list[CharacterSummary]:
+    """List available characters with their basic info."""
     try:
-        return character_loader.list_characters()
+        return character_loader.list_character_summaries(user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list characters: {str(e)}") from e
 
 
 @app.get("/api/characters/{character_name}")
-async def get_character_info(character_name: str) -> dict[str, str]:
+async def get_character_info(character_name: str, user_id: UserIdDep) -> dict[str, str]:
     """Get information about a specific character."""
     try:
-        character_info = character_loader.get_character_info(character_name)
+        character_info = character_loader.get_character_info(character_name, user_id)
         if not character_info:
             raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
 
         return {
             "name": character_info.name,
-            "role": character_info.role,
+            "tagline": character_info.tagline,
             "backstory": character_info.backstory,
             "personality": character_info.personality,
             "appearance": character_info.appearance,
-            "setting_description": character_info.setting_description or "Not specified"
+            "setting_description": character_info.setting_description or "Not specified",
         }
     except HTTPException:
         raise
@@ -128,31 +125,22 @@ async def get_character_info(character_name: str) -> dict[str, str]:
 
 
 @app.post("/api/characters")
-async def create_character(request: CreateCharacterRequest) -> CreateCharacterResponse:
+async def create_character(request: CreateCharacterRequest, user_id: UserIdDep) -> CreateCharacterResponse:
     """Create a new character from either structured data or freeform YAML text."""
     try:
         # Delegate to service layer
         if request.is_yaml_text:
             if not isinstance(request.data, str):
-                raise HTTPException(
-                    status_code=400,
-                    detail="When is_yaml_text is true, data must be a string"
-                )
+                raise HTTPException(status_code=400, detail="When is_yaml_text is true, data must be a string")
             character_data = character_manager.validate_yaml_text(request.data)
         else:
             if not isinstance(request.data, Character):
-                raise HTTPException(
-                    status_code=400,
-                    detail="When is_yaml_text is false, data must be structured character data"
-                )
+                raise HTTPException(status_code=400, detail="When is_yaml_text is false, data must be structured character data")
             character_data = request.data.model_dump()
 
-        filename = character_manager.create_character_file(character_data)
+        filename = character_manager.create_character_file(character_data, user_id=user_id)
 
-        return CreateCharacterResponse(
-            message=f"Character '{character_data['name']}' created successfully",
-            character_filename=filename
-        )
+        return CreateCharacterResponse(message=f"Character '{character_data['name']}' created successfully", character_filename=filename)
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -163,21 +151,18 @@ async def create_character(request: CreateCharacterRequest) -> CreateCharacterRe
 
 
 @app.post("/api/characters/generate")
-async def generate_character(request: GenerateCharacterRequest) -> GenerateCharacterResponse:
+async def generate_character(request: GenerateCharacterRequest, user_id: UserIdDep) -> GenerateCharacterResponse:
     """Generate a complete character from partial character data using AI."""
     try:
         # Get the appropriate prompt processor
         dependencies = CharacterResponderDependencies.create_default(
             character_name="temp",  # Temp name for processor creation
             processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type
+            backup_processor_type=request.backup_processor_type,
         )
 
         # Create character creator with the selected processor
-        character_creator = CharacterCreator(
-            prompt_processor=dependencies.primary_processor,
-            character_manager=character_manager
-        )
+        character_creator = CharacterCreator(prompt_processor=dependencies.primary_processor, character_manager=character_manager)
 
         # Track which fields were originally missing to report what was generated
         original_fields = set(request.partial_character.keys())
@@ -194,10 +179,7 @@ async def generate_character(request: GenerateCharacterRequest) -> GenerateChara
                 if character_dict.get(field):  # Field was populated
                     generated_fields.append(field)
 
-        return GenerateCharacterResponse(
-            character=complete_character,
-            generated_fields=generated_fields
-        )
+        return GenerateCharacterResponse(character=complete_character, generated_fields=generated_fields)
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -206,11 +188,11 @@ async def generate_character(request: GenerateCharacterRequest) -> GenerateChara
 
 
 @app.post("/api/scenarios/generate")
-async def generate_scenarios(request: GenerateScenariosRequest) -> GenerateScenariosResponse:
+async def generate_scenarios(request: GenerateScenariosRequest, user_id: UserIdDep) -> GenerateScenariosResponse:
     """Generate scenario intros for a given character."""
     try:
         # Load the character from registry
-        character = character_loader.load_character(request.character_name)
+        character = character_loader.load_character(request.character_name, user_id)
         if not character:
             raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
 
@@ -218,22 +200,16 @@ async def generate_scenarios(request: GenerateScenariosRequest) -> GenerateScena
         dependencies = CharacterResponderDependencies.create_default(
             character_name="temp",  # Temp name for processor creation
             processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type
+            backup_processor_type=request.backup_processor_type,
         )
 
         # Create scenario generator with the selected processor
-        scenario_generator = ScenarioGenerator(
-            processors=[dependencies.primary_processor, dependencies.backup_processor],
-            logger=dependencies.chat_logger
-        )
+        scenario_generator = ScenarioGenerator(processors=[dependencies.primary_processor, dependencies.backup_processor], logger=dependencies.chat_logger)
 
         # Generate scenarios
         scenarios = scenario_generator.generate_scenarios(character, count=request.count, mood=request.mood)
 
-        return GenerateScenariosResponse(
-            character_name=character.name,
-            scenarios=scenarios
-        )
+        return GenerateScenariosResponse(character_name=character.name, scenarios=scenarios)
 
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -244,42 +220,43 @@ async def generate_scenarios(request: GenerateScenariosRequest) -> GenerateScena
 
 
 @app.get("/api/sessions")
-async def list_sessions() -> list[SessionInfo]:
+async def list_sessions(user_id: UserIdDep) -> list[SessionInfo]:
     """List all sessions from conversation memory."""
     try:
         conversation_memory = ConversationMemory()
-        character_loader = CharacterLoader()
-        available_characters = character_loader.list_characters()
+        char_loader = CharacterLoader()
+        available_characters = char_loader.list_characters(user_id)
         sessions: list[SessionInfo] = []
 
         for character_filename in available_characters:
             # Load the character to get the actual name used in the database
-            character = character_loader.load_character(character_filename)
-            character_name = character.name if character else character_filename.capitalize()
+            try:
+                character = char_loader.load_character(character_filename, user_id)
+                character_name = character.name if character else character_filename.capitalize()
+            except FileNotFoundError:
+                continue  # Skip characters not found for this user
 
-            character_sessions = conversation_memory.get_character_sessions(character_name, limit=50)
+            character_sessions = conversation_memory.get_character_sessions(character_name, user_id, limit=50)
 
             for session_info in character_sessions:
                 # Get the last character response from this session (conversation type only, not evaluations)
                 last_character_response = None
                 try:
-                    recent_messages = conversation_memory.get_recent_messages(
-                        session_info["session_id"],
-                        limit=1,
-                        type="conversation"
-                    )
+                    recent_messages = conversation_memory.get_recent_messages(session_info["session_id"], user_id, limit=1, type="conversation")
                     last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
                 except Exception:
                     # If there's an issue getting recent messages, just set to None
                     last_character_response = None
 
-                sessions.append(SessionInfo(
-                    session_id=session_info["session_id"],
-                    character_name=character_filename,  # Use filename for frontend consistency
-                    message_count=session_info["message_count"],
-                    last_message_time=session_info["last_message_time"],
-                    last_character_response=last_character_response
-                ))
+                sessions.append(
+                    SessionInfo(
+                        session_id=session_info["session_id"],
+                        character_name=character_filename,  # Use filename for frontend consistency
+                        message_count=session_info["message_count"],
+                        last_message_time=session_info["last_message_time"],
+                        last_character_response=last_character_response,
+                    )
+                )
 
         # Sort by last message time (newest first)
         sessions.sort(key=lambda x: x.last_message_time, reverse=True)
@@ -289,23 +266,25 @@ async def list_sessions() -> list[SessionInfo]:
 
     return sessions
 
+
 @app.get("/api/sessions/{session_id}")
-async def get_session(session_id: str) -> SessionDetails:
+async def get_session(session_id: str, user_id: UserIdDep) -> SessionDetails:
     """Get details of a specific session."""
     memory = ConversationMemory()
-    session_details = memory.get_session_details(session_id)
+    session_details = memory.get_session_details(session_id, user_id)
     if not session_details or session_details.get("message_count", 0) == 0:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
     try:
-        session_messages = memory.get_recent_messages(session_id, limit=50, type="conversation")
+        session_messages = memory.get_recent_messages(session_id, user_id, limit=50, type="conversation")
 
         last_messages = [
             SessionMessage(
                 role=msg["role"],
                 content=msg["content"],
-                created_at=msg["created_at"] # type: ignore
-            ) for msg in session_messages
+                created_at=msg["created_at"],  # type: ignore
+            )
+            for msg in session_messages
         ]
 
         return SessionDetails(
@@ -313,30 +292,30 @@ async def get_session(session_id: str) -> SessionDetails:
             character_name=session_details["character_id"],
             message_count=session_details["message_count"],
             last_messages=last_messages,
-            last_message_time=session_details["last_message_time"]
+            last_message_time=session_details["last_message_time"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get session details: {str(e)}") from e
 
 
 @app.delete("/api/sessions/{session_id}")
-async def clear_session(session_id: str) -> dict[str, str]:
+async def clear_session(session_id: str, user_id: UserIdDep) -> dict[str, str]:
     """Clear a specific session."""
     memory = ConversationMemory()
-    messages = memory.get_session_messages(session_id, limit=1)  # Validate session exists
+    messages = memory.get_session_messages(session_id, user_id, limit=1)  # Validate session exists
     if len(messages) == 0:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
     try:
-        memory.delete_session(session_id)
-        SummaryMemory().delete_session_summaries(session_id)
+        memory.delete_session(session_id, user_id)
+        SummaryMemory().delete_session_summaries(session_id, user_id)
         return {"message": f"Session '{session_id}' cleared successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}") from e
 
 
 @app.post("/api/sessions/start")
-async def start_session_with_scenario(request: StartSessionRequest) -> StartSessionResponse:
+async def start_session_with_scenario(request: StartSessionRequest, user_id: UserIdDep) -> StartSessionResponse:
     """
     Start a new session with a scenario intro message.
 
@@ -345,10 +324,7 @@ async def start_session_with_scenario(request: StartSessionRequest) -> StartSess
     """
     try:
         session_id = session_starter.start_session_with_scenario(
-            character_name=request.character_name,
-            intro_message=request.intro_message,
-            user_name=request.user_name,
-            user_description=request.user_description
+            character_name=request.character_name, intro_message=request.intro_message, user_name=request.user_name, user_description=request.user_description, user_id=user_id
         )
 
         return StartSessionResponse(session_id=session_id)
@@ -362,7 +338,7 @@ async def start_session_with_scenario(request: StartSessionRequest) -> StartSess
 
 
 @app.post("/api/interact")
-async def interact(request: InteractRequest) -> StreamingResponse:
+async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingResponse:
     """
     Interact with a character and get streaming response via Server-Sent Events.
 
@@ -375,10 +351,7 @@ async def interact(request: InteractRequest) -> StreamingResponse:
     """
     try:
         responder = get_character_responder(
-            session_id=request.session_id,
-            character_name=request.character_name,
-            processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type
+            session_id=request.session_id, character_name=request.character_name, processor_type=request.processor_type, backup_processor_type=request.backup_processor_type, user_id=user_id
         )
 
         # Create async generator for streaming response
@@ -408,10 +381,7 @@ async def interact(request: InteractRequest) -> StreamingResponse:
                 async def run_character_response() -> None:
                     nonlocal character_response
                     try:
-                        character_response = await loop.run_in_executor(
-                            None,
-                            lambda: responder.respond(request.user_message, streaming_callback, event_callback)
-                        )
+                        character_response = await loop.run_in_executor(None, lambda: responder.respond(request.user_message, streaming_callback, event_callback))
                     finally:
                         # Signal completion
                         await chunk_queue.put(None)
@@ -456,18 +426,11 @@ async def interact(request: InteractRequest) -> StreamingResponse:
 
                 # Wait for response task to complete and send completion marker
                 await response_task
-                completion_data = {
-                    "type": "complete",
-                    "full_response": character_response,
-                    "message_count": len(responder.memory)
-                }
+                completion_data = {"type": "complete", "full_response": character_response, "message_count": len(responder.memory)}
                 yield f"data: {json.dumps(completion_data)}\n\n"
 
             except Exception as e:
-                error_data = {
-                    "type": "error",
-                    "error": str(e)
-                }
+                error_data = {"type": "error", "error": str(e)}
                 responder.chat_logger.log_exception(e) if responder.chat_logger else None
                 yield f"data: {json.dumps(error_data)}\n\n"
 
@@ -479,7 +442,7 @@ async def interact(request: InteractRequest) -> StreamingResponse:
                 "Connection": "keep-alive",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Headers": "*",
-            }
+            },
         )
 
     except HTTPException:
@@ -487,21 +450,19 @@ async def interact(request: InteractRequest) -> StreamingResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
 
-def get_character_responder(session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None) -> CharacterResponder:
+
+def get_character_responder(session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None, user_id: str = "anonymous") -> CharacterResponder:
     # Load character if not already loaded
-    character = character_loader.load_character(character_name)
+    character = character_loader.load_character(character_name, user_id)
     if not character:
         raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
     dependencies = CharacterResponderDependencies.create_default(
-        character_name=character.name,
-        session_id=session_id,
-        logs_dir=None,
-        processor_type=processor_type,
-        backup_processor_type=backup_processor_type
+        character_name=character.name, session_id=session_id, logs_dir=None, processor_type=processor_type, backup_processor_type=backup_processor_type, user_id=user_id
     )
 
     session_id = dependencies.session_id
     return CharacterResponder(character, dependencies)
+
 
 # Root route - serve the Vue.js app
 @app.get("/")
@@ -531,4 +492,5 @@ async def general_exception_handler(request: object, exc: Exception) -> dict[str
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", 8000)), reload=True)

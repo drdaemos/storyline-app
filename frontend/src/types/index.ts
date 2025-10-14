@@ -1,6 +1,12 @@
+export interface CharacterSummary {
+  id: string
+  name: string
+  tagline: string
+}
+
 export interface Character {
   name: string
-  role: string
+  tagline: string
   backstory: string
   personality?: string
   appearance?: string
@@ -65,7 +71,6 @@ export interface StreamEvent {
 export interface LocalSettings {
   aiProcessor: string
   backupProcessor: string
-  theme: string
   lastSelectedCharacter?: string
 }
 

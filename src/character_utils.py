@@ -20,6 +20,5 @@ def format_character_description(character: Character) -> dict[str, str]:
         "character_personality": character.personality,
         "relationships": "\n".join([f"- {key}: {value}" for key, value in character.relationships.items()]),
         "setting_description": character.setting_description or "Not specified",
-        "key_locations": "\n".join([f"- {location}" for location in character.key_locations])
+        "key_locations": "\n".join([f"- {location}" for location in character.key_locations]),
     }
-

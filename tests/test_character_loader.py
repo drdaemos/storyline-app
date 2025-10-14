@@ -24,10 +24,10 @@ class TestCharacterLoader:
 
             character_data = {
                 "name": "Eldric",
-                "role": "Village Blacksmith",
+                "tagline": "Village Blacksmith",
                 "backstory": "A gruff but kind blacksmith who has lived in this village for 30 years.",
                 "personality": "Gruff but kind",
-                "appearance": "Tall and sturdy"
+                "appearance": "Tall and sturdy",
             }
 
             # Save character to database
@@ -38,7 +38,7 @@ class TestCharacterLoader:
             result = loader.load_character("eldric")
 
             assert result.name == "Eldric"
-            assert result.role == "Village Blacksmith"
+            assert result.tagline == "Village Blacksmith"
             assert "gruff but kind blacksmith" in result.backstory
 
     def test_load_character_file_not_found(self):
@@ -67,8 +67,8 @@ class TestCharacterLoader:
             registry = CharacterRegistry(Path(temp_dir))
 
             # Add test characters to database
-            registry.save_character("alice", {"name": "Alice", "role": "Adventurer", "backstory": "Test"})
-            registry.save_character("bob", {"name": "Bob", "role": "Merchant", "backstory": "Test"})
+            registry.save_character("alice", {"name": "Alice", "tagline": "Adventurer", "backstory": "Test"})
+            registry.save_character("bob", {"name": "Bob", "tagline": "Merchant", "backstory": "Test"})
 
             loader = CharacterLoader(Path(temp_dir))
             result = loader.list_characters()
@@ -83,7 +83,7 @@ class TestCharacterLoader:
         # but keeping for compatibility - database only stores valid characters
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = CharacterRegistry(Path(temp_dir))
-            registry.save_character("valid_char", {"name": "Valid", "role": "Test", "backstory": "Test"})
+            registry.save_character("valid_char", {"name": "Valid", "tagline": "Test", "backstory": "Test"})
 
             loader = CharacterLoader(Path(temp_dir))
             result = loader.list_characters()
@@ -96,7 +96,7 @@ class TestCharacterLoader:
         # but keeping for compatibility
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = CharacterRegistry(Path(temp_dir))
-            registry.save_character("char1", {"name": "Char1", "role": "Test", "backstory": "Test"})
+            registry.save_character("char1", {"name": "Char1", "tagline": "Test", "backstory": "Test"})
 
             loader = CharacterLoader(Path(temp_dir))
             result = loader.list_characters()
@@ -108,12 +108,7 @@ class TestCharacterLoader:
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = CharacterRegistry(Path(temp_dir))
 
-            character_data = {
-                "name": "Test Character",
-                "role": "Test Role",
-                "backstory": "Test backstory",
-                "personality": "Test personality"
-            }
+            character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory", "personality": "Test personality"}
 
             registry.save_character("test_char", character_data)
 
@@ -122,7 +117,7 @@ class TestCharacterLoader:
 
             assert result is not None
             assert result.name == "Test Character"
-            assert result.role == "Test Role"
+            assert result.tagline == "Test Role"
 
     def test_get_character_info_file_not_found(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -144,13 +139,13 @@ class TestCharacterLoader:
 
             character_data = {
                 "name": "Extended Character",
-                "role": "Test Role",
+                "tagline": "Test Role",
                 "backstory": "Test backstory",
                 "personality": "Test personality",
                 "appearance": "Test appearance",
                 "relationships": {"friend": "Alice"},
                 "key_locations": ["Castle", "Forest"],
-                "setting_description": "Fantasy world"
+                "setting_description": "Fantasy world",
             }
 
             registry.save_character("extended_char", character_data)
@@ -186,16 +181,13 @@ class TestCharacterLoader:
             # Simulate real character data structure
             character_data = {
                 "name": "Eldric Ironforge",
-                "role": "Village Blacksmith",
+                "tagline": "Village Blacksmith",
                 "backstory": "Eldric has been the village blacksmith for over 30 years. He's known for his exceptional craftsmanship and his willingness to help anyone in need. He lost his wife to a plague 10 years ago and has since dedicated his life to his craft and the community.",
                 "personality": "Gruff exterior but kind heart. Speaks directly and honestly. Has a soft spot for children and animals. Takes pride in his work and doesn't tolerate shoddy craftsmanship.",
                 "appearance": "A tall, sturdy man in his fifties with calloused hands, graying hair, and kind brown eyes. Usually covered in soot from the forge.",
-                "relationships": {
-                    "The Mayor": "Respectful professional relationship",
-                    "Local children": "Protective and nurturing, like a grandfather figure"
-                },
+                "relationships": {"The Mayor": "Respectful professional relationship", "Local children": "Protective and nurturing, like a grandfather figure"},
                 "key_locations": ["The Village Forge", "The Local Tavern", "The Cemetery"],
-                "setting_description": "A small, peaceful village surrounded by rolling hills and farmland. The forge is at the center of town, always filled with the sound of hammer on anvil."
+                "setting_description": "A small, peaceful village surrounded by rolling hills and farmland. The forge is at the center of town, always filled with the sound of hammer on anvil.",
             }
 
             registry.save_character("eldric_ironforge", character_data)
@@ -204,7 +196,7 @@ class TestCharacterLoader:
             character = loader.load_character("eldric_ironforge")
 
             assert character.name == "Eldric Ironforge"
-            assert character.role == "Village Blacksmith"
+            assert character.tagline == "Village Blacksmith"
             assert "30 years" in character.backstory
             assert "Gruff exterior" in character.personality
             assert len(character.relationships) == 2
@@ -222,3 +214,34 @@ class TestCharacterLoader:
             # Test with None (default)
             loader2 = CharacterLoader()
             assert loader2.registry is not None
+
+    def test_list_character_summaries_empty_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            loader = CharacterLoader(Path(temp_dir))
+            result = loader.list_character_summaries()
+            assert result == []
+
+    def test_list_character_summaries_with_characters(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry = CharacterRegistry(Path(temp_dir))
+
+            # Add test characters to database
+            registry.save_character("alice", {"name": "Alice", "tagline": "Adventurer", "backstory": "Test"})
+            registry.save_character("bob", {"name": "Bob", "tagline": "Merchant", "backstory": "Test"})
+
+            loader = CharacterLoader(Path(temp_dir))
+            result = loader.list_character_summaries()
+
+            assert len(result) == 2
+            assert result[0].name == "Alice"
+            assert result[0].tagline == "Adventurer"
+            assert result[1].name == "Bob"
+            assert result[1].tagline == "Merchant"
+            # Should be sorted by name
+            assert result[0].name < result[1].name
+
+    def test_list_character_summaries_nonexistent_directory(self):
+        # Database handles non-existent directories gracefully
+        loader = CharacterLoader(Path("/nonexistent/path"))
+        result = loader.list_character_summaries()
+        assert result == []

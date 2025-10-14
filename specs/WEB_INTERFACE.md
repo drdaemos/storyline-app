@@ -173,7 +173,6 @@ State Management:
 characters: ref([]) - loaded from API
 sessions: ref([]) - loaded from API
 selectedCharacter: ref(null)
-showSettings: ref(false)
 
 Key Methods:
 

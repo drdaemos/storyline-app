@@ -19,38 +19,45 @@ class TestPromptProcessorFactory:
         processor = PromptProcessorFactory.create_processor("claude")
         assert isinstance(processor, ClaudePromptProcessor)
 
-    @patch.dict('os.environ', {'CO_API_KEY': 'test_key'})
+    @patch.dict("os.environ", {"CO_API_KEY": "test_key"})
     def test_create_cohere_processor(self) -> None:
         """Test creating Cohere processor."""
         processor = PromptProcessorFactory.create_processor("cohere")
         assert isinstance(processor, CoherePromptProcessor)
 
-    @patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'})
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"})
     def test_create_gpt_processor(self) -> None:
         """Test creating GPT processor."""
         processor = PromptProcessorFactory.create_processor("gpt")
         assert isinstance(processor, OpenAiPromptProcessor)
 
-    @patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test_key'})
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
     def test_create_grok_processor(self) -> None:
         """Test creating Grok processor."""
         processor = PromptProcessorFactory.create_processor("grok")
         assert isinstance(processor, OpenRouterPromptProcessor)
         assert processor.model == "x-ai/grok-4-fast"
 
-    @patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test_key'})
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
     def test_create_deepseek_processor(self) -> None:
         """Test creating DeepSeek processor."""
         processor = PromptProcessorFactory.create_processor("deepseek")
         assert isinstance(processor, OpenRouterPromptProcessor)
         assert processor.model == "deepseek/deepseek-v3.1-terminus"
 
-    @patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test_key'})
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
     def test_create_google_processor(self) -> None:
         """Test creating Google processor."""
         processor = PromptProcessorFactory.create_processor("google")
         assert isinstance(processor, OpenRouterPromptProcessor)
         assert processor.model == "google/gemini-2.5-flash"
+
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
+    def test_create_ling_processor(self) -> None:
+        """Test creating Ling processor."""
+        processor = PromptProcessorFactory.create_processor("ling")
+        assert isinstance(processor, OpenRouterPromptProcessor)
+        assert processor.model == "inclusionai/ling-1t"
 
     def test_case_insensitive_processor_creation(self) -> None:
         """Test that processor creation is case insensitive."""
@@ -65,7 +72,7 @@ class TestPromptProcessorFactory:
         with pytest.raises(ValueError, match="Unsupported processor type: unknown"):
             PromptProcessorFactory.create_processor("unknown")
 
-    @patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test_key'})
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
     def test_get_default_backup_processor(self) -> None:
         """Test getting default backup processor."""
         processor = PromptProcessorFactory.get_default_backup_processor()
@@ -75,14 +82,10 @@ class TestPromptProcessorFactory:
     def test_get_available_processor_types(self) -> None:
         """Test getting list of available processor types."""
         types = PromptProcessorFactory.get_available_processor_types()
-        expected_types = ["cohere", "claude", "gpt", "grok", "deepseek", "gpt-oss", "google"]
+        expected_types = ["cohere", "claude", "gpt", "grok", "deepseek", "gpt-oss", "google", "ling"]
         assert types == expected_types
 
-    @patch.dict('os.environ', {
-        'OPENROUTER_API_KEY': 'test_key',
-        'CO_API_KEY': 'test_key',
-        'OPENAI_API_KEY': 'test_key'
-    })
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key", "CO_API_KEY": "test_key", "OPENAI_API_KEY": "test_key"})
     def test_all_listed_types_can_be_created(self) -> None:
         """Test that all listed processor types can actually be created."""
         types = PromptProcessorFactory.get_available_processor_types()

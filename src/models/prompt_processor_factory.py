@@ -39,6 +39,8 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="openai/gpt-oss-120b")
             case "google":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
+            case "ling":
+                return OpenRouterPromptProcessor(model="inclusionai/ling-1t")
             case _:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
 
@@ -60,4 +62,4 @@ class PromptProcessorFactory:
         Returns:
             List of supported processor type names
         """
-        return ["cohere", "claude", "gpt", "grok", "deepseek", "gpt-oss", "google"]
+        return ["cohere", "claude", "gpt", "grok", "deepseek", "gpt-oss", "google", "ling"]

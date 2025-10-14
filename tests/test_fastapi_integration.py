@@ -1,3 +1,4 @@
+import os
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,18 +14,23 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def set_env():
+    os.environ["AUTH_ENABLED"] = "false"
+
+
 @pytest.fixture
 def mock_character():
     """Create mock character."""
     return Character(
         name="TestBot",
-        role="Assistant",
+        tagline="Assistant",
         backstory="Test character for API testing",
         personality="Helpful and direct",
         appearance="Digital assistant",
         relationships={"user": "helper"},
         key_locations=["digital space"],
-        setting_description="Test digital environment"
+        setting_description="Test digital environment",
     )
 
 
@@ -52,24 +58,26 @@ class TestFastAPIEndpoints:
         assert data["summary_memory"] in ["ok", "error"]
         assert data["status"] in ["healthy", "unhealthy"]
 
-    @patch('src.fastapi_server.character_loader')
+    @patch("src.fastapi_server.character_loader")
     def test_list_characters(self, mock_loader, client):
         """Test character listing endpoint."""
-        mock_loader.list_characters.return_value = ["TestBot", "Alice"]
+        from src.models.api_models import CharacterSummary
+
+        mock_loader.list_character_summaries.return_value = [CharacterSummary(id="testbot", name="TestBot", tagline="Test Assistant"), CharacterSummary(id="alice", name="Alice", tagline="Adventurer")]
 
         response = client.get("/api/characters")
         assert response.status_code == 200
-        assert response.json() == ["TestBot", "Alice"]
+        assert response.json() == [{"id": "testbot", "name": "TestBot", "tagline": "Test Assistant"}, {"id": "alice", "name": "Alice", "tagline": "Adventurer"}]
 
-    @patch('src.fastapi_server.character_loader')
+    @patch("src.fastapi_server.character_loader")
     def test_list_characters_error(self, mock_loader, client):
         """Test character listing endpoint with error."""
-        mock_loader.list_characters.side_effect = Exception("Test error")
+        mock_loader.list_character_summaries.side_effect = Exception("Test error")
 
         response = client.get("/api/characters")
         assert response.status_code == 500
 
-    @patch('src.fastapi_server.character_loader')
+    @patch("src.fastapi_server.character_loader")
     def test_get_character_info(self, mock_loader, client, mock_character):
         """Test getting character info."""
         mock_loader.get_character_info.return_value = mock_character
@@ -78,10 +86,10 @@ class TestFastAPIEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "TestBot"
-        assert data["role"] == "Assistant"
+        assert data["tagline"] == "Assistant"
         assert data["backstory"] == "Test character for API testing"
 
-    @patch('src.fastapi_server.character_loader')
+    @patch("src.fastapi_server.character_loader")
     def test_get_character_info_not_found(self, mock_loader, client):
         """Test getting info for non-existent character."""
         mock_loader.get_character_info.return_value = None
@@ -111,9 +119,9 @@ class TestFastAPIEndpoints:
 
 
 class TestInteractEndpoint:
-    @patch('src.fastapi_server.character_loader')
-    @patch('src.fastapi_server.CharacterResponderDependencies')
-    @patch('src.fastapi_server.CharacterResponder')
+    @patch("src.fastapi_server.character_loader")
+    @patch("src.fastapi_server.CharacterResponderDependencies")
+    @patch("src.fastapi_server.CharacterResponder")
     def test_interact_success(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
         """Test successful interaction with character."""
         # Setup mocks
@@ -132,11 +140,7 @@ class TestInteractEndpoint:
         mock_responder_class.return_value = mock_responder
 
         # Make request
-        response = client.post("/api/interact", json={
-            "character_name": "TestBot",
-            "user_message": "Hello!",
-            "processor_type": "google"
-        })
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
@@ -147,31 +151,30 @@ class TestInteractEndpoint:
         assert '"type": "session"' in content
         assert '"type": "complete"' in content
 
-    @patch('src.fastapi_server.character_loader')
+    @patch("src.fastapi_server.character_loader")
     def test_interact_character_not_found(self, mock_loader, client):
         """Test interaction with non-existent character."""
         mock_loader.load_character.return_value = None
 
-        response = client.post("/api/interact", json={
-            "character_name": "NonExistent",
-            "user_message": "Hello!",
-            "processor_type": "google"
-        })
+        response = client.post("/api/interact", json={"character_name": "NonExistent", "user_message": "Hello!", "processor_type": "google"})
 
         assert response.status_code == 404
 
     def test_interact_invalid_request(self, client):
         """Test interaction with invalid request data."""
-        response = client.post("/api/interact", json={
-            "user_message": "Hello!"
-            # Missing required character_name
-        })
+        response = client.post(
+            "/api/interact",
+            json={
+                "user_message": "Hello!"
+                # Missing required character_name
+            },
+        )
 
         assert response.status_code == 422  # Validation error
 
-    @patch('src.fastapi_server.character_loader')
-    @patch('src.fastapi_server.CharacterResponderDependencies')
-    @patch('src.fastapi_server.CharacterResponder')
+    @patch("src.fastapi_server.character_loader")
+    @patch("src.fastapi_server.CharacterResponderDependencies")
+    @patch("src.fastapi_server.CharacterResponder")
     def test_interact_with_session_id(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
         """Test interaction with specific session ID."""
         # Setup mocks
@@ -190,12 +193,7 @@ class TestInteractEndpoint:
         mock_responder_class.return_value = mock_responder
 
         # First request to create session
-        response1 = client.post("/api/interact", json={
-            "character_name": "TestBot",
-            "user_message": "Hello!",
-            "session_id": "test-session-123",
-            "processor_type": "google"
-        })
+        response1 = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-123", "processor_type": "google"})
 
         assert response1.status_code == 200
         content1 = response1.text
@@ -203,9 +201,9 @@ class TestInteractEndpoint:
 
 
 class TestSessionManagement:
-    @patch('src.fastapi_server.character_loader')
-    @patch('src.fastapi_server.CharacterResponderDependencies')
-    @patch('src.fastapi_server.CharacterResponder')
+    @patch("src.fastapi_server.character_loader")
+    @patch("src.fastapi_server.CharacterResponderDependencies")
+    @patch("src.fastapi_server.CharacterResponder")
     def test_session_creation_and_listing(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
         """Test session creation and listing."""
         # Setup mocks
@@ -220,12 +218,7 @@ class TestSessionManagement:
         mock_responder_class.return_value = mock_responder
 
         # Create interaction to establish session
-        response = client.post("/api/interact", json={
-            "character_name": "TestBot",
-            "user_message": "Hello!",
-            "session_id": "test-session-456",
-            "processor_type": "google"
-        })
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-456", "processor_type": "google"})
 
         assert response.status_code == 200
 
@@ -260,44 +253,31 @@ class TestRequestValidation:
     def test_interact_request_optional_fields(self, client):
         """Test optional fields in interact request."""
         # Mock the character loader to avoid actual file system access
-        with patch('src.fastapi_server.character_loader') as mock_loader:
+        with patch("src.fastapi_server.character_loader") as mock_loader:
             mock_loader.load_character.return_value = None  # Will cause 404
 
-            response = client.post("/api/interact", json={
-                "character_name": "TestBot",
-                "user_message": "Hello!",
-                "session_id": "custom-session",
-                "processor_type": "openai"
-            })
+            response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "custom-session", "processor_type": "openai"})
 
             assert response.status_code == 404  # Character not found, but validation passed
 
 
 class TestErrorHandling:
-    @patch('src.fastapi_server.character_loader')
+    @patch("src.fastapi_server.character_loader")
     def test_character_loading_error(self, mock_loader, client):
         """Test error handling when character loading fails."""
         mock_loader.load_character.side_effect = Exception("File system error")
 
-        response = client.post("/api/interact", json={
-            "character_name": "TestBot",
-            "user_message": "Hello!",
-            "processor_type": "google"
-        })
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
 
         assert response.status_code == 500
 
-    @patch('src.fastapi_server.character_loader')
-    @patch('src.fastapi_server.CharacterResponderDependencies')
+    @patch("src.fastapi_server.character_loader")
+    @patch("src.fastapi_server.CharacterResponderDependencies")
     def test_dependencies_creation_error(self, mock_deps_class, mock_loader, client, mock_character):
         """Test error handling when dependencies creation fails."""
         mock_loader.load_character.return_value = mock_character
         mock_deps_class.create_default.side_effect = Exception("Dependencies error")
 
-        response = client.post("/api/interact", json={
-            "character_name": "TestBot",
-            "user_message": "Hello!",
-            "processor_type": "google"
-        })
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
 
         assert response.status_code == 500

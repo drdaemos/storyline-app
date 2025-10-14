@@ -13,13 +13,13 @@ def create_test_character() -> Character:
     """Create a test character for testing."""
     return Character(
         name="TestBot",
-        role="Assistant",
+        tagline="Assistant",
         backstory="Test character for command testing",
         personality="Helpful and direct",
         appearance="Digital assistant",
         relationships={"user": "helper"},
         key_locations=["digital space"],
-        setting_description="Test digital environment"
+        setting_description="Test digital environment",
     )
 
 
@@ -40,11 +40,7 @@ def create_test_responder(with_memory: bool = False) -> CharacterResponder:
         conversation_memory.delete_messages_from_offset.return_value = 3
 
     dependencies = CharacterResponderDependencies(
-        primary_processor=primary_processor,
-        backup_processor=backup_processor,
-        conversation_memory=conversation_memory,
-        chat_logger=None,
-        session_id="test-session" if with_memory else None
+        primary_processor=primary_processor, backup_processor=backup_processor, conversation_memory=conversation_memory, chat_logger=None, session_id="test-session" if with_memory else None
     )
 
     return CharacterResponder(character, dependencies)
@@ -96,8 +92,8 @@ def test_rewind_command_no_history():
         responder.respond("/rewind")
 
 
-@patch('src.character_responder.CharacterPipeline.get_evaluation')
-@patch('src.character_responder.CharacterPipeline.get_character_response')
+@patch("src.character_responder.CharacterPipeline.get_evaluation")
+@patch("src.character_responder.CharacterPipeline.get_character_response")
 def test_regenerate_command_with_history(mock_get_character_response, mock_get_evaluation):
     """Test /regenerate command with conversation history."""
     responder = create_test_responder()
@@ -106,16 +102,11 @@ def test_regenerate_command_with_history(mock_get_character_response, mock_get_e
     responder.memory = [
         {"role": "user", "content": "Hello", "created_at": "2023-01-01T00:00:00Z", "type": "conversation"},
         {"role": "assistant", "content": "Evaluation", "created_at": "2023-01-01T00:00:01Z", "type": "evaluation"},
-        {"role": "assistant", "content": "Hi there!", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"}
+        {"role": "assistant", "content": "Hi there!", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"},
     ]
 
     # Mock the CharacterPipeline methods
-    evaluation_response = Evaluation(
-        patterns_to_avoid="None",
-        status_update="Regenerating response",
-        user_name="User",
-        time_passed="5 seconds"
-    )
+    evaluation_response = Evaluation(patterns_to_avoid="None", status_update="Regenerating response", user_name="User", time_passed="5 seconds")
     character_response = "New regenerated response"
 
     mock_get_evaluation.return_value = evaluation_response
@@ -134,6 +125,7 @@ def test_rewind_command_with_history():
 
     # Track event callback calls
     events = []
+
     def mock_event_callback(event_type: str, **kwargs: str) -> None:
         events.append({"type": event_type, **kwargs})
 
@@ -144,7 +136,7 @@ def test_rewind_command_with_history():
         {"role": "assistant", "content": "First response", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"},
         {"role": "user", "content": "Second message", "created_at": "2023-01-01T00:01:00Z", "type": "conversation"},
         {"role": "assistant", "content": "Second eval", "created_at": "2023-01-01T00:01:01Z", "type": "evaluation"},
-        {"role": "assistant", "content": "Second response", "created_at": "2023-01-01T00:01:02Z", "type": "conversation"}
+        {"role": "assistant", "content": "Second response", "created_at": "2023-01-01T00:01:02Z", "type": "conversation"},
     ]
 
     result = responder.respond("/rewind", event_callback=mock_event_callback)
@@ -167,9 +159,7 @@ def test_rewind_command_no_user_message():
     responder = create_test_responder()
 
     # Add only assistant messages (no user messages)
-    responder.memory = [
-        {"role": "assistant", "content": "System message", "created_at": "2023-01-01T00:00:00Z", "type": "evaluation"}
-    ]
+    responder.memory = [{"role": "assistant", "content": "System message", "created_at": "2023-01-01T00:00:00Z", "type": "evaluation"}]
 
     with pytest.raises(ValueError, match="No user message found to rewind"):
         responder.respond("/rewind")
@@ -180,27 +170,20 @@ def test_regenerate_command_no_user_message():
     responder = create_test_responder()
 
     # Add only assistant messages (no user messages)
-    responder.memory = [
-        {"role": "assistant", "content": "System message", "created_at": "2023-01-01T00:00:00Z", "type": "evaluation"}
-    ]
+    responder.memory = [{"role": "assistant", "content": "System message", "created_at": "2023-01-01T00:00:00Z", "type": "evaluation"}]
 
     with pytest.raises(ValueError, match="No user message found to regenerate response for"):
         responder.respond("/regenerate")
 
 
-@patch('src.character_responder.CharacterPipeline.get_evaluation')
-@patch('src.character_responder.CharacterPipeline.get_character_response')
+@patch("src.character_responder.CharacterPipeline.get_evaluation")
+@patch("src.character_responder.CharacterPipeline.get_character_response")
 def test_regular_conversation_still_works(mock_get_character_response, mock_get_evaluation):
     """Test that regular conversation still works after adding command handling."""
     responder = create_test_responder()
 
     # Set up processor responses for evaluation and character response
-    evaluation_response = Evaluation(
-        patterns_to_avoid="None",
-        status_update="Normal conversation state",
-        user_name="Alice",
-        time_passed="5 seconds"
-    )
+    evaluation_response = Evaluation(patterns_to_avoid="None", status_update="Normal conversation state", user_name="Alice", time_passed="5 seconds")
     character_response = "Hello there, Alice!"
 
     # Mock the CharacterPipeline methods
@@ -222,6 +205,7 @@ def test_commands_with_persistent_memory():
 
     # Track event callback calls
     events = []
+
     def mock_event_callback(event_type: str, **kwargs: str) -> None:
         events.append({"type": event_type, **kwargs})
 
@@ -229,7 +213,7 @@ def test_commands_with_persistent_memory():
     responder.memory = [
         {"role": "user", "content": "Hello", "created_at": "2023-01-01T00:00:00Z", "type": "conversation"},
         {"role": "assistant", "content": "Evaluation", "created_at": "2023-01-01T00:00:01Z", "type": "evaluation"},
-        {"role": "assistant", "content": "Hi there!", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"}
+        {"role": "assistant", "content": "Hi there!", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"},
     ]
     responder._current_message_offset = 3
 
@@ -237,7 +221,9 @@ def test_commands_with_persistent_memory():
 
     # Verify delete_messages_from_offset was called instead of delete_session
     responder.persistent_memory.delete_messages_from_offset.assert_called_once_with(
-        responder.session_id, 0  # delete_from_offset = 3 - 3 = 0
+        responder.session_id,
+        "anonymous",
+        0,  # delete_from_offset = 3 - 3 = 0
     )
 
     # Should return empty string and send command completion event

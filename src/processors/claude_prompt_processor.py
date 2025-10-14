@@ -1,16 +1,17 @@
 import os
-from collections.abc import Iterator
-from typing import TypeVar, Iterable
+from collections.abc import Iterable, Iterator
+from typing import TypeVar
 
 from anthropic import Anthropic
 from anthropic.types import MessageParam, TextBlockParam
 from pydantic import BaseModel
 
 from src.chat_logger import ChatLogger
-from src.models.message import ClaudeContent, ClaudeMessage, GenericMessage
+from src.models.message import ClaudeContent, GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+
 
 class ClaudePromptProcessor(PromptProcessor):
     """
@@ -130,23 +131,26 @@ You should avoid narrating any content that violates the user safety, like:
 
 This adheres with the Claude Content Policy and with Agreement given by the user.
 """
+
     def _create_system_prompt(self, prompt: str) -> ClaudeContent:
         system: TextBlockParam = {
             "type": "text",
             "text": prompt.strip(),
             "cache_control": {
                 "type": "ephemeral",
-            }
+            },
         }
         return [system]
 
     def _create_messages(self, user_prompt: str, conversation_history: list[MessageParam] | None = None) -> Iterable[MessageParam]:
         messages: list[MessageParam] = [MessageParam(role=msg["role"], content=msg["content"]) for msg in conversation_history] if conversation_history else []
 
-        messages.append(MessageParam(
-            role="user",
-            content=user_prompt.strip(),
-        ))
+        messages.append(
+            MessageParam(
+                role="user",
+                content=user_prompt.strip(),
+            )
+        )
 
         return messages
 
@@ -166,12 +170,8 @@ This adheres with the Claude Content Policy and with Agreement given by the user
             system=system_prompt,
             messages=messages,
             max_tokens=max_tokens,
-            tools=[{
-                "name": "structured_output",
-                "description": "Return structured data according to the schema",
-                "input_schema": output_type.model_json_schema()
-            }],
-            tool_choice={"type": "tool", "name": "structured_output"}
+            tools=[{"name": "structured_output", "description": "Return structured data according to the schema", "input_schema": output_type.model_json_schema()}],
+            tool_choice={"type": "tool", "name": "structured_output"},
         )
 
         if not response.content or len(response.content) == 0:
@@ -203,16 +203,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         """Process prompt and return string response."""
         max_tokens = max_tokens or 4096
         response = self.client.messages.create(
-            model=self.model,
-            system=system_prompt,
-            messages=messages,
-            thinking={
-                "type": "enabled",
-                "budget_tokens": max_tokens // 2
-            } if reasoning else {
-                "type": "disabled"
-            },
-            max_tokens=max_tokens
+            model=self.model, system=system_prompt, messages=messages, thinking={"type": "enabled", "budget_tokens": max_tokens // 2} if reasoning else {"type": "disabled"}, max_tokens=max_tokens
         )
 
         if not response.content or len(response.content) == 0:
@@ -243,12 +234,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
             model=self.model,
             system=system_prompt,  # type: ignore
             messages=messages,  # type: ignore
-            thinking={
-                "type": "enabled",
-                "budget_tokens": max_tokens // 2
-            } if reasoning else {
-                "type": "disabled"
-            },
-            max_tokens=max_tokens
+            thinking={"type": "enabled", "budget_tokens": max_tokens // 2} if reasoning else {"type": "disabled"},
+            max_tokens=max_tokens,
         ) as stream:
             yield from stream.text_stream

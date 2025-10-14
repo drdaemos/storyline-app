@@ -36,7 +36,7 @@ def chat(
             for char_name in characters:
                 char_info = loader.get_character_info(char_name)
                 if char_info:
-                    click.echo(f"  - {char_info.name} - {char_info.role}")
+                    click.echo(f"  - {char_info.name} - {char_info.tagline}")
                 else:
                     click.echo(f"  - {char_name}")
         else:
@@ -112,13 +112,7 @@ def serve(host: str, port: int, reload: bool) -> None:
         console.print(f"[blue]Web interface: http://{host}:{port}/[/blue]")
         console.print(f"[blue]API docs: http://{host}:{port}/docs[/blue]")
 
-        uvicorn.run(
-            "src.fastapi_server:app",
-            host=host,
-            port=port,
-            reload=reload,
-            log_level="info"
-        )
+        uvicorn.run("src.fastapi_server:app", host=host, port=port, reload=reload, log_level="info")
     except ImportError:
         console = Console()
         console.print("[red]FastAPI server dependencies not installed. Please install with: pip install fastapi uvicorn[/red]")

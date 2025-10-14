@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import type {
+  CharacterSummary,
   SessionInfo,
   InteractRequest,
   CreateCharacterRequest,
@@ -11,6 +12,7 @@ import type {
   StartSessionRequest,
   StartSessionResponse
 } from '@/types'
+import { useAuth } from './useAuth'
 
 interface ApiError {
   message: string
@@ -20,6 +22,7 @@ interface ApiError {
 export function useApi() {
   const loading = ref(false)
   const error: Ref<ApiError | null> = ref(null)
+  const { getAuthToken } = useAuth()
 
   const handleResponse = async (response: Response) => {
     if (!response.ok) {
@@ -37,12 +40,22 @@ export function useApi() {
     error.value = null
 
     try {
+      // Get auth token if available
+      const token = await getAuthToken()
+
+      // Build headers with optional Authorization header
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string> || {})
+      }
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`
+      }
+
       const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
+        ...options,
+        headers
       })
 
       const data = await handleResponse(response)
@@ -70,8 +83,8 @@ export function useApi() {
     }
   }
 
-  const getCharacters = async (): Promise<string[]> => {
-    return makeRequest<string[]>('/api/characters')
+  const getCharacters = async (): Promise<CharacterSummary[]> => {
+    return makeRequest<CharacterSummary[]>('/api/characters')
   }
 
   const getCharacterInfo = async (name: string): Promise<Record<string, string>> => {
@@ -102,18 +115,28 @@ export function useApi() {
     })
   }
 
-  const handleInteraction = (payload: InteractRequest, retryAttempt = 0): EventSource => {
+  const handleInteraction = async (payload: InteractRequest, retryAttempt = 0): Promise<EventSource> => {
     const eventSource = new EventSource('/api/interact', {
 
     })
+
+    // Get auth token if available
+    const token = await getAuthToken()
+
+    // Build headers with optional Authorization header
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
 
     // Since EventSource doesn't support POST directly, we need to use a different approach
     // We'll create the EventSource after making a POST request
     fetch('/api/interact', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(payload)
     }).then(response => {
       if (!response.ok) {

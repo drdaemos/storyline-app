@@ -7,11 +7,11 @@ from pathlib import Path
 
 
 # Test the integration
-def test_character_integration():
+def test_character_integration() -> None:
     # Create a temporary directory for testing
     with tempfile.TemporaryDirectory() as temp_dir:
         # Set environment for test database
-        os.environ['DB_NAME'] = 'test_characters.db'
+        os.environ["DB_NAME"] = "test_characters.db"
 
         try:
             from src.character_loader import CharacterLoader
@@ -22,13 +22,7 @@ def test_character_integration():
             loader = CharacterLoader(memory_dir=Path(temp_dir))
 
             # Test character data
-            character_data = {
-                "name": "Test Hero",
-                "role": "Adventurer",
-                "backstory": "A brave hero on a quest",
-                "personality": "Bold and fearless",
-                "appearance": "Tall with a sword"
-            }
+            character_data = {"name": "Test Hero", "tagline": "Adventurer", "backstory": "A brave hero on a quest", "personality": "Bold and fearless", "appearance": "Tall with a sword"}
 
             # Create character file
             filename = manager.create_character_file(character_data)
@@ -36,7 +30,7 @@ def test_character_integration():
 
             # Load character from database
             character = loader.load_character(filename)
-            print(f"✓ Loaded character: {character.name} - {character.role}")
+            print(f"✓ Loaded character: {character.name} - {character.tagline}")
 
             # List characters
             characters = loader.list_characters()
@@ -50,8 +44,9 @@ def test_character_integration():
 
         finally:
             # Clean up environment
-            if 'DB_NAME' in os.environ:
-                del os.environ['DB_NAME']
+            if "DB_NAME" in os.environ:
+                del os.environ["DB_NAME"]
+
 
 if __name__ == "__main__":
     test_character_integration()

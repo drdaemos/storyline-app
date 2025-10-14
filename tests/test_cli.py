@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import yaml
 from click.testing import CliRunner
 
 from src.character_loader import CharacterLoader
@@ -22,13 +21,13 @@ class TestInteractiveChatCLI:
         cli = InteractiveChatCLI()
         cli.current_character = Character(
             name="Test Character",
-            role="Test Role",
+            tagline="Test Role",
             backstory="Test backstory",
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
             key_locations=["Test Location"],
-            setting_description="Test environment"
+            setting_description="Test environment",
         )
 
         # Test without responder (should return no responder message)
@@ -42,13 +41,7 @@ class TestInteractiveChatCLI:
             # Create character data and save to database
             from src.memory.character_registry import CharacterRegistry
 
-            character_data = {
-                "name": "Test Character",
-                "role": "Test Role",
-                "backstory": "Test backstory",
-                "appearance": "Test appearance",
-                "personality": "Test personality"
-            }
+            character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory", "appearance": "Test appearance", "personality": "Test personality"}
 
             # Save character to database
             registry = CharacterRegistry(Path(temp_dir))
@@ -65,26 +58,26 @@ class TestInteractiveChatCLI:
 
             assert character is not None
             assert character.name == "Test Character"
-            assert character.role == "Test Role"
+            assert character.tagline == "Test Role"
 
     def test_display_character_info(self):
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
-            role="Test Role",
+            tagline="Test Role",
             backstory="Test backstory",
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
             key_locations=["Test Location"],
-            setting_description="Test environment"
+            setting_description="Test environment",
         )
 
         with patch.object(cli.console, "print") as mock_print:
             cli.display_character_info(character)
             mock_print.assert_called_once()
 
-    @patch('src.interactive_chat.ConversationMemory')
+    @patch("src.interactive_chat.ConversationMemory")
     def test_setup_character_session_no_existing_sessions(self, mock_memory_class: Mock):
         """Test setting up character session when no existing sessions exist."""
         # Mock responder for session checking
@@ -93,13 +86,13 @@ class TestInteractiveChatCLI:
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
-            role="Test Role",
+            tagline="Test Role",
             backstory="Test backstory",
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
             key_locations=["Test Location"],
-            setting_description="Test environment"
+            setting_description="Test environment",
         )
 
         with patch.object(cli.console, "print"):
@@ -107,41 +100,23 @@ class TestInteractiveChatCLI:
 
         assert result.get_last_character_response() is None
 
-    @patch('src.interactive_chat.ConversationMemory')
-    @patch('src.models.character_responder_dependencies.ConversationMemory')
+    @patch("src.interactive_chat.ConversationMemory")
+    @patch("src.models.character_responder_dependencies.ConversationMemory")
     def test_setup_character_session_continue_existing(self, mock_deps_memory_class: Mock, mock_memory_class: Mock):
         """Test setting up character session when choosing to continue existing session."""
         # Create a mock memory instance
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         mock_memory_instance = Mock()
-        mock_memory_instance.get_character_sessions.return_value = [{
-            "session_id": 'test-session',
-            "last_message_time": '2023-01-01',
-            "message_count": 5
-        }]
-        mock_memory_instance.get_recent_messages.return_value = [{
-            "role": 'user',
-            "content": 'test',
-            "type": 'conversation',
-            "created_at": datetime.now(UTC).isoformat()
-        },{
-            "role": 'assistant',
-            "content": 'response',
-            "type": 'conversation',
-            "created_at": datetime.now(UTC).isoformat()
-        }]
-        mock_memory_instance.get_session_messages.return_value = [{
-            "role": 'user',
-            "content": 'test',
-            "type": 'conversation',
-            "created_at": datetime.now(UTC).isoformat()
-        },{
-            "role": 'assistant',
-            "content": 'response',
-            "type": 'conversation',
-            "created_at": datetime.now(UTC).isoformat()
-        }]
+        mock_memory_instance.get_character_sessions.return_value = [{"session_id": "test-session", "last_message_time": "2023-01-01", "message_count": 5}]
+        mock_memory_instance.get_recent_messages.return_value = [
+            {"role": "user", "content": "test", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+            {"role": "assistant", "content": "response", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+        ]
+        mock_memory_instance.get_session_messages.return_value = [
+            {"role": "user", "content": "test", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+            {"role": "assistant", "content": "response", "type": "conversation", "created_at": datetime.now(UTC).isoformat()},
+        ]
 
         # Mock both ConversationMemory constructors to return the same mock instance
         mock_memory_class.return_value = mock_memory_instance
@@ -150,41 +125,30 @@ class TestInteractiveChatCLI:
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
-            role="Test Role",
+            tagline="Test Role",
             backstory="Test backstory",
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
             key_locations=["Test Location"],
-            setting_description="Test environment"
+            setting_description="Test environment",
         )
 
         # Mock the session choice to return "continue"
-        with patch.object(cli.console, "print"), \
-             patch.object(cli, '_prompt_session_choice', return_value='continue'):
+        with patch.object(cli.console, "print"), patch.object(cli, "_prompt_session_choice", return_value="continue"):
             result = cli._setup_character_session(character)
 
         assert result.get_last_character_response() == "response"
 
-    @patch('src.interactive_chat.ConversationMemory')
-    @patch('src.models.character_responder_dependencies.ConversationMemory')
-    @patch('src.models.character_responder_dependencies.CharacterResponderDependencies.create_default')
+    @patch("src.interactive_chat.ConversationMemory")
+    @patch("src.models.character_responder_dependencies.ConversationMemory")
+    @patch("src.models.character_responder_dependencies.CharacterResponderDependencies.create_default")
     def test_setup_character_session_start_new(self, mock_create_default: Mock, mock_deps_memory_class: Mock, mock_memory_class: Mock):
         """Test setting up character session when choosing to start new session."""
         # Create a mock memory instance
         mock_memory_instance = Mock()
-        mock_memory_instance.get_character_sessions.return_value = [{
-            "session_id": 'test-session',
-            "last_message_time": '2023-01-01',
-            "message_count": 5
-        }]
-        mock_memory_instance.get_recent_messages.return_value = [{
-            "role": 'user',
-            "content": 'test'
-        },{
-            "role": 'assistant',
-            "content": 'response'
-        }]
+        mock_memory_instance.get_character_sessions.return_value = [{"session_id": "test-session", "last_message_time": "2023-01-01", "message_count": 5}]
+        mock_memory_instance.get_recent_messages.return_value = [{"role": "user", "content": "test"}, {"role": "assistant", "content": "response"}]
 
         # Create a separate mock memory instance for dependencies (after clear)
         mock_deps_memory_instance = Mock()
@@ -209,17 +173,16 @@ class TestInteractiveChatCLI:
         cli = InteractiveChatCLI()
         character = Character(
             name="Test Character",
-            role="Test Role",
+            tagline="Test Role",
             backstory="Test backstory",
             personality="Independent, secure, organized character. Extroverted with balanced approach.",
             appearance="Test appearance",
             relationships={"user": "Test relationship"},
             key_locations=["Test Location"],
-            setting_description="Test environment"
+            setting_description="Test environment",
         )
 
-        with patch.object(cli.console, "print"), \
-             patch.object(cli, '_prompt_session_choice', return_value='new'):
+        with patch.object(cli.console, "print"), patch.object(cli, "_prompt_session_choice", return_value="new"):
             result = cli._setup_character_session(character)
 
         assert result.get_last_character_response() is None
@@ -240,7 +203,7 @@ class TestInteractiveChatCLI:
         # Should print header + 3 sessions + "... and X more" message
         assert mock_print.call_count >= 4
 
-    @patch('src.interactive_chat.Prompt.ask')
+    @patch("src.interactive_chat.Prompt.ask")
     def test_prompt_session_choice_continue(self, mock_ask):
         """Test prompting for session choice - continue option."""
         mock_ask.return_value = "1"
@@ -252,7 +215,7 @@ class TestInteractiveChatCLI:
 
         assert choice == "continue"
 
-    @patch('src.interactive_chat.Prompt.ask')
+    @patch("src.interactive_chat.Prompt.ask")
     def test_prompt_session_choice_new(self, mock_ask):
         """Test prompting for session choice - new option."""
         mock_ask.return_value = "2"
@@ -264,19 +227,12 @@ class TestInteractiveChatCLI:
 
         assert choice == "new"
 
-    @patch('src.interactive_chat.Prompt.ask')
+    @patch("src.interactive_chat.Prompt.ask")
     def test_prompt_session_choice_various_inputs(self, mock_ask):
         """Test prompting for session choice with various valid inputs."""
         cli = InteractiveChatCLI()
 
-        test_cases = [
-            ("continue", "continue"),
-            ("c", "continue"),
-            ("new", "new"),
-            ("n", "new"),
-            ("1", "continue"),
-            ("2", "new")
-        ]
+        test_cases = [("continue", "continue"), ("c", "continue"), ("new", "new"), ("n", "new"), ("1", "continue"), ("2", "new")]
 
         for input_val, expected in test_cases:
             mock_ask.return_value = input_val

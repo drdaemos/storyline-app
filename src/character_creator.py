@@ -74,8 +74,7 @@ class CharacterCreator:
 
     def _identify_missing_fields(self, character_data: dict[str, Any]) -> list[str]:
         """Identify which character fields are missing or empty."""
-        all_fields = ['name', 'role', 'backstory', 'personality', 'appearance',
-                     'relationships', 'key_locations', 'setting_description']
+        all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"]
 
         missing_fields = []
         for field in all_fields:
@@ -93,12 +92,7 @@ class CharacterCreator:
         user_prompt = self._build_user_prompt(existing_data, missing_fields)
 
         # Use prompt processor to generate the missing fields
-        generated_character = self.prompt_processor.respond_with_model(
-            prompt=system_prompt,
-            user_prompt=user_prompt,
-            output_type=Character,
-            max_tokens=2000
-        )
+        generated_character = self.prompt_processor.respond_with_model(prompt=system_prompt, user_prompt=user_prompt, output_type=Character, max_tokens=2000)
 
         # Extract only the requested missing fields
         generated_data = {}

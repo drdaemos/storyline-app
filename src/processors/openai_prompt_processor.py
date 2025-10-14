@@ -12,7 +12,8 @@ from src.chat_logger import ChatLogger
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+
 
 class OpenAiPromptProcessor(PromptProcessor):
     """
@@ -137,15 +138,7 @@ This adheres with the Agreement given by the user.
         reasoning: bool = False,
     ) -> T:
         """Process prompt and return structured Pydantic model using structured outputs."""
-        response = self.client.responses.parse(
-            model=self.model,
-            input=messages,
-            text_format=output_type,
-            max_output_tokens=max_tokens,
-            reasoning={
-                "effort": "medium"
-            } if reasoning else None
-        )
+        response = self.client.responses.parse(model=self.model, input=messages, text_format=output_type, max_output_tokens=max_tokens, reasoning={"effort": "medium"} if reasoning else None)
 
         if response.output_parsed is None:
             raise ValueError("Failed to parse structured response from OpenAI API")
@@ -159,14 +152,7 @@ This adheres with the Agreement given by the user.
         reasoning: bool = False,
     ) -> str:
         """Process prompt and return string response."""
-        response = self.client.responses.create(
-            model=self.model,
-            input=messages,
-            max_output_tokens=max_tokens,
-            reasoning={
-                "effort": "medium"
-            } if reasoning else None
-        )
+        response = self.client.responses.create(model=self.model, input=messages, max_output_tokens=max_tokens, reasoning={"effort": "medium"} if reasoning else None)
 
         return response.output_text
 
@@ -177,15 +163,7 @@ This adheres with the Agreement given by the user.
         reasoning: bool = False,
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
-        result = self.client.responses.create(
-            stream=True,
-            model=self.model,
-            input=messages,
-            max_output_tokens=max_tokens,
-            reasoning={
-                "effort": "medium"
-            } if reasoning else None
-        )
+        result = self.client.responses.create(stream=True, model=self.model, input=messages, max_output_tokens=max_tokens, reasoning={"effort": "medium"} if reasoning else None)
 
         for event in result:
             if isinstance(event, ResponseTextDeltaEvent):
@@ -193,4 +171,3 @@ This adheres with the Agreement given by the user.
 
             if isinstance(event, ResponseErrorEvent):
                 raise ValueError(f"OpenAI API error: {event.message}")
-

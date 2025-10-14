@@ -1,54 +1,70 @@
 <template>
-  <div class="session-list">
-    <div class="session-header">
-      <h3>Chat Sessions</h3>
-      <button
-        class="btn btn-primary"
+  <div class="max-w-4xl mx-auto space-y-6">
+    <div v-if="filteredSessions.length > 0" class="flex items-center justify-between">
+      <div>
+        <h3 class="text-xl font-semibold">Chat Sessions</h3>
+        <p class="text-sm text-gray-500 mt-1">Continue your conversations with {{ characterName }}</p>
+      </div>
+      <UButton
+        color="primary"
+        icon="i-lucide-plus"
         @click="emit('open-scenario-modal')"
       >
-        Start New Session
-      </button>
+        New Session
+      </UButton>
     </div>
 
-    <div v-if="filteredSessions.length === 0" class="no-sessions">
-      <p>No sessions found for this character.</p>
-      <button class="btn btn-secondary" @click="emit('open-scenario-modal')">
-        Start your first conversation
-      </button>
+    <div v-if="filteredSessions.length === 0" class="text-center py-16">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+        <span class="i-lucide-message-square w-8 h-8 text-gray-400" />
+      </div>
+      <h4 class="text-lg font-medium mb-2">No conversations yet</h4>
+      <p class="text-gray-500 mb-6">Start your first conversation with {{ characterName }}</p>
+      <UButton
+        color="primary"
+        icon="i-lucide-plus"
+        @click="emit('open-scenario-modal')"
+      >
+        Start Conversation
+      </UButton>
     </div>
 
-    <div v-else class="sessions-grid">
-      <div
+    <div v-else class="space-y-3">
+      <UCard
         v-for="session in filteredSessions"
         :key="session.session_id"
-        class="session-card"
+        class="hover:shadow-md transition-shadow cursor-pointer group"
         @click="emit('select-session', session.session_id)"
       >
-        <div class="session-info">
-          <div class="session-header-row">
-            <span class="session-id">{{ formatSessionId(session.session_id) }}</span>
-            <time class="session-time">{{ formatRelativeTime(session.last_message_time) }}</time>
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 mb-2">
+              <UBadge color="primary" variant="subtle" size="sm">
+                {{ formatSessionId(session.session_id) }}
+              </UBadge>
+              <span class="text-xs text-gray-500">
+                {{ formatRelativeTime(session.last_message_time) }}
+              </span>
+              <UBadge color="neutral" variant="subtle" size="sm">
+                {{ session.message_count }} messages
+              </UBadge>
+            </div>
+
+            <p v-if="session.last_character_response" class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+              {{ session.last_character_response }}
+            </p>
           </div>
 
-          <div class="session-meta">
-            <span class="message-count">{{ session.message_count }} messages</span>
-          </div>
-
-          <div v-if="session.last_character_response" class="session-preview">
-            <p>{{ truncateText(session.last_character_response, 160) }}</p>
-          </div>
-        </div>
-
-        <div class="session-actions">
-          <button
-            class="btn-icon delete-btn"
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-trash-2"
+            size="sm"
+            class="opacity-0 group-hover:opacity-100 transition-opacity"
             @click.stop="showDeleteConfirmation(session.session_id)"
-            :title="`Delete session ${formatSessionId(session.session_id)}`"
-          >
-            <Trash2 :size="16" />
-          </button>
+          />
         </div>
-      </div>
+      </UCard>
     </div>
 
     <ConfirmModal
@@ -65,9 +81,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { SessionInfo } from '@/types'
-import { formatRelativeTime, truncateText } from '@/utils/formatters'
+import { formatRelativeTime } from '@/utils/formatters'
 import { useApi } from '@/composables/useApi'
-import { Trash2 } from 'lucide-vue-next'
 import ConfirmModal from './ConfirmModal.vue'
 
 interface Props {
@@ -95,7 +110,6 @@ const filteredSessions = computed(() => {
 })
 
 const formatSessionId = (sessionId: string): string => {
-  // Show first 8 characters of session ID
   return sessionId.substring(0, 8)
 }
 
@@ -112,7 +126,6 @@ const confirmDelete = async () => {
     emit('session-deleted', sessionToDelete.value)
   } catch (err) {
     console.error('Failed to delete session:', err)
-    // Error will be shown via the error state from useApi
   } finally {
     cancelDelete()
   }
@@ -123,156 +136,3 @@ const cancelDelete = () => {
   sessionToDelete.value = null
 }
 </script>
-
-<style scoped>
-.session-list {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.session-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.session-header h3 {
-  margin: 0;
-  color: var(--text-primary);
-}
-
-.no-sessions {
-  text-align: center;
-  padding: 3rem 2rem;
-  color: var(--text-secondary);
-}
-
-.no-sessions p {
-  margin: 0 0 1.5rem 0;
-  font-size: 1.1rem;
-}
-
-.sessions-grid {
-  display: grid;
-  gap: 1rem;
-}
-
-.session-card {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.session-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-.session-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.session-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.session-id {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-family: monospace;
-  font-size: 0.9rem;
-}
-
-.session-time {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.session-meta {
-  margin-bottom: 1rem;
-}
-
-.message-count {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.session-preview {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
-
-.session-preview p {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.session-actions {
-  margin-left: 1rem;
-  display: flex;
-  gap: 0.5rem;
-}
-
-.btn-icon {
-  background: none;
-  border: none;
-  padding: 0.5rem;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background-color 0.2s;
-  font-size: 1rem;
-}
-
-.delete-btn:hover {
-  background: #fee2e2;
-}
-
-.delete-btn:active {
-  background: #fecaca;
-}
-
-@media (max-width: 768px) {
-  .session-header {
-    flex-direction: column;
-    gap: 1rem;
-    text-align: center;
-  }
-
-  .session-card {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .session-actions {
-    margin-left: 0;
-    align-self: flex-end;
-  }
-
-  .session-header-row {
-    flex-direction: column;
-    gap: 0.25rem;
-    align-items: flex-start;
-  }
-
-  .no-sessions {
-    padding: 2rem 1rem;
-  }
-}
-</style>

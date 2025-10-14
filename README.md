@@ -33,9 +33,9 @@ The system utilizes an LLM-based pipeline consisting of the following components
 
 1. Retrieve conversation memory (list of summarized user actions and character actions).
 2. Run an evaluation prompt (evaluate the user request to determine the action, intent, next steps to take and how it affects the character state) - this has the full memory of previous evaluations and user messages.
-4. Feed last evaluation to the response prompt (generate the response text based on the action plan and character state).
-5. Update conversation memory with (user message, character evaluation, character response) exchange.
-6. Respond to user and await for the next message.
+3. Feed last evaluation to the response prompt (generate the response text based on the action plan and character state).
+4. Update conversation memory with (user message, character evaluation, character response) exchange.
+5. Respond to user and await for the next message.
 
 Every N exchanges the conversation memory is summarized and further plot beats are generated (this is where the storytelling operates on a level of act).
 
@@ -51,15 +51,17 @@ Basically, pipeline operates on multiple levels:
 /regenerate - recreates the last character response
 ```
 
-## Things not yet explored
+## Roadmap
 
 - Using randomized external events to move the story and make both characters react
 - Using /commands to enable out of character / story transition actions (outside the default pipeline)
-- Additional prompt / logic to select the continuation option
 - Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.
-- Introduce scene intro message - either autogenerate or predefine via character card
+- [x] Introduce scene intro message - either autogenerate or predefine via character card
 - Multi-group convos (LLM handle them, but probably there should be a different card format)
 - User profile / authentication / description
 - Generate user responses dynamically
-- Support image generation (DALL·E / Stable Diffusion) for character portraits, scenes etc.
+- Support image generation for character portraits, scenes etc.
 - AI-to-AI roleplay (two characters interacting without user input)
+- Character creation screen:
+  - Left half: AI chat to guide through the creation
+  - Right half: Dynamically populated character sheet with editable fields

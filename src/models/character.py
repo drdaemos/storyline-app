@@ -8,7 +8,7 @@ class Character(BaseModel):
 
     # Basic information
     name: str = Field(..., min_length=1, description="Name of the character")
-    role: str = Field(..., min_length=1, description="Profession or role in the story")
+    tagline: str = Field(..., min_length=1, description="Short tagline or description of the character")
     backstory: str = Field(..., min_length=1, description="Previous experiences, events and relationships")
     personality: str = Field("", description="Personality traits and characteristics")
     appearance: str = Field("", description="Physical description")

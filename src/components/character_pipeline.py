@@ -1,4 +1,3 @@
-
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -17,11 +16,13 @@ class EvaluationInput(TypedDict):
     user_message: str
     character: Character
 
+
 class PlanGenerationInput(TypedDict):
     character: Character
     user_name: str
     summary: str
     scenario_state: str
+
 
 class CharacterResponseInput(TypedDict):
     summary: str
@@ -30,6 +31,7 @@ class CharacterResponseInput(TypedDict):
     user_name: str
     user_message: str
     scenario_state: str
+
 
 class CharacterPipeline:
     @staticmethod
@@ -122,23 +124,22 @@ Key Locations:
         variables = format_character_description(input["character"]) | {"processor_specific_prompt": processor.get_processor_specific_prompt()}
 
         # Summary piece:
-        summary_msg: list[GenericMessage] = [{
-            "role": "user",
-            "content": f"""Summary of previous interactions:
+        summary_msg: list[GenericMessage] = [
+            {
+                "role": "user",
+                "content": f"""Summary of previous interactions:
 {input["summary"]}
 
-{input['plans']},
+{input["plans"]},
 """,
-            "type": "summary",
-            "created_at": datetime.now(UTC).isoformat(),
-        }]
+                "type": "summary",
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+        ]
 
         # Process the prompt
         evaluation = processor.respond_with_model(
-            prompt=developer_prompt.format(**variables),
-            user_prompt=user_prompt.format(**variables),
-            conversation_history=summary_msg + memory,
-            output_type=Evaluation
+            prompt=developer_prompt.format(**variables), user_prompt=user_prompt.format(**variables), conversation_history=summary_msg + memory, output_type=Evaluation
         )
 
         return evaluation
@@ -197,16 +198,10 @@ State as of right now:
 {scenario_state}
 """
 
-        variables: dict[str, str] = format_character_description(input["character"]) | input | {
-            "processor_specific_prompt": processor.get_processor_specific_prompt()
-        } # type: ignore
+        variables: dict[str, str] = format_character_description(input["character"]) | input | {"processor_specific_prompt": processor.get_processor_specific_prompt()}  # type: ignore
 
         # Process the prompt
-        plans = processor.respond_with_text(
-            prompt=developer_prompt.format(**variables),
-            user_prompt=user_prompt.format(**variables),
-            reasoning=True
-        )
+        plans = processor.respond_with_text(prompt=developer_prompt.format(**variables), user_prompt=user_prompt.format(**variables), reasoning=True)
 
         if "<story_plan>" not in plans:
             return None
@@ -274,17 +269,10 @@ Scenario is evaluated as follows:
 
 Respond to the user now:
 """
-        variables: dict[str, str] = format_character_description(input["character"]) | input | {
-            "processor_specific_prompt": processor.get_processor_specific_prompt()
-        } # type: ignore
+        variables: dict[str, str] = format_character_description(input["character"]) | input | {"processor_specific_prompt": processor.get_processor_specific_prompt()}  # type: ignore
 
         # Process the prompt
-        stream = processor.respond_with_stream(
-            prompt=developer_prompt.format(**variables),
-            user_prompt=user_prompt.format(**variables),
-            conversation_history=memory,
-            reasoning=True
-        )
+        stream = processor.respond_with_stream(prompt=developer_prompt.format(**variables), user_prompt=user_prompt.format(**variables), conversation_history=memory, reasoning=True)
 
         return stream
 
@@ -351,7 +339,7 @@ Respond to the user now:
                     # We need to be careful not to yield partial closing tags
                     potential_closing_start = None
                     for i in range(len(f"</{tag}>")):
-                        closing_prefix = f"</{tag}>"[:i+1]
+                        closing_prefix = f"</{tag}>"[: i + 1]
                         if buffer.endswith(closing_prefix):
                             potential_closing_start = len(buffer) - len(closing_prefix)
                             break
@@ -415,14 +403,10 @@ Character's long-term goals: [describe where the character wants the story to cl
 Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
 """
 
-        user_prompt = "\n".join(f"{message["role"]}: {message["content"]}" for message in memory)
+        user_prompt = "\n".join(f"{message['role']}: {message['content']}" for message in memory)
 
         # Process the prompt
-        summary = processor.respond_with_text(
-            prompt=developer_prompt,
-            user_prompt=user_prompt,
-            reasoning=True
-        )
+        summary = processor.respond_with_text(prompt=developer_prompt, user_prompt=user_prompt, reasoning=True)
 
         return summary
 
@@ -438,7 +422,7 @@ Be concise, specific (especially about the events and learnings - avoid vague ge
             Extracted character response text, or original text if no tags found
         """
         # Look for content between <[tag]> tags
-        pattern = rf'<{tag}>(.*?)</{tag}>'
+        pattern = rf"<{tag}>(.*?)</{tag}>"
         matches = re.findall(pattern, response_text, re.DOTALL | re.IGNORECASE)
 
         if matches:
@@ -447,5 +431,3 @@ Be concise, specific (especially about the events and learnings - avoid vague ge
         else:
             # If no tags found, return None to allow to handle this
             return None
-
-

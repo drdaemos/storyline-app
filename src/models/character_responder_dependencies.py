@@ -16,18 +16,14 @@ class CharacterResponderDependencies:
     primary_processor: PromptProcessor
     backup_processor: PromptProcessor
     session_id: str
+    user_id: str = "anonymous"
     conversation_memory: ConversationMemory | None = None
     summary_memory: SummaryMemory | None = None
     chat_logger: ChatLogger | None = None
 
     @classmethod
     def create_default(
-        cls,
-        character_name: str,
-        session_id: str | None = None,
-        logs_dir: Path | None = None,
-        processor_type: str = "claude",
-        backup_processor_type: str | None = None
+        cls, character_name: str, session_id: str | None = None, logs_dir: Path | None = None, processor_type: str = "claude", backup_processor_type: str | None = None, user_id: str = "anonymous"
     ) -> "CharacterResponderDependencies":
         """
         Create default dependencies with standard processor setup.
@@ -38,6 +34,7 @@ class CharacterResponderDependencies:
             logs_dir: Directory for chat logs
             processor_type: Type of primary processor
             backup_processor_type: Type of backup processor (uses default if not specified)
+            user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             CharacterResponderDependencies instance with default setup
@@ -69,6 +66,6 @@ class CharacterResponderDependencies:
             conversation_memory=conversation_memory,
             summary_memory=summary_memory,
             chat_logger=chat_logger,
-            session_id=session_id
+            session_id=session_id,
+            user_id=user_id,
         )
-

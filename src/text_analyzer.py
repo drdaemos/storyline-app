@@ -53,7 +53,7 @@ Output instructions:
             ChatMessage.from_user(text),
         ]
 
-        result = self.pipeline.run({"prompt_builder": {"template": template, "template_variables": {"text": text }}})
+        result = self.pipeline.run({"prompt_builder": {"template": template, "template_variables": {"text": text}}})
 
         response = result["llm"]["replies"][0].text
 

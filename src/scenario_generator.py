@@ -9,6 +9,7 @@ from .models.prompt_processor import PromptProcessor
 
 class ScenarioList(BaseModel):
     """Model for scenario list response from AI."""
+
     scenarios: list[Scenario]
 
 
@@ -25,7 +26,7 @@ class ScenarioGenerator:
         self.processors = processors
         self.logger = logger
 
-    def generate_scenarios(self, character: Character, count: int = 3, mood: str = 'normal') -> list[Scenario]:
+    def generate_scenarios(self, character: Character, count: int = 3, mood: str = "normal") -> list[Scenario]:
         """
         Generate scenario intros for a given character.
 
@@ -49,12 +50,7 @@ class ScenarioGenerator:
                 user_prompt = self._build_user_prompt(character, count, mood)
 
                 # Use prompt processor to generate scenarios
-                scenario_response = processor.respond_with_model(
-                    prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    output_type=ScenarioList,
-                    reasoning=True
-                )
+                scenario_response = processor.respond_with_model(prompt=system_prompt, user_prompt=user_prompt, output_type=ScenarioList, reasoning=True)
 
                 if not scenario_response.scenarios or len(scenario_response.scenarios) == 0:
                     raise ValueError("Failed to generate scenarios")
@@ -97,27 +93,27 @@ Output your scenarios as a JSON object with a 'scenarios' array containing objec
     def _build_user_prompt(self, character: Character, count: int, mood: str) -> str:
         """Build the user prompt with character data and scenario count."""
         prompt = """Generate exactly {count} different engaging scenarios for a role-play based on the following character description:
-    
+
 ## Character Information
 
 Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
-Established Relationships: 
+Established Relationships:
 {relationships}
 
 ## World Description
 
 Setting: {setting_description}
-Key Locations: 
+Key Locations:
 {key_locations}
 
 ## Scenario Requirements
 {mood_prompt}
         """
 
-        return prompt.format(**(format_character_description(character) | { "count": count } | { "mood_prompt": self._build_mood_prompt(mood) }))
+        return prompt.format(**(format_character_description(character) | {"count": count} | {"mood_prompt": self._build_mood_prompt(mood)}))
 
     def _build_mood_prompt(self, mood: str) -> str:
         """Build the conventionality prompt based on user preference."""

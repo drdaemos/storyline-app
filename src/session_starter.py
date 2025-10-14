@@ -18,13 +18,7 @@ class SessionStarter:
         self.character_loader = character_loader
         self.conversation_memory = conversation_memory
 
-    def start_session_with_scenario(
-        self,
-        character_name: str,
-        intro_message: str,
-        user_name: str = "",
-        user_description: str = ""
-    ) -> str:
+    def start_session_with_scenario(self, character_name: str, intro_message: str, user_name: str = "", user_description: str = "", user_id: str = "anonymous") -> str:
         """
         Start a new session with a scenario intro message.
 
@@ -33,6 +27,7 @@ class SessionStarter:
             intro_message: The scenario intro message
             user_name: User's name in the roleplay (optional)
             user_description: User's description for context (optional)
+            user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             The created session ID
@@ -47,7 +42,7 @@ class SessionStarter:
             raise ValueError("intro_message cannot be empty")
 
         # Load the character
-        character = self.character_loader.load_character(character_name)
+        character = self.character_loader.load_character(character_name, user_id)
         if not character:
             raise FileNotFoundError(f"Character '{character_name}' not found")
 
@@ -69,12 +64,6 @@ class SessionStarter:
             intro_with_context += f"\n\n<hidden_context>{hidden_context}</hidden_context>"
 
         # Add the intro message as an assistant (character) message
-        self.conversation_memory.add_message(
-            character_id=character.name,
-            session_id=session_id,
-            role="assistant",
-            content=intro_with_context,
-            message_type="conversation"
-        )
+        self.conversation_memory.add_message(character_id=character.name, session_id=session_id, role="assistant", content=intro_with_context, message_type="conversation", user_id=user_id)
 
         return session_id

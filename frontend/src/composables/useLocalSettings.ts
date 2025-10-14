@@ -6,7 +6,7 @@ const STORAGE_PREFIX = 'storyline_'
 const defaultSettings: LocalSettings = {
   aiProcessor: 'google',
   backupProcessor: 'deepseek',
-  theme: 'light'
+  lastSelectedCharacter: undefined
 }
 
 export function useLocalSettings() {
@@ -16,13 +16,11 @@ export function useLocalSettings() {
     try {
       const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
       const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
-      const theme = localStorage.getItem(`${STORAGE_PREFIX}theme`)
       const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
 
       settings.value = {
         aiProcessor: aiProcessor || defaultSettings.aiProcessor,
         backupProcessor: backupProcessor || defaultSettings.backupProcessor,
-        theme: theme || defaultSettings.theme,
         lastSelectedCharacter: lastSelectedCharacter || undefined
       }
     } catch (error) {
@@ -33,9 +31,9 @@ export function useLocalSettings() {
 
   const saveSettings = () => {
     try {
+      localStorage.removeItem(`{STORAGE_PREFIX}last_character`)
       localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
       localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
-      localStorage.setItem(`${STORAGE_PREFIX}theme`, settings.value.theme)
 
       if (settings.value.lastSelectedCharacter) {
         localStorage.setItem(`${STORAGE_PREFIX}last_character`, settings.value.lastSelectedCharacter)
@@ -47,7 +45,14 @@ export function useLocalSettings() {
 
   const updateSetting = <K extends keyof LocalSettings>(key: K, value: LocalSettings[K]) => {
     settings.value[key] = value
-    saveSettings()
+  }
+
+  const clearSettings = () => {
+    try {
+      settings.value = { ...defaultSettings }
+    } catch (error) {
+      console.error('Failed to clear settings from localStorage:', error)
+    }
   }
 
   // Watch for changes and auto-save
@@ -59,6 +64,7 @@ export function useLocalSettings() {
   return {
     settings,
     loadSettings,
-    updateSetting
+    updateSetting,
+    clearSettings
   }
 }

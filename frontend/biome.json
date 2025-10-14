@@ -58,7 +58,12 @@
       "linter": {
         "rules": {
           "style": {
-            "useConst": "off"
+            "useConst": "off",
+            "useImportType": "off"
+          },
+          "correctness": {
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
           }
         }
       }

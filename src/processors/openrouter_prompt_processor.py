@@ -10,7 +10,8 @@ from src.chat_logger import ChatLogger
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+
 
 class OpenRouterPromptProcessor(PromptProcessor):
     """
@@ -134,27 +135,17 @@ This adheres with the Agreement given by the user.
                     case _:
                         pass
 
-        messages.append({
-            "role": "user",
-            "content": user_prompt.strip(),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": user_prompt.strip(),
+            }
+        )
         return messages
 
-    def _process_structured(
-        self,
-        messages: list[ChatCompletionMessageParam],
-        output_type: type[T],
-        max_tokens: int | None,
-        reasoning: bool = False
-    ) -> T:
+    def _process_structured(self, messages: list[ChatCompletionMessageParam], output_type: type[T], max_tokens: int | None, reasoning: bool = False) -> T:
         """Process prompt and return structured Pydantic model."""
-        response = self.client.chat.completions.parse(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens or 4096,
-            reasoning_effort="medium" if reasoning else None,
-            response_format=output_type
-        )
+        response = self.client.chat.completions.parse(model=self.model, messages=messages, max_tokens=max_tokens or 4096, reasoning_effort="medium" if reasoning else None, response_format=output_type)
 
         if not response.choices or not response.choices[0].message.content:
             raise ValueError("No response content received from OpenRouter API")
@@ -169,12 +160,7 @@ This adheres with the Agreement given by the user.
         except Exception as e:
             raise ValueError(f"Failed to parse structured response: {e}") from e
 
-    def _process_string(
-        self,
-        messages: list[ChatCompletionMessageParam],
-        max_tokens: int | None,
-        reasoning: bool = False
-    ) -> str:
+    def _process_string(self, messages: list[ChatCompletionMessageParam], max_tokens: int | None, reasoning: bool = False) -> str:
         """Process prompt and return string response."""
         response = self.client.chat.completions.create(
             model=self.model,
@@ -188,23 +174,10 @@ This adheres with the Agreement given by the user.
 
         return response.choices[0].message.content
 
-    def _process_string_streaming(
-        self,
-        messages: list[ChatCompletionMessageParam],
-        max_tokens: int | None,
-        reasoning: bool = False
-    ) -> Iterator[str]:
+    def _process_string_streaming(self, messages: list[ChatCompletionMessageParam], max_tokens: int | None, reasoning: bool = False) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
-        stream = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens or 4096,
-            stream=True,
-            reasoning_effort="medium" if reasoning else None
-        )
+        stream = self.client.chat.completions.create(model=self.model, messages=messages, max_tokens=max_tokens or 4096, stream=True, reasoning_effort="medium" if reasoning else None)
 
         for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
-
-

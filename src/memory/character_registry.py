@@ -26,7 +26,7 @@ class CharacterRegistry:
         # Database initialization is handled by DatabaseConfig
         pass
 
-    def save_character(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1) -> bool:
+    def save_character(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1, user_id: str = "anonymous") -> bool:
         """
         Save or update a character in the database.
 
@@ -34,6 +34,7 @@ class CharacterRegistry:
             character_id: Character ID (same as filename in characters folder)
             character_data: All character fields as a dictionary
             schema_version: Schema version for the character data (default: 1)
+            user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             True if character was saved/updated successfully
@@ -45,33 +46,29 @@ class CharacterRegistry:
                 # Update existing character
                 existing_character.character_data = character_data
                 existing_character.schema_version = schema_version
+                existing_character.user_id = user_id
                 existing_character.updated_at = datetime.now()
             else:
                 # Create new character
-                character = Character(
-                    id=character_id,
-                    character_data=character_data,
-                    schema_version=schema_version,
-                    created_at=datetime.now(),
-                    updated_at=datetime.now()
-                )
+                character = Character(id=character_id, character_data=character_data, schema_version=schema_version, user_id=user_id, created_at=datetime.now(), updated_at=datetime.now())
                 session.add(character)
 
             session.commit()
             return True
 
-    def get_character(self, character_id: str) -> dict[str, Any] | None:
+    def get_character(self, character_id: str, user_id: str) -> dict[str, Any] | None:
         """
         Retrieve a character by ID.
 
         Args:
             character_id: Character ID to retrieve
+            user_id: ID of the user to filter character for
 
         Returns:
             Character data dictionary or None if not found
         """
         with self.db_config.create_session() as session:
-            character = session.query(Character).filter(Character.id == character_id).first()
+            character = session.query(Character).filter(Character.id == character_id, Character.user_id == user_id).first()
 
             if character:
                 return {
@@ -79,23 +76,24 @@ class CharacterRegistry:
                     "character_data": character.character_data,
                     "schema_version": character.schema_version,
                     "created_at": character.created_at.isoformat(),
-                    "updated_at": character.updated_at.isoformat()
+                    "updated_at": character.updated_at.isoformat(),
                 }
 
             return None
 
-    def get_all_characters(self, schema_version: int | None = None) -> list[dict[str, Any]]:
+    def get_all_characters(self, user_id: str, schema_version: int | None = None) -> list[dict[str, Any]]:
         """
-        Retrieve all characters, optionally filtered by schema version.
+        Retrieve all characters for a user, optionally filtered by schema version.
 
         Args:
+            user_id: ID of the user to filter characters for
             schema_version: Optional schema version filter
 
         Returns:
             List of character data dictionaries
         """
         with self.db_config.create_session() as session:
-            query = session.query(Character)
+            query = session.query(Character).filter(Character.user_id == user_id)
 
             if schema_version is not None:
                 query = query.filter(Character.schema_version == schema_version)
@@ -103,84 +101,84 @@ class CharacterRegistry:
             characters = query.order_by(Character.updated_at.desc()).all()
 
             return [
-                {
-                    "id": char.id,
-                    "character_data": char.character_data,
-                    "schema_version": char.schema_version,
-                    "created_at": char.created_at.isoformat(),
-                    "updated_at": char.updated_at.isoformat()
-                }
+                {"id": char.id, "character_data": char.character_data, "schema_version": char.schema_version, "created_at": char.created_at.isoformat(), "updated_at": char.updated_at.isoformat()}
                 for char in characters
             ]
 
-    def delete_character(self, character_id: str) -> bool:
+    def delete_character(self, character_id: str, user_id: str) -> bool:
         """
         Delete a character by ID.
 
         Args:
             character_id: Character ID to delete
+            user_id: ID of the user (for authorization check)
 
         Returns:
             True if character was deleted, False if not found
         """
         with self.db_config.create_session() as session:
-            count = session.query(Character).filter(Character.id == character_id).delete()
+            count = session.query(Character).filter(Character.id == character_id, Character.user_id == user_id).delete()
             session.commit()
             return count > 0
 
-    def character_exists(self, character_id: str) -> bool:
+    def character_exists(self, character_id: str, user_id: str) -> bool:
         """
-        Check if a character exists.
+        Check if a character exists for a specific user.
 
         Args:
             character_id: Character ID to check
+            user_id: ID of the user to filter character for
 
         Returns:
             True if character exists, False otherwise
         """
         with self.db_config.create_session() as session:
-            return session.query(Character).filter(Character.id == character_id).first() is not None
+            return session.query(Character).filter(Character.id == character_id, Character.user_id == user_id).first() is not None
 
-    def get_characters_by_schema_version(self, schema_version: int) -> list[dict[str, Any]]:
+    def get_characters_by_schema_version(self, user_id: str, schema_version: int) -> list[dict[str, Any]]:
         """
-        Get all characters with a specific schema version.
+        Get all characters with a specific schema version for a specific user.
 
         Args:
+            user_id: ID of the user to filter characters for
             schema_version: Schema version to filter by
 
         Returns:
             List of character data dictionaries
         """
-        return self.get_all_characters(schema_version=schema_version)
+        return self.get_all_characters(user_id=user_id, schema_version=schema_version)
 
-    def update_character_schema(self, character_id: str, new_schema_version: int) -> bool:
+    def update_character_schema(self, character_id: str, user_id: str, new_schema_version: int) -> bool:
         """
         Update only the schema version of a character.
 
         Args:
             character_id: Character ID to update
+            user_id: ID of the user (for authorization check)
             new_schema_version: New schema version
 
         Returns:
             True if updated successfully, False if character not found
         """
         with self.db_config.create_session() as session:
-            count = session.query(Character).filter(Character.id == character_id).update({
-                Character.schema_version: new_schema_version,
-                Character.updated_at: datetime.now()
-            })
+            count = (
+                session.query(Character).filter(Character.id == character_id, Character.user_id == user_id).update({Character.schema_version: new_schema_version, Character.updated_at: datetime.now()})
+            )
             session.commit()
             return count > 0
 
-    def get_character_count(self) -> int:
+    def get_character_count(self, user_id: str) -> int:
         """
-        Get the total number of characters stored.
+        Get the total number of characters stored for a user.
+
+        Args:
+            user_id: ID of the user to count characters for
 
         Returns:
-            Total character count
+            Total character count for the user
         """
         with self.db_config.create_session() as session:
-            return session.query(func.count(Character.id)).scalar()
+            return session.query(func.count(Character.id)).filter(Character.user_id == user_id).scalar()
 
     def health_check(self) -> bool:
         """Check if the database is accessible and healthy."""

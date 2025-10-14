@@ -1,242 +1,222 @@
 <template>
-  <div class="character-creation-view">
-    <div class="creation-content">
-      <header class="view-header">
-        <div class="header-main">
-          <router-link to="/" class="back-button btn btn-secondary">
-            <ArrowLeft :size="20" />
-          </router-link>
-          <h2>Create New Character</h2>
-        </div>
-      </header>
-
-      <div class="creation-tabs">
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'manual' }"
-          @click="activeTab = 'manual'"
-        >
-          Manual Entry
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'yaml' }"
-          @click="activeTab = 'yaml'"
-        >
-          Import YAML
-        </button>
+  <div class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-950">
+    <div class="max-w-5xl mx-auto w-full px-6 py-8 space-y-6">
+      <!-- Header -->
+      <div class="flex items-center gap-4">
+        <UButton
+          to="/"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-arrow-left"
+        />
+        <h2 class="text-3xl font-bold font-serif">Create New Character</h2>
       </div>
 
+      <!-- Tabs -->
+      <UTabs
+        v-model="activeTab"
+        :items="[
+          { key: 'manual', label: 'Manual Entry' },
+          { key: 'yaml', label: 'Import YAML' }
+        ]"
+      />
+
       <!-- Manual Entry Form -->
-      <div v-if="activeTab === 'manual'" class="manual-form">
-        <form @submit.prevent="saveCharacter" class="character-form">
-          <div class="form-section">
-            <h3>Basic Information</h3>
+      <div v-if="activeTab === 'manual'">
+        <form @submit.prevent="saveCharacter" class="space-y-6">
+          <UCard>
+            <template #header>
+              <h3 class="text-lg font-semibold">Basic Information</h3>
+            </template>
 
-            <div class="form-group">
-              <label for="name" class="required">Character Name</label>
-              <input
-                id="name"
-                v-model="formData.name"
-                type="text"
-                class="input"
-                :class="{ error: errors.name }"
-                placeholder="Enter character name"
-                required
-              />
-              <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
-            </div>
-
-            <div class="form-group">
-              <label for="role" class="required">Role/Profession</label>
-              <input
-                id="role"
-                v-model="formData.role"
-                type="text"
-                class="input"
-                :class="{ error: errors.role }"
-                placeholder="e.g., Detective, Teacher, Wizard"
-                required
-              />
-              <span v-if="errors.role" class="error-message">{{ errors.role }}</span>
-            </div>
-
-            <div class="form-group">
-              <label for="backstory" class="required">Backstory</label>
-              <textarea
-                id="backstory"
-                v-model="formData.backstory"
-                class="input textarea"
-                :class="{ error: errors.backstory }"
-                rows="4"
-                placeholder="Character's history, experiences, and background"
-                required
-              ></textarea>
-              <span v-if="errors.backstory" class="error-message">{{ errors.backstory }}</span>
-            </div>
-          </div>
-
-          <div class="form-section">
-            <h3>Character Details</h3>
-
-            <div class="form-group">
-              <label for="personality">Personality</label>
-              <textarea
-                id="personality"
-                v-model="formData.personality"
-                class="input textarea"
-                rows="3"
-                placeholder="Personality traits and characteristics"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="appearance">Physical Appearance</label>
-              <textarea
-                id="appearance"
-                v-model="formData.appearance"
-                class="input textarea"
-                rows="3"
-                placeholder="Physical description for avatar generation"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="setting">Setting Description</label>
-              <textarea
-                id="setting"
-                v-model="formData.setting_description"
-                class="input textarea"
-                rows="3"
-                placeholder="Description of the world/setting the character exists in"
-              ></textarea>
-            </div>
-          </div>
-
-          <div class="form-section">
-            <h3>Locations</h3>
-            <p class="section-description">Add up to 10 key locations for this character.</p>
-
-            <div class="locations-list">
-              <div
-                v-for="(location, index) in formData.key_locations"
-                :key="index"
-                class="location-item"
-              >
-                <input
-                  v-model="formData.key_locations[index]"
-                  type="text"
-                  class="input"
-                  :placeholder="`Location ${index + 1}`"
+            <div class="space-y-4">
+              <UFormField label="Character Name" required :error="errors.name">
+                <UInput
+                  v-model="formData.name"
+                  placeholder="Enter character name"
+                  size="lg"
                 />
-                <button
-                  type="button"
-                  class="btn-icon remove-location"
-                  @click="removeLocation(index)"
-                  title="Remove location"
+              </UFormField>
+
+              <UFormField label="Role/Profession" required :error="errors.role">
+                <UInput
+                  v-model="formData.tagline"
+                  placeholder="e.g., Detective, Teacher, Wizard"
+                  size="lg"
+                />
+              </UFormField>
+
+              <UFormField label="Backstory" required :error="errors.backstory">
+                <UTextarea
+                  v-model="formData.backstory"
+                  :rows="4"
+                  placeholder="Character's history, experiences, and background"
+                />
+              </UFormField>
+            </div>
+          </UCard>
+
+          <UCard>
+            <template #header>
+              <h3 class="text-lg font-semibold">Character Details</h3>
+            </template>
+
+            <div class="space-y-4">
+              <UFormField label="Personality">
+                <UTextarea
+                  v-model="formData.personality"
+                  :rows="3"
+                  placeholder="Personality traits and characteristics"
+                />
+              </UFormField>
+
+              <UFormField label="Physical Appearance">
+                <UTextarea
+                  v-model="formData.appearance"
+                  :rows="3"
+                  placeholder="Physical description for avatar generation"
+                />
+              </UFormField>
+
+              <UFormField label="Setting Description">
+                <UTextarea
+                  v-model="formData.setting_description"
+                  :rows="3"
+                  placeholder="Description of the world/setting the character exists in"
+                />
+              </UFormField>
+            </div>
+          </UCard>
+
+          <UCard>
+            <template #header>
+              <h3 class="text-lg font-semibold">Locations</h3>
+            </template>
+
+            <div class="space-y-4">
+              <p class="text-sm text-gray-600 dark:text-gray-400">Add up to 10 key locations for this character.</p>
+
+              <div class="space-y-3">
+                <div
+                  v-for="(location, index) in formData.key_locations"
+                  :key="index"
+                  class="flex gap-2 items-center"
                 >
-                  <X :size="14" />
-                </button>
+                  <UInput
+                    v-model="formData.key_locations[index]"
+                    :placeholder="`Location ${index + 1}`"
+                    class="flex-1"
+                  />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-lucide-x"
+                    size="sm"
+                    @click="removeLocation(index)"
+                  />
+                </div>
               </div>
-            </div>
 
-            <button
-              v-if="formData.key_locations.length < 10"
-              type="button"
-              class="btn btn-secondary"
-              @click="addLocation"
-            >
-              + Add Location
-            </button>
-          </div>
-
-          <div class="form-section">
-            <h3>Relationships</h3>
-            <p class="section-description">Define relationships with other characters.</p>
-
-            <div class="relationships-list">
-              <div
-                v-for="(relationship, index) in relationships"
-                :key="index"
-                class="relationship-item"
+              <UButton
+                v-if="formData.key_locations.length < 10"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                @click="addLocation"
               >
-                <input
-                  v-model="relationship.name"
-                  type="text"
-                  class="input"
-                  placeholder="Character name"
-                />
-                <input
-                  v-model="relationship.relationship"
-                  type="text"
-                  class="input"
-                  placeholder="Relationship type"
-                />
-                <button
-                  type="button"
-                  class="btn-icon remove-relationship"
-                  @click="removeRelationship(index)"
-                  title="Remove relationship"
-                >
-                  <X :size="14" />
-                </button>
-              </div>
+                Add Location
+              </UButton>
             </div>
+          </UCard>
 
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="addRelationship"
-            >
-              + Add Relationship
-            </button>
-          </div>
+          <UCard>
+            <template #header>
+              <h3 class="text-lg font-semibold">Relationships</h3>
+            </template>
 
-          <div class="form-actions">
-            <button
-              type="button"
-              class="btn btn-generate"
-              @click="handleGenerateCharacter"
+            <div class="space-y-4">
+              <p class="text-sm text-gray-600 dark:text-gray-400">Define relationships with other characters.</p>
+
+              <div class="space-y-3">
+                <div
+                  v-for="(relationship, index) in relationships"
+                  :key="index"
+                  class="flex gap-2 items-center"
+                >
+                  <UInput
+                    v-model="relationship.name"
+                    placeholder="Character name"
+                    class="flex-1"
+                  />
+                  <UInput
+                    v-model="relationship.relationship"
+                    placeholder="Relationship type"
+                    class="flex-1"
+                  />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-lucide-x"
+                    size="sm"
+                    @click="removeRelationship(index)"
+                  />
+                </div>
+              </div>
+
+              <UButton
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                @click="addRelationship"
+              >
+                Add Relationship
+              </UButton>
+            </div>
+          </UCard>
+
+          <div class="flex gap-3 justify-end">
+            <UButton
+              color="primary"
+              variant="outline"
+              icon="i-lucide-wand-2"
               :disabled="loading || !canGenerate"
-              title="AI will fill empty fields based on existing content"
+              :loading="generating"
+              @click="handleGenerateCharacter"
             >
-              <span v-if="!generating">
-                <Wand2 :size="16" class="inline mr-1" /> AI Generate Missing Fields
-              </span>
-              <span v-else class="generating">
-                <Wand2 :size="16" class="inline mr-1" /> Generating...
-              </span>
-            </button>
+              {{ generating ? 'Generating...' : 'AI Generate Missing Fields' }}
+            </UButton>
 
-            <button
+            <UButton
               type="submit"
-              class="btn btn-primary"
+              color="primary"
               :disabled="loading || !isFormValid"
+              :loading="loading"
             >
-              <span v-if="!loading">Create Character</span>
-              <div v-else class="loading-spinner"></div>
-            </button>
+              Create Character
+            </UButton>
           </div>
         </form>
       </div>
 
       <!-- YAML Import -->
-      <div v-if="activeTab === 'yaml'" class="yaml-form">
-        <div class="yaml-section">
-          <h3>Import Character from YAML</h3>
-          <p class="section-description">
-            Paste your character definition in YAML format below. The system will parse and validate it.
-          </p>
+      <div v-if="activeTab === 'yaml'">
+        <UCard>
+          <template #header>
+            <h3 class="text-lg font-semibold">Import Character from YAML</h3>
+          </template>
 
-          <div class="form-group">
-            <label for="yaml-content">YAML Content</label>
-            <textarea
-              id="yaml-content"
-              v-model="yamlContent"
-              class="input textarea yaml-textarea"
-              rows="20"
-              placeholder="name: Character Name
-role: Character Role
+          <div class="space-y-4">
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              Paste your character definition in YAML format below. The system will parse and validate it.
+            </p>
+
+            <UFormField label="YAML Content">
+              <UTextarea
+                v-model="yamlContent"
+                :rows="20"
+                class="font-mono text-sm"
+                placeholder="name: Character Name
+tagline: Character tagline
 backstory: Character backstory...
 personality: Character personality...
 appearance: Physical description...
@@ -247,45 +227,57 @@ relationships:
   friend_name: friend
   family_member: sister
 setting_description: World description..."
-            ></textarea>
+              />
+            </UFormField>
+
+            <div class="flex gap-3">
+              <UButton
+                color="neutral"
+                variant="outline"
+                :disabled="loading || !yamlContent.trim()"
+                :loading="processingYaml"
+                @click="processYaml"
+              >
+                {{ processingYaml ? 'Processing...' : 'Parse YAML' }}
+              </UButton>
+
+              <UButton
+                color="primary"
+                :disabled="loading || !yamlContent.trim()"
+                :loading="loading"
+                @click="saveYamlCharacter"
+              >
+                Create from YAML
+              </UButton>
+            </div>
+
+            <div v-if="yamlPreview">
+              <UDivider />
+              <h4 class="text-md font-semibold mb-2">Preview</h4>
+              <pre class="font-mono text-sm bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto">{{ yamlPreview }}</pre>
+            </div>
           </div>
-
-          <div class="yaml-actions">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="processYaml"
-              :disabled="loading || !yamlContent.trim()"
-            >
-              <span v-if="!processingYaml">Parse YAML</span>
-              <span v-else>Processing...</span>
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-primary"
-              @click="saveYamlCharacter"
-              :disabled="loading || !yamlContent.trim()"
-            >
-              <span v-if="!loading">Create from YAML</span>
-              <div v-else class="loading-spinner"></div>
-            </button>
-          </div>
-        </div>
-
-        <div v-if="yamlPreview" class="yaml-preview">
-          <h4>Preview</h4>
-          <pre class="yaml-preview-content">{{ yamlPreview }}</pre>
-        </div>
+        </UCard>
       </div>
 
-      <div v-if="successMessage" class="success-message">
-        {{ successMessage }}
-      </div>
+      <!-- Success/Error Messages -->
+      <UAlert
+        v-if="successMessage"
+        color="success"
+        variant="soft"
+        icon="i-lucide-check-circle"
+        :description="successMessage"
+        @close="successMessage = ''"
+      />
 
-      <div v-if="errorMessage" class="error-message-global">
-        {{ errorMessage }}
-      </div>
+      <UAlert
+        v-if="errorMessage"
+        color="error"
+        variant="soft"
+        icon="i-lucide-alert-circle"
+        :description="errorMessage"
+        @close="errorMessage = ''"
+      />
     </div>
   </div>
 </template>
@@ -297,7 +289,6 @@ import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { validateCharacterName, debounce } from '@/utils/formatters'
 import type { Character } from '@/types'
-import { ArrowLeft, Wand2, X } from 'lucide-vue-next'
 
 const router = useRouter()
 const { createCharacter, generateCharacter, loading, error } = useApi()
@@ -318,7 +309,7 @@ interface RelationshipItem {
 
 const formData = reactive<Character>({
   name: '',
-  role: '',
+  tagline: '',
   backstory: '',
   personality: '',
   appearance: '',
@@ -339,14 +330,14 @@ const errors = reactive({
 
 const isFormValid = computed(() => {
   return formData.name.trim().length > 0 &&
-         formData.role.trim().length > 0 &&
+         formData.tagline.trim().length > 0 &&
          formData.backstory.trim().length > 0 &&
          validateCharacterName(formData.name)
 })
 
 const canGenerate = computed(() => {
   return formData.name.trim().length > 0 ||
-         formData.role.trim().length > 0 ||
+         formData.tagline.trim().length > 0 ||
          formData.backstory.trim().length > 0
 })
 
@@ -361,8 +352,8 @@ const validateForm = () => {
     errors.name = 'Character name must be 1-50 characters'
   }
 
-  if (!formData.role.trim()) {
-    errors.role = 'Role is required'
+  if (!formData.tagline.trim()) {
+    errors.role = 'Tagline is required'
   }
 
   if (!formData.backstory.trim()) {
@@ -417,7 +408,7 @@ const handleGenerateCharacter = debounce(async () => {
 
     // Add non-empty fields to partial character
     if (formData.name.trim()) partialCharacter.name = formData.name.trim()
-    if (formData.role.trim()) partialCharacter.role = formData.role.trim()
+    if (formData.tagline.trim()) partialCharacter.tagline = formData.tagline.trim()
     if (formData.backstory.trim()) partialCharacter.backstory = formData.backstory.trim()
     if (formData.personality?.trim()) partialCharacter.personality = formData.personality.trim()
     if (formData.appearance?.trim()) partialCharacter.appearance = formData.appearance.trim()
@@ -442,7 +433,7 @@ const handleGenerateCharacter = debounce(async () => {
     // Update form data with generated character
     const generatedCharacter = response.character
     formData.name = generatedCharacter.name
-    formData.role = generatedCharacter.role
+    formData.tagline = generatedCharacter.tagline
     formData.backstory = generatedCharacter.backstory
     formData.personality = generatedCharacter.personality || ''
     formData.appearance = generatedCharacter.appearance || ''
@@ -549,301 +540,3 @@ onMounted(() => {
   loadSettings()
 })
 </script>
-
-<style scoped>
-.character-creation-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.creation-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
-  width: 100%;
-}
-
-.view-header {
-  margin-bottom: 2rem;
-}
-
-.creation-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 2rem;
-}
-
-.tab-button {
-  background: none;
-  border: none;
-  padding: 1rem 2rem;
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.tab-button:hover {
-  color: var(--text-primary);
-  background: var(--background-color);
-}
-
-.tab-button.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
-}
-
-.character-form {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.form-section {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-}
-
-.form-section h3 {
-  margin: 0 0 1.5rem 0;
-  color: var(--text-primary);
-  font-size: 1.25rem;
-}
-
-.section-description {
-  margin: 0 0 1rem 0;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.form-group label.required::after {
-  content: ' *';
-  color: var(--error-color);
-}
-
-.error-message {
-  display: block;
-  margin-top: 0.5rem;
-  color: var(--error-color);
-  font-size: 0.875rem;
-}
-
-.locations-list,
-.relationships-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.location-item,
-.relationship-item {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.relationship-item .input {
-  flex: 1;
-}
-
-.btn-icon {
-  background: none;
-  border: none;
-  padding: 0.5rem;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background-color 0.2s;
-  color: var(--text-secondary);
-}
-
-.remove-location:hover,
-.remove-relationship:hover {
-  background: #fee2e2;
-  color: var(--error-color);
-}
-
-.form-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
-}
-
-.btn-generate {
-  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
-  color: white;
-  border: 1px solid transparent;
-  transition: all 0.3s ease;
-}
-
-.btn-generate:hover:not(:disabled) {
-  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-}
-
-.btn-generate:disabled {
-  background: #d1d5db;
-  color: #9ca3af;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.generating {
-  animation: sparkle 1.5s ease-in-out infinite;
-}
-
-@keyframes sparkle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.yaml-section {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-}
-
-.yaml-section h3 {
-  margin: 0 0 1rem 0;
-  color: var(--text-primary);
-}
-
-.yaml-textarea {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.yaml-actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.yaml-preview {
-  margin-top: 2rem;
-  background: var(--background-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-}
-
-.yaml-preview h4 {
-  margin: 0 0 1rem 0;
-  color: var(--text-primary);
-}
-
-.yaml-preview-content {
-  margin: 0;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-x: auto;
-}
-
-.success-message {
-  background: #dcfce7;
-  color: #166534;
-  padding: 1rem;
-  border-radius: var(--radius-md);
-  margin-top: 1rem;
-  text-align: center;
-}
-
-.error-message-global {
-  background: #fee2e2;
-  color: var(--error-color);
-  padding: 1rem;
-  border-radius: var(--radius-md);
-  margin-top: 1rem;
-  text-align: center;
-}
-
-@media (max-width: 768px) {
-  .creation-content {
-    padding: 1.5rem 1rem;
-  }
-
-  .header-main {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .header-main h2 {
-    font-size: 1.75rem;
-  }
-
-  .creation-tabs {
-    overflow-x: auto;
-  }
-
-  .tab-button {
-    padding: 0.75rem 1.5rem;
-    white-space: nowrap;
-  }
-
-  .form-section {
-    padding: 1.5rem;
-  }
-
-  .form-actions {
-    flex-direction: column;
-  }
-
-  .yaml-actions {
-    flex-direction: column;
-  }
-
-  .relationship-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-@media (max-width: 480px) {
-  .location-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .form-section {
-    padding: 1rem;
-  }
-}
-
-/* Icon utility classes */
-.inline {
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.mr-1 {
-  margin-right: 0.25rem;
-}
-</style>

@@ -19,7 +19,23 @@
       "Bash(npm run lint)",
       "Bash(npm run lint:*)",
       "Bash(npm run type-check:*)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "mcp__nuxt-ui-remote__get_migration_guide",
+      "mcp__nuxt-ui-remote__list_components",
+      "WebFetch(domain:ui.nuxt.com)",
+      "mcp__nuxt-ui-remote__list_getting_started_guides",
+      "mcp__nuxt-ui-remote__get_documentation_page",
+      "mcp__nuxt-ui-remote__get_component",
+      "mcp__nuxt-ui-remote__get_component_metadata",
+      "Bash(uv pip:*)",
+      "WebFetch(domain:clerk.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(AUTH_ENABLED=false python -m pytest:*)",
+      "Bash(AUTH_ENABLED=false python:*)",
+      "Bash(xargs cat:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   }

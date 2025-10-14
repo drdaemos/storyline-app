@@ -3,6 +3,7 @@
 Test script for the FastAPI server.
 This script demonstrates how to interact with the storyline API endpoints.
 """
+
 import json
 
 import requests
@@ -72,22 +73,13 @@ def test_streaming_interaction() -> None:
         print(f"Testing with character: {character_name}")
 
         # Test streaming interaction
-        interaction_data = {
-            "character_name": character_name,
-            "user_message": "Hello! How are you today?",
-            "processor_type": "google"
-        }
+        interaction_data = {"character_name": character_name, "user_message": "Hello! How are you today?", "processor_type": "google"}
 
         print("\nSending interaction request...")
         print(f"Request data: {json.dumps(interaction_data, indent=2)}")
 
         # Make streaming request
-        response = requests.post(
-            f"{base_url}/interact",
-            json=interaction_data,
-            stream=True,
-            timeout=30
-        )
+        response = requests.post(f"{base_url}/interact", json=interaction_data, stream=True, timeout=30)
 
         print(f"Response status: {response.status_code}")
         print(f"Response headers: {dict(response.headers)}")

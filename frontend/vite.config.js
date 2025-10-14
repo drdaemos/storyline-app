@@ -1,8 +1,22 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import ui from '@nuxt/ui/vite'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    ui({
+      ui: {
+        colors: {
+          primary: 'indigo',
+          neutral: 'slate'
+        },
+        pageGrid: {
+          base: 'relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
+        }
+      }
+    })
+  ],
   resolve: {
     alias: {
       '@': '/src'

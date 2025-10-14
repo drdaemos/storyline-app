@@ -37,13 +37,13 @@ class TestScenarioGenerator:
         """Setup test with mock character and prompt processor."""
         self.test_character = Character(
             name="Aria",
-            role="Elven Ranger",
+            tagline="Elven Ranger",
             backstory="Protector of the ancient forest",
             personality="Cautious but kind-hearted",
             appearance="Tall elf with silver hair and green eyes",
             relationships={"mentor": "Elder druid of the forest"},
             key_locations=["Whispering Woods", "Crystal Lake"],
-            setting_description="A mystical forest realm filled with ancient magic"
+            setting_description="A mystical forest realm filled with ancient magic",
         )
 
         # Mock scenarios
@@ -51,30 +51,27 @@ class TestScenarioGenerator:
             Scenario(
                 summary="Tracking mysterious footprints in the Whispering Woods",
                 intro_message="You find Aria tracking mysterious footprints through the Whispering Woods. "
-                             "She gestures for silence as she points to strange markings on the trees. "
-                             "The forest seems unusually quiet around you.",
-                narrative_category="subtle mystery"
+                "She gestures for silence as she points to strange markings on the trees. "
+                "The forest seems unusually quiet around you.",
+                narrative_category="subtle mystery",
             ),
             Scenario(
                 summary="Urgent encounter at Crystal Lake",
                 intro_message="Aria emerges from the shadows near Crystal Lake, bow drawn and alert. 'Something's not right here,' she whispers urgently. The water's surface ripples unnaturally.",
-                narrative_category="tension and urgency"
+                narrative_category="tension and urgency",
             ),
             Scenario(
                 summary="Tending to an injured forest creature",
                 intro_message="You discover Aria kneeling beside an injured forest creature, her hands glowing "
-                             "with soft green light. She looks up with concern as you approach, relief crossing "
-                             "her features.",
-                narrative_category="conventional"
-            )
+                "with soft green light. She looks up with concern as you approach, relief crossing "
+                "her features.",
+                narrative_category="conventional",
+            ),
         ]
 
         self.mock_prompt_processor = MockPromptProcessor(self.mock_scenarios)
         self.mock_logger = MockChatLogger()
-        self.scenario_generator = ScenarioGenerator(
-            processors=[self.mock_prompt_processor],
-            logger=self.mock_logger
-        )
+        self.scenario_generator = ScenarioGenerator(processors=[self.mock_prompt_processor], logger=self.mock_logger)
 
     def test_generate_scenarios_default_count(self):
         """Test generating scenarios with default count (3)."""
@@ -89,11 +86,8 @@ class TestScenarioGenerator:
         """Test generating scenarios with custom count."""
         # Create mock with 5 scenarios
         mock_scenarios_5 = [
-            Scenario(
-                summary=f"Scenario {i} summary",
-                intro_message=f"This is the intro message for scenario {i} with more details about what's happening.",
-                narrative_category=f"category {i}"
-            ) for i in range(5)
+            Scenario(summary=f"Scenario {i} summary", intro_message=f"This is the intro message for scenario {i} with more details about what's happening.", narrative_category=f"category {i}")
+            for i in range(5)
         ]
         mock_processor = MockPromptProcessor(mock_scenarios_5)
         mock_logger = MockChatLogger()
@@ -124,11 +118,7 @@ class TestScenarioGenerator:
 
     def test_generate_scenarios_single_scenario(self):
         """Test generating a single scenario."""
-        single_scenario = [Scenario(
-            summary="A single scenario",
-            intro_message="This is a single scenario intro message with details about the scene.",
-            narrative_category="conventional"
-        )]
+        single_scenario = [Scenario(summary="A single scenario", intro_message="This is a single scenario intro message with details about the scene.", narrative_category="conventional")]
         mock_processor = MockPromptProcessor(single_scenario)
         mock_logger = MockChatLogger()
         generator = ScenarioGenerator(processors=[mock_processor], logger=mock_logger)
@@ -142,11 +132,7 @@ class TestScenarioGenerator:
 
     def test_generate_scenarios_with_minimal_character(self):
         """Test generating scenarios with minimal character data."""
-        minimal_character = Character(
-            name="Bob",
-            role="Merchant",
-            backstory="Sells goods"
-        )
+        minimal_character = Character(name="Bob", tagline="Merchant", backstory="Sells goods")
 
         result = self.scenario_generator.generate_scenarios(minimal_character)
 
@@ -155,7 +141,7 @@ class TestScenarioGenerator:
 
     def test_build_user_prompt_includes_character_details(self):
         """Test that user prompt includes all character details."""
-        prompt = self.scenario_generator._build_user_prompt(self.test_character, 3, 'normal')
+        prompt = self.scenario_generator._build_user_prompt(self.test_character, 3, "normal")
 
         # Verify key character details are in prompt
         assert "Aria" in prompt
@@ -169,13 +155,9 @@ class TestScenarioGenerator:
 
     def test_build_user_prompt_with_minimal_character(self):
         """Test user prompt with character having minimal fields."""
-        minimal_character = Character(
-            name="Test",
-            role="Role",
-            backstory="Story"
-        )
+        minimal_character = Character(name="Test", tagline="Role", backstory="Story")
 
-        prompt = self.scenario_generator._build_user_prompt(minimal_character, 2, 'normal')
+        prompt = self.scenario_generator._build_user_prompt(minimal_character, 2, "normal")
 
         # Should still include basic fields
         assert "Test" in prompt

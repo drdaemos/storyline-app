@@ -1,52 +1,39 @@
 <template>
-  <div
-    class="character-card"
-    :class="{ 'selected': selected, 'create-new': isCreateNew }"
+  <UCard
+    v-if="!isCreateNew"
+    :class="[
+      'min-h-48 flex items-end-safe cursor-pointer transition-all hover:shadow-md shadow-primary/20',
+      selected && 'ring-2 ring-primary'
+    ]"
     @click="handleClick"
   >
-    <div v-if="isCreateNew" class="create-new-content">
-      <div class="create-icon">+</div>
-      <h3>Create New Character</h3>
-    </div>
-
-    <div v-else class="character-content">
-      <div class="character-avatar">
-        <img
-          v-if="characterInfo?.appearance"
-          :src="getAvatarUrl(character)"
-          :alt="character"
-          loading="lazy"
-          @error="handleImageError"
-        />
-        <div v-else class="avatar-placeholder">
-          {{ character.charAt(0).toUpperCase() }}
-        </div>
-      </div>
-
-      <div class="character-info">
-        <h3 class="character-name">{{ character }}</h3>
-        <p v-if="characterInfo?.role" class="character-role">
-          {{ characterInfo.role }}
-        </p>
-        <p v-if="characterInfo?.backstory" class="character-description">
-          {{ truncateText(characterInfo.backstory, 100) }}
+    <template #footer>
+      <div class="space-y-1 w-full">
+        <p class="text-md font-semibold">{{ characterSummary?.name }}</p>
+        <p v-if="characterSummary?.role" class="text-sm text-gray-600 dark:text-gray-400">
+          {{ characterSummary.role }}
         </p>
       </div>
-    </div>
+    </template>
+  </UCard>
 
-    <div v-if="selected" class="selection-indicator">
-      ✓
-    </div>
-  </div>
+  <UCard
+    v-else
+    variant="subtle"
+    class="min-h-32 flex items-end-safe cursor-pointer border-dashed hover:shadow-md shadow-indigo-500/20 transition-all"
+    @click="handleClick"
+  >
+    <p class="text-md font-semibold">
+      Create New Character
+    </p>
+  </UCard>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi'
-import { truncateText } from '@/utils/formatters'
+import type { CharacterSummary } from '@/types'
 
 interface Props {
-  character?: string
+  characterSummary?: CharacterSummary
   selected?: boolean
   isCreateNew?: boolean
 }
@@ -57,194 +44,15 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  select: [character: string]
+  select: [characterName: string]
   create: []
 }>()
-
-const { getCharacterInfo } = useApi()
-const characterInfo = ref<Record<string, string> | null>(null)
-const imageError = ref(false)
 
 const handleClick = () => {
   if (props.isCreateNew) {
     emit('create')
-  } else if (props.character) {
-    emit('select', props.character)
+  } else if (props.characterSummary) {
+    emit('select', props.characterSummary.id)
   }
 }
-
-const getAvatarUrl = (name: string): string => {
-  // For now, we'll use a placeholder service
-  // In production, this would likely be served from your backend
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`
-}
-
-const handleImageError = () => {
-  imageError.value = true
-}
-
-onMounted(async () => {
-  if (props.character && !props.isCreateNew) {
-    try {
-      characterInfo.value = await getCharacterInfo(props.character)
-    } catch (error) {
-      console.error('Failed to load character info:', error)
-    }
-  }
-})
 </script>
-
-<style scoped>
-.character-card {
-  position: relative;
-  background: var(--surface-color);
-  border: 2px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-}
-
-.character-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-
-.character-card.selected {
-  border-color: var(--primary-color);
-  background: #eff6ff;
-  box-shadow: var(--shadow-md);
-}
-
-.character-card.create-new {
-  border-style: dashed;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-.character-card.create-new:hover {
-  color: var(--primary-color);
-  background: #eff6ff;
-}
-
-.create-new-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.create-icon {
-  font-size: 3rem;
-  font-weight: 300;
-  opacity: 0.7;
-}
-
-.character-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: 100%;
-}
-
-.character-avatar {
-  align-self: center;
-}
-
-.character-avatar img {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.avatar-placeholder {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-
-.character-info {
-  text-align: center;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.character-name {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.character-role {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin: 0;
-}
-
-.character-description {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin: 0;
-  flex: 1;
-}
-
-.selection-indicator {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 24px;
-  height: 24px;
-  background: var(--primary-color);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-@media (max-width: 768px) {
-  .character-card {
-    padding: 1rem;
-    min-height: 160px;
-  }
-
-  .character-avatar img,
-  .avatar-placeholder {
-    width: 48px;
-    height: 48px;
-  }
-
-  .character-name {
-    font-size: 1rem;
-  }
-
-  .character-role {
-    font-size: 0.8rem;
-  }
-
-  .character-description {
-    font-size: 0.75rem;
-  }
-}
-</style>

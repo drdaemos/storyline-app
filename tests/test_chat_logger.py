@@ -6,7 +6,6 @@ from src.chat_logger import ChatLogger
 
 
 class TestChatLogger:
-
     def setup_method(self):
         """Set up test data for each test."""
         self.character_id = "Alice"
@@ -14,12 +13,12 @@ class TestChatLogger:
     def test_logging_setup_with_default_directory(self):
         """Test that logging is set up with default directory."""
 
-        with patch('pathlib.Path.cwd') as mock_cwd:
+        with patch("pathlib.Path.cwd") as mock_cwd:
             mock_cwd.return_value = Path(tempfile.mkdtemp())
             chat_logger = ChatLogger(self.character_id, session_id="test-session-123456789")
 
-            assert hasattr(chat_logger, 'logger')
-            assert hasattr(chat_logger, 'log_file_path')
+            assert hasattr(chat_logger, "logger")
+            assert hasattr(chat_logger, "log_file_path")
             assert chat_logger.logs_dir.name == "logs"
 
     def test_logging_setup_with_custom_directory(self):
@@ -45,11 +44,7 @@ class TestChatLogger:
             logs_dir = Path(temp_dir)
 
             # Test with session ID
-            chat_logger = ChatLogger(
-                self.character_id,
-                session_id="test-session-123456789",
-                logs_dir=logs_dir
-            )
+            chat_logger = ChatLogger(self.character_id, session_id="test-session-123456789", logs_dir=logs_dir)
 
             try:
                 # Check that character directory is created
@@ -73,11 +68,7 @@ class TestChatLogger:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             logs_dir = Path(temp_dir)
-            chat_logger = ChatLogger(
-                "Alice O'Malley & Co.",
-                session_id="test123",
-                logs_dir=logs_dir
-            )
+            chat_logger = ChatLogger("Alice O'Malley & Co.", session_id="test123", logs_dir=logs_dir)
 
             try:
                 # Check that sanitized character directory is created
@@ -100,11 +91,7 @@ class TestChatLogger:
         """Test that log files handle Unicode characters properly."""
         with tempfile.TemporaryDirectory() as temp_dir:
             logs_dir = Path(temp_dir)
-            chat_logger = ChatLogger(
-                self.character_id,
-                session_id="unicode-session",
-                logs_dir=logs_dir
-            )
+            chat_logger = ChatLogger(self.character_id, session_id="unicode-session", logs_dir=logs_dir)
 
             try:
                 # Send message with Unicode characters
@@ -112,7 +99,7 @@ class TestChatLogger:
                 chat_logger.log_message("character", "Héllo wörld! 🎭")
 
                 # Check that Unicode is properly stored
-                log_content = chat_logger.log_file_path.read_text(encoding='utf-8')
+                log_content = chat_logger.log_file_path.read_text(encoding="utf-8")
                 assert "Héllo charactér! 🌟" in log_content
                 assert "Héllo wörld! 🎭" in log_content
             finally:

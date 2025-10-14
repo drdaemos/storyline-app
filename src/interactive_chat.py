@@ -81,7 +81,7 @@ Select a character to start chatting with them!
         for i, char_name in enumerate(characters, 1):
             char_info = self.loader.get_character_info(char_name)
             if char_info:
-                self.console.print(f"{i}. [bold]{char_info.name}[/bold] - {char_info.role}")
+                self.console.print(f"{i}. [bold]{char_info.name}[/bold] - {char_info.tagline}")
             else:
                 self.console.print(f"{i}. {char_name}")
 
@@ -105,7 +105,7 @@ Select a character to start chatting with them!
     def display_character_info(self, character: Character) -> None:
         info_text = f"""
 **Name:** {character.name}
-**Role:** {character.role}
+**Tagline:** {character.tagline}
 **Backstory:** {character.backstory}
         """
         self.console.print(Panel(Markdown(info_text), title=f"Character: {character.name}", border_style="green"))

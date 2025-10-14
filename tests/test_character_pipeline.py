@@ -10,7 +10,8 @@ from src.models.character import Character
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+
 
 class MockPromptProcessor(PromptProcessor):
     """Test implementation of PromptProcessor for testing."""
@@ -27,62 +28,22 @@ class MockPromptProcessor(PromptProcessor):
         """Set the logger for this processor."""
         self.logger = logger
 
-
-    def respond_with_model(
-        self,
-        prompt: str,
-        user_prompt: str,
-        output_type: type[T],
-        conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None
-    ) -> T:
+    def respond_with_model(self, prompt: str, user_prompt: str, output_type: type[T], conversation_history: list[GenericMessage] | None = None, max_tokens: int | None = None) -> T:
         # Record the call for verification
-        self.call_history.append({
-            "prompt": prompt,
-            "user_prompt": user_prompt,
-            "output_type": output_type,
-            "conversation_history": conversation_history,
-            "max_tokens": max_tokens
-        })
+        self.call_history.append({"prompt": prompt, "user_prompt": user_prompt, "output_type": output_type, "conversation_history": conversation_history, "max_tokens": max_tokens})
         # Return the response if it's already a model, otherwise raise error
         if isinstance(self.response, BaseModel):
-            return self.response # type: ignore
+            return self.response  # type: ignore
         raise NotImplementedError("Model response not provided")
 
-    def respond_with_text(
-        self,
-        prompt: str,
-        user_prompt: str,
-        conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None,
-        reasoning: bool = False
-    ) -> str:
+    def respond_with_text(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None, max_tokens: int | None = None, reasoning: bool = False) -> str:
         # Record the call for verification
-        self.call_history.append({
-            "prompt": prompt,
-            "user_prompt": user_prompt,
-            "conversation_history": conversation_history,
-            "max_tokens": max_tokens,
-            "reasoning": reasoning
-        })
-        return self.response # type: ignore
+        self.call_history.append({"prompt": prompt, "user_prompt": user_prompt, "conversation_history": conversation_history, "max_tokens": max_tokens, "reasoning": reasoning})
+        return self.response  # type: ignore
 
-    def respond_with_stream(
-        self,
-        prompt: str,
-        user_prompt: str,
-        conversation_history: list[GenericMessage] | None = None,
-        max_tokens: int | None = None,
-        reasoning: bool = False
-    ) -> Iterator[str]:
+    def respond_with_stream(self, prompt: str, user_prompt: str, conversation_history: list[GenericMessage] | None = None, max_tokens: int | None = None, reasoning: bool = False) -> Iterator[str]:
         # Record the call for verification
-        self.call_history.append({
-            "prompt": prompt,
-            "user_prompt": user_prompt,
-            "conversation_history": conversation_history,
-            "max_tokens": max_tokens,
-            "reasoning": reasoning
-        })
+        self.call_history.append({"prompt": prompt, "user_prompt": user_prompt, "conversation_history": conversation_history, "max_tokens": max_tokens, "reasoning": reasoning})
         if isinstance(self.response, str):
             # Convert string to iterator by yielding character by character (to simulate streaming)
             yield from self.response
@@ -95,13 +56,13 @@ class TestCharacterPipeline:
         """Set up test fixtures."""
         self.test_character = Character(
             name="Alice",
-            role="Detective",
+            tagline="Detective",
             backstory="Former police officer turned private investigator",
             personality="Sharp, analytical, slightly cynical but caring",
             appearance="Tall, auburn hair, piercing green eyes",
             relationships={"user": "professional acquaintance"},
             key_locations=["downtown office", "crime scenes", "local diner"],
-            setting_description="Urban detective story setting"
+            setting_description="Urban detective story setting",
         )
 
     def test_get_evaluation_success(self):
@@ -113,7 +74,7 @@ class TestCharacterPipeline:
             patterns_to_avoid="Avoid being too confrontational without evidence",
             status_update="Alice is in her office reviewing case files. User appears nervous and needs help with something important.",
             time_passed="A few minutes have passed since the last interaction",
-            user_name="Unknown"
+            user_name="Unknown",
         )
 
         mock_processor = MockPromptProcessor(evaluation_response)
@@ -122,13 +83,10 @@ class TestCharacterPipeline:
             "summary": "Previous case discussion",
             "plans": "Investigate the missing person case",
             "user_message": "I need your help with something important",
-            "character": self.test_character
+            "character": self.test_character,
         }
 
-        memory: list[GenericMessage] = [
-            {"role": "user", "content": "Hello Alice"},
-            {"role": "assistant", "content": "Hello, what can I help you with?"}
-        ]
+        memory: list[GenericMessage] = [{"role": "user", "content": "Hello Alice"}, {"role": "assistant", "content": "Hello, what can I help you with?"}]
 
         result = CharacterPipeline.get_evaluation(mock_processor, input_data, memory)
 
@@ -140,15 +98,14 @@ class TestCharacterPipeline:
         call = mock_processor.call_history[0]
 
         # Check that prompt contains character information
-        assert "Former police officer" in call['prompt']
-        assert "Detective" in call['prompt'] or "investigator" in call['prompt']
+        assert "Former police officer" in call["prompt"]
+        assert "Detective" in call["prompt"] or "investigator" in call["prompt"]
 
         # Check that user prompt was passed
-        assert call['user_prompt'] == "I need your help with something important"
+        assert call["user_prompt"] == "I need your help with something important"
 
         # Check conversation history was included
-        assert len(call['conversation_history']) >= 2
-
+        assert len(call["conversation_history"]) >= 2
 
     def test_get_character_plans_success(self):
         """Test successful character plan generation."""
@@ -165,12 +122,7 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(plans_response)
 
-        input_data: PlanGenerationInput = {
-            "character": self.test_character,
-            "user_name": "John",
-            "summary": "Missing person case discussion",
-            "scenario_state": "Office meeting, case files on desk"
-        }
+        input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": "Missing person case discussion", "scenario_state": "Office meeting, case files on desk"}
 
         result = CharacterPipeline.get_character_plans(mock_processor, input_data)
 
@@ -188,8 +140,8 @@ class TestCharacterPipeline:
         call = mock_processor.call_history[0]
 
         # Check character information in prompt
-        assert "Alice" in call['prompt']
-        assert "John" in call['prompt']
+        assert "Alice" in call["prompt"]
+        assert "John" in call["prompt"]
 
     def test_get_character_plans_missing_story_plan_tag(self):
         """Test plan generation fails when <story_plan> tag is missing."""
@@ -197,12 +149,7 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(plans_response)
 
-        input_data: PlanGenerationInput = {
-            "character": self.test_character,
-            "user_name": "John",
-            "summary": "Test summary",
-            "scenario_state": "Test state"
-        }
+        input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": "Test summary", "scenario_state": "Test state"}
 
         result = CharacterPipeline.get_character_plans(mock_processor, input_data)
 
@@ -220,13 +167,10 @@ class TestCharacterPipeline:
             "character": self.test_character,
             "user_name": "John",
             "user_message": "Here are the case files",
-            "scenario_state": "Office meeting, files on desk"
+            "scenario_state": "Office meeting, files on desk",
         }
 
-        memory: list[GenericMessage] = [
-            {"role": "user", "content": "I need help with a case"},
-            {"role": "assistant", "content": "I can help you with that"}
-        ]
+        memory: list[GenericMessage] = [{"role": "user", "content": "I need help with a case"}, {"role": "assistant", "content": "I can help you with that"}]
 
         result = CharacterPipeline.get_character_response(mock_processor, input_data, memory)
 
@@ -240,9 +184,8 @@ class TestCharacterPipeline:
         call = mock_processor.call_history[0]
 
         # Check character information in prompt
-        assert "Alice" in call['prompt']
-        assert "John" in call['prompt']
-
+        assert "Alice" in call["prompt"]
+        assert "John" in call["prompt"]
 
     def test_get_memory_summary(self):
         """Test memory summarization."""
@@ -254,7 +197,7 @@ class TestCharacterPipeline:
             {"role": "user", "content": "I need help with a case"},
             {"role": "assistant", "content": "I can help you with that"},
             {"role": "user", "content": "Here are the details"},
-            {"role": "assistant", "content": "I see some inconsistencies"}
+            {"role": "assistant", "content": "I see some inconsistencies"},
         ]
 
         result = CharacterPipeline.get_memory_summary(mock_processor, memory)
@@ -266,7 +209,7 @@ class TestCharacterPipeline:
         call = mock_processor.call_history[0]
 
         # Check that memory content was included in user prompt
-        user_prompt = call['user_prompt']
+        user_prompt = call["user_prompt"]
         assert "I need help with a case" in user_prompt
         assert "Here are the details" in user_prompt
 
@@ -350,7 +293,7 @@ class TestCharacterPipeline:
             "character_personality": "Sharp, analytical, slightly cynical but caring",
             "relationships": "- user: professional acquaintance",
             "key_locations": "- downtown office\n- crime scenes\n- local diner",
-            "setting_description": "Urban detective story setting"
+            "setting_description": "Urban detective story setting",
         }
 
         assert result == expected
@@ -359,13 +302,13 @@ class TestCharacterPipeline:
         """Test character formatting with empty relationships."""
         character = Character(
             name="Bob",
-            role="Engineer",
+            tagline="Engineer",
             backstory="Software engineer",
             personality="Analytical",
             appearance="Average height",
             relationships={},  # No user relationship
             key_locations=["office"],
-            setting_description="Modern office environment"
+            setting_description="Modern office environment",
         )
 
         result = format_character_description(character)
@@ -376,16 +319,15 @@ class TestCharacterPipeline:
         """Test character formatting with empty key locations."""
         character = Character(
             name="Bob",
-            role="Engineer",
+            tagline="Engineer",
             backstory="Software engineer",
             personality="Analytical",
             appearance="Average height",
             relationships={"user": "colleague"},
             key_locations=[],  # Empty locations
-            setting_description="Modern office environment"
+            setting_description="Modern office environment",
         )
 
         result = format_character_description(character)
 
         assert result["key_locations"] == ""
-

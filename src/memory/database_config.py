@@ -41,19 +41,19 @@ class DatabaseConfig:
             Database URL string
         """
         # Check for explicit DATABASE_URL first
-        database_url = os.getenv('DATABASE_URL')
+        database_url = os.getenv("DATABASE_URL")
         if database_url:
             return database_url
 
         # Build URL from components
-        db_type = os.getenv('DB_TYPE', 'sqlite').lower()
+        db_type = os.getenv("DB_TYPE", "sqlite").lower()
 
-        if db_type == 'postgresql':
-            host = os.getenv('DB_HOST', 'localhost')
-            port = os.getenv('DB_PORT', '5432')
-            name = os.getenv('DB_NAME', 'storyline')
-            user = os.getenv('DB_USER', 'postgres')
-            password = os.getenv('DB_PASSWORD', '')
+        if db_type == "postgresql":
+            host = os.getenv("DB_HOST", "localhost")
+            port = os.getenv("DB_PORT", "5432")
+            name = os.getenv("DB_NAME", "storyline")
+            user = os.getenv("DB_USER", "postgres")
+            password = os.getenv("DB_PASSWORD", "")
 
             if password:
                 return f"postgresql://{user}:{password}@{host}:{port}/{name}"
@@ -61,7 +61,7 @@ class DatabaseConfig:
                 return f"postgresql://{user}@{host}:{port}/{name}"
 
         # Default to SQLite
-        db_name = os.getenv('DB_NAME', 'conversations.db')
+        db_name = os.getenv("DB_NAME", "conversations.db")
         self.memory_dir.mkdir(parents=True, exist_ok=True)
         db_path = self.memory_dir / db_name
         return f"sqlite:///{db_path}"

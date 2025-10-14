@@ -5,4 +5,4 @@ from .conversation_memory import ConversationMemory
 from .database_config import DatabaseConfig
 from .summary_memory import SummaryMemory
 
-__all__ = ['ConversationMemory', 'SummaryMemory', 'CharacterRegistry', 'DatabaseConfig']
+__all__ = ["ConversationMemory", "SummaryMemory", "CharacterRegistry", "DatabaseConfig"]

@@ -17,13 +17,13 @@ class TestCharacterManager:
         """Test validation with valid character data."""
         valid_data = {
             "name": "Test Character",
-            "role": "Test Role",
+            "tagline": "Test Role",
             "backstory": "Test backstory",
             "personality": "Test personality",
             "appearance": "Test appearance",
             "setting_description": "Test setting",
             "relationships": {"user": "Test relationship"},
-            "key_locations": ["Location 1", "Location 2"]
+            "key_locations": ["Location 1", "Location 2"],
         }
 
         # Should not raise any exception
@@ -33,7 +33,7 @@ class TestCharacterManager:
         """Test validation fails when required fields are missing."""
         invalid_data = {
             "name": "Test Character",
-            "role": "Test Role"
+            "tagline": "Test Role",
             # Missing backstory
         }
 
@@ -42,23 +42,14 @@ class TestCharacterManager:
 
     def test_validate_character_data_empty_required_fields(self):
         """Test validation fails when required fields are empty."""
-        invalid_data = {
-            "name": "",
-            "role": "Test Role",
-            "backstory": "Test backstory"
-        }
+        invalid_data = {"name": "", "tagline": "Test Role", "backstory": "Test backstory"}
 
         with pytest.raises(ValueError, match="'name' must be a non-empty string"):
             self.character_manager.validate_character_data(invalid_data)
 
     def test_validate_character_data_wrong_types(self):
         """Test validation fails with wrong field types."""
-        invalid_data = {
-            "name": "Test Character",
-            "role": "Test Role",
-            "backstory": "Test backstory",
-            "relationships": "not a dict"
-        }
+        invalid_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory", "relationships": "not a dict"}
 
         with pytest.raises(ValueError, match="'relationships' must be a dictionary"):
             self.character_manager.validate_character_data(invalid_data)
@@ -67,14 +58,14 @@ class TestCharacterManager:
         """Test YAML text validation with valid input."""
         yaml_text = """
 name: Test Character
-role: Test Role
+tagline: Test Role
 backstory: Test backstory
 personality: Test personality
 """
 
         result = self.character_manager.validate_yaml_text(yaml_text)
         assert result["name"] == "Test Character"
-        assert result["role"] == "Test Role"
+        assert result["tagline"] == "Test Role"
         assert result["backstory"] == "Test backstory"
         assert result["personality"] == "Test personality"
 
@@ -82,7 +73,7 @@ personality: Test personality
         """Test YAML text validation with invalid YAML syntax."""
         invalid_yaml = """
 name: Test Character
-role: Test Role
+tagline: Test Role
 backstory: [unclosed bracket
 """
 
@@ -96,12 +87,7 @@ backstory: [unclosed bracket
 
     def test_create_character_file_success(self):
         """Test successful character file creation."""
-        character_data = {
-            "name": "Test Character",
-            "role": "Test Role",
-            "backstory": "Test backstory",
-            "personality": "Test personality"
-        }
+        character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory", "personality": "Test personality"}
 
         filename = self.character_manager.create_character_file(character_data)
 
@@ -114,17 +100,13 @@ backstory: [unclosed bracket
             saved_data = yaml.safe_load(f)
 
         assert saved_data["name"] == "Test Character"
-        assert saved_data["role"] == "Test Role"
+        assert saved_data["tagline"] == "Test Role"
         assert saved_data["backstory"] == "Test backstory"
         assert saved_data["personality"] == "Test personality"
 
     def test_create_character_file_already_exists(self):
         """Test character file creation when file already exists."""
-        character_data = {
-            "name": "Test Character",
-            "role": "Test Role",
-            "backstory": "Test backstory"
-        }
+        character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory"}
 
         # Create character first time
         self.character_manager.create_character_file(character_data)
@@ -150,11 +132,7 @@ backstory: [unclosed bracket
 
     def test_filename_collision_detection_same_character(self):
         """Test that creating the same character twice raises FileExistsError."""
-        character_data = {
-            "name": "Test Character",
-            "role": "Test Role",
-            "backstory": "Test backstory"
-        }
+        character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory"}
 
         # Create character first time
         self.character_manager.create_character_file(character_data)
@@ -166,18 +144,14 @@ backstory: [unclosed bracket
     def test_filename_collision_detection_different_characters(self):
         """Test that different character names generating the same filename raises ValueError."""
         # Create first character
-        character1_data = {
-            "name": "Test Character",
-            "role": "Test Role",
-            "backstory": "Test backstory"
-        }
+        character1_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory"}
         self.character_manager.create_character_file(character1_data)
 
         # Try to create second character with different name but same sanitized filename
         character2_data = {
             "name": "Test@Character",  # This will sanitize to "test_character"
-            "role": "Different Role",
-            "backstory": "Different backstory"
+            "tagline": "Different Role",
+            "backstory": "Different backstory",
         }
 
         with pytest.raises(ValueError, match="Filename collision detected"):
@@ -186,11 +160,7 @@ backstory: [unclosed bracket
     def test_filename_collision_detection_special_characters(self):
         """Test filename collision with special characters that sanitize to same result."""
         # Create first character
-        character1_data = {
-            "name": "Test Character",
-            "role": "Test Role",
-            "backstory": "Test backstory"
-        }
+        character1_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory"}
         self.character_manager.create_character_file(character1_data)
 
         # Try characters with different special characters that result in same filename
@@ -202,28 +172,16 @@ backstory: [unclosed bracket
         ]
 
         for name in collision_names:
-            character_data = {
-                "name": name,
-                "role": "Different Role",
-                "backstory": "Different backstory"
-            }
+            character_data = {"name": name, "tagline": "Different Role", "backstory": "Different backstory"}
 
             with pytest.raises(ValueError, match="Filename collision detected"):
                 self.character_manager.create_character_file(character_data)
 
     def test_no_collision_with_different_sanitized_names(self):
         """Test that characters with different sanitized names can coexist."""
-        character1_data = {
-            "name": "Test Character A",
-            "role": "Test Role",
-            "backstory": "Test backstory"
-        }
+        character1_data = {"name": "Test Character A", "tagline": "Test Role", "backstory": "Test backstory"}
 
-        character2_data = {
-            "name": "Test Character B",
-            "role": "Different Role",
-            "backstory": "Different backstory"
-        }
+        character2_data = {"name": "Test Character B", "tagline": "Different Role", "backstory": "Different backstory"}
 
         # Both should succeed as they generate different filenames
         filename1 = self.character_manager.create_character_file(character1_data)
