@@ -105,8 +105,10 @@ const sessionToDelete = ref<string | null>(null)
 
 const filteredSessions = computed(() => {
   return props.sessions
-    .filter(session => session.character_name === props.characterName)
-    .sort((a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime())
+    .filter((session) => session.character_name === props.characterName)
+    .sort(
+      (a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime()
+    )
 })
 
 const formatSessionId = (sessionId: string): string => {

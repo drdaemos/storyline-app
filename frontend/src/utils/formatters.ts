@@ -37,17 +37,17 @@ export function generateSessionId(): string {
 export function formatMessageTime(timestamp: Date): string {
   return timestamp.toLocaleTimeString([], {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   })
 }
 
 export function escapeHtml(unsafe: string): string {
   return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 export function parseMarkdown(text: string): string {
@@ -94,25 +94,16 @@ export function debounce<T extends (...args: any[]) => any>(
 
 // Thinking stage descriptors with synonyms
 const THINKING_STAGE_DESCRIPTORS = {
-  summarizing: [
-    'summarizing',
-    'consolidating',
-    'distilling',
-  ],
+  summarizing: ['summarizing', 'consolidating', 'distilling'],
   deliberating: [
     'deliberating',
     'analyzing',
     'contemplating',
     'evaluating',
     'weighing',
-    'assessing'
+    'assessing',
   ],
-  responding: [
-    'pondering',
-    'responding',
-    'formulating',
-    'articulating'
-  ]
+  responding: ['pondering', 'responding', 'formulating', 'articulating'],
 } as const
 
 export function getThinkingDescriptor(stage: string, _characterName: string): string {

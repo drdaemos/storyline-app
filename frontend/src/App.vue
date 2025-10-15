@@ -2,7 +2,7 @@
 import { SquareLibrary } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/vue'
-import SettingsMenu from "./components/SettingsMenu.vue"
+import SettingsMenu from './components/SettingsMenu.vue'
 
 const globalError = ref<string | null>(null)
 
@@ -26,8 +26,8 @@ window.addEventListener('error', (_event) => {
 
 const appearance = {
   elements: {
-    userButtonBox: 'rounded-md p-0.5'
-  }
+    userButtonBox: 'rounded-md p-0.5',
+  },
 }
 </script>
 
@@ -64,7 +64,7 @@ const appearance = {
         </SignedIn>
       </template>
     </UHeader>
-    <UContainer class="py-8">
+    <UContainer class="pt-8">
       <SignedIn>
         <router-view />
       </SignedIn>

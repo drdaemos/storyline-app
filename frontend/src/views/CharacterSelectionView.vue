@@ -1,9 +1,7 @@
 <template>
   <!-- Header -->
-  <div class="mb-8">
-    <div>
-      <h2 class="text-3xl font-bold font-serif">Choose a Character</h2>
-    </div>
+  <div class="flex mb-8 gap-4">
+    <h2 class="text-3xl font-bold font-serif">Choose a Character</h2>
   </div>
 
   <!-- Loading state -->
@@ -74,7 +72,7 @@ const selectCharacter = (characterId: string) => {
   updateSetting('lastSelectedCharacter', characterId)
   router.push({
     name: 'character',
-    params: { characterId }
+    params: { characterId },
   })
 }
 

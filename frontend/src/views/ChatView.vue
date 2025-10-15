@@ -1,109 +1,114 @@
 <template>
-  <div>
-    <!-- Header -->
-    <header>
-      <div class="flex items-center gap-4">
-        <UButton
-          to="/"
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-arrow-left"
-        />
-        <div>
-          <h2 class="text-2xl font-bold font-serif">{{ characterId }}</h2>
-          <span class="text-sm text-gray-500 font-mono">Session: {{ displaySessionId }}</span>
-        </div>
-      </div>
+  <!-- Header -->
+  <div class="flex mb-8 gap-4 items-center">
+    <UButton
+      color="neutral"
+      variant="ghost"
+      icon="i-lucide-arrow-left"
+      @click="navigateBack"
+    >
+      Back
+    </UButton>
+    <h2 class="text-2xl font-bold font-serif">{{ characterId }}</h2>
+    <span class="text-sm text-gray-500 font-mono">Session: {{ displaySessionId }}</span>
 
-      <div class="flex items-center gap-3">
-        <UBadge v-if="isConnected" color="success" variant="subtle">
-          Connected
-        </UBadge>
-        <UBadge v-else-if="error" color="error" variant="subtle">
-          Error
-        </UBadge>
-      </div>
-    </header>
-
-    <!-- Chat Container -->
-    <div class="pb-12 flex-1 justify-items-center">
-      <!-- Empty state -->
-      <div v-if="messages.length === 0 && !isThinking" class="flex-1 flex items-center justify-center text-center p-8">
-        <div class="space-y-4">
-          <div class="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <UIcon name="i-lucide-message-square" class="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 class="text-xl font-semibold">Start a conversation with {{ characterId }}</h3>
-          <p class="text-gray-500">Type a message below to begin chatting.</p>
-        </div>
-      </div>
-
-      <!-- Messages -->
-      <UChatMessages
-        v-else
-        :status="chatStatus"
-        should-auto-scroll
-        class="max-w-2xl"
-      >
-        <template #indicator>
-          <div class="flex items-center gap-3 py-3">
-            <div class="flex gap-1">
-              <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0s"></span>
-              <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0.2s"></span>
-              <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0.4s"></span>
-            </div>
-            <span class="text-sm italic text-gray-600 dark:text-gray-400">{{ thinkingMessage }}</span>
-          </div>
-        </template>
-        <UChatMessage
-          v-for="(message, index) in formattedMessages"
-          :key="index"
-          v-bind="message"
-          variant="soft"
-          :side="message.role === 'user' ? 'right' : 'left'"
-        />
-      </UChatMessages>
-
-      <!-- Error message -->
-      <div v-if="error && !isThinking" class="px-6">
-        <UAlert
-          color="error"
-          variant="soft"
-          icon="i-lucide-alert-triangle"
-          title="Error"
-          :description="error"
-        >
-          <template #actions>
-            <UButton
-              color="error"
-              variant="solid"
-              size="xs"
-              icon="i-lucide-refresh-cw"
-              label="Regenerate"
-              @click="regenerateAfterError"
-            />
-          </template>
-        </UAlert>
-      </div>
-
-      <!-- Chat Input -->
-      <ChatInput
-        :disabled="isThinking"
-        :character-name="characterId"
-        @send="handleChatInput"
-      />
+    <div class="flex items-center gap-3">
+      <UBadge v-if="isConnected" color="success" variant="subtle">
+        Connected
+      </UBadge>
+      <UBadge v-else-if="error" color="error" variant="subtle">
+        Error
+      </UBadge>
     </div>
+  </div>
+
+  <!-- Chat Container -->
+  <div class="pb-12 flex-1 justify-items-center">
+    <!-- Empty state -->
+    <div v-if="messages.length === 0 && !isThinking" class="flex-1 flex items-center justify-center text-center p-8">
+      <div class="space-y-4">
+        <div class="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+          <UIcon name="i-lucide-message-square" class="w-8 h-8 text-gray-400" />
+        </div>
+        <h3 class="text-xl font-semibold">Start a conversation with {{ characterId }}</h3>
+        <p class="text-gray-500">Type a message below to begin chatting.</p>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <UChatMessages
+      v-else
+      :status="chatStatus"
+      should-auto-scroll
+      class="max-w-2xl"
+    >
+      <template #indicator>
+        <div class="flex items-center gap-3 py-3">
+          <div class="flex gap-1">
+            <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse " style="animation-delay: 0s"></span>
+            <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0.2s"></span>
+            <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0.4s"></span>
+          </div>
+          <span class="text-sm italic text-gray-600 dark:text-gray-400">{{ thinkingMessage }}</span>
+        </div>
+      </template>
+      <UChatMessage
+        v-for="(message, index) in messages"
+        :id="index.toString()"
+        :role="message.isUser ? 'user' : 'assistant'"
+        :parts="[]"
+        :side="message.isUser ? 'right' : 'left'"
+        :variant="message.isUser ? 'outline' : 'soft'"
+      >
+        <template #content>
+          <div v-html="highlight(message.content)"></div>
+        </template>
+      </UChatMessage>
+    </UChatMessages>
+
+    <!-- Error message -->
+    <div v-if="error && !isThinking" class="px-6">
+      <UAlert
+        color="error"
+        variant="soft"
+        icon="i-lucide-alert-triangle"
+        title="Error"
+        :description="error"
+      >
+        <template #actions>
+          <UButton
+            color="error"
+            variant="solid"
+            size="xs"
+            icon="i-lucide-refresh-cw"
+            label="Regenerate"
+            @click="regenerateAfterError"
+          />
+        </template>
+      </UAlert>
+    </div>
+
+    <!-- Chat Input -->
+    <ChatInput
+      :chat-status="chatStatus"
+      :disabled="isThinking"
+      :character-name="characterId"
+      @send="handleChatInput"
+      @stop="handleStop"
+      @regenerate="regenerateAfterError"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatInput from '@/components/ChatInput.vue'
 import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails } from '@/types'
+import { useChatHighlight } from '@/composables/useChatHighlight.ts'
 
 interface Props {
   characterId: string
@@ -113,6 +118,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const router = useRouter()
+const { highlight } = useChatHighlight()
 const { settings } = useLocalSettings()
 const {
   isConnected,
@@ -123,13 +129,17 @@ const {
   connect,
   disconnect,
   clearStreamContent,
-  clearError
+  clearError,
 } = useEventStream()
 
 const messages = ref<ChatMessageType[]>([])
 const isThinking = ref(false)
 const currentSessionId = ref<string | null>(null)
 const lastInteractPayload = ref<InteractRequest | null>(null)
+
+const navigateBack = () => {
+  router.back()
+}
 
 const displaySessionId = computed(() => {
   if (props.sessionId === 'new') {
@@ -143,42 +153,6 @@ const thinkingMessage = computed((): string => {
     return `${props.characterId} is thinking...`
   }
   return getThinkingDescriptor(thinkingStage.value, props.characterId)
-})
-
-// Convert messages to AI SDK v5 format for UChatMessages
-const formattedMessages = computed(() => {
-  const formatted = messages.value.map((msg, index) => ({
-    id: `${msg.timestamp.getTime()}-${index}`,
-    role: msg.isUser ? 'user' : 'assistant',
-    parts: [{
-      type: 'text',
-      text: msg.content
-    }],
-    avatar: {icon: 'i-lucide-user'},
-    actions: !msg.isUser && index === messages.value.length - 1 ? [
-      {
-        icon: 'i-lucide-refresh-cw',
-        label: 'Regenerate response',
-        onClick: () => regenerateLastMessage()
-      }
-    ] : []
-  }))
-
-  // Add streaming message if present
-  if (isThinking.value && streamingContent.value) {
-    formatted.push({
-      id: 'streaming',
-      role: 'assistant',
-      parts: [{
-        type: 'text',
-        text: streamingContent.value
-      }],
-      avatar: {icon: 'i-lucide-user'},
-      actions: []
-    })
-  }
-
-  return formatted
 })
 
 // Convert isThinking to AI SDK chat status
@@ -223,7 +197,7 @@ const sendInteractRequest = async (userMessage: string) => {
       user_message: userMessage,
       session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor
+      backup_processor_type: settings.value.backupProcessor,
     }
 
     // Store payload for potential regeneration
@@ -240,7 +214,7 @@ const sendInteractRequest = async (userMessage: string) => {
           author: props.characterId,
           content: streamingContent.value,
           isUser: false,
-          timestamp: new Date()
+          timestamp: new Date(),
         }
 
         messages.value.push(characterMessage)
@@ -254,8 +228,8 @@ const sendInteractRequest = async (userMessage: string) => {
             name: 'chat',
             params: {
               characterName: props.characterId,
-              sessionId: sessionId?.value
-            }
+              sessionId: sessionId?.value,
+            },
           })
         }
       } else if (!isConnected.value && !streamingContent.value && !error.value) {
@@ -274,7 +248,6 @@ const sendInteractRequest = async (userMessage: string) => {
         clearInterval(completionInterval)
       }
     }, 100)
-
   } catch (err) {
     console.error('Failed to send message:', err)
     isThinking.value = false
@@ -289,7 +262,7 @@ const sendMessage = async (text: string) => {
     author: 'User',
     content: text.trim(),
     isUser: true,
-    timestamp: new Date()
+    timestamp: new Date(),
   }
 
   messages.value.push(userMessage)
@@ -366,21 +339,20 @@ const loadSessionHistory = async (sessionId: string, retryAttempt = 0) => {
     const sessionDetails: SessionDetails = await response.json()
 
     // Convert session messages to ChatMessage format
-    const chatMessages: ChatMessageType[] = sessionDetails.last_messages.map(msg => ({
+    // Set the messages
+    messages.value = sessionDetails.last_messages.map((msg) => ({
       author: msg.role === 'user' ? 'User' : props.characterId,
       content: msg.content,
       isUser: msg.role === 'user',
-      timestamp: new Date(msg.created_at)
+      timestamp: new Date(msg.created_at),
     }))
-
-    // Set the messages
-    messages.value = chatMessages
-
   } catch (err) {
     console.error('Failed to load session history:', err)
     // Don't show error to user for session loading failures, just start fresh
   }
 }
+
+const handleStop = () => {}
 
 // Initialize session
 onMounted(async () => {

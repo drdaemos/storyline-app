@@ -6,7 +6,7 @@ const STORAGE_PREFIX = 'storyline_'
 const defaultSettings: LocalSettings = {
   aiProcessor: 'google',
   backupProcessor: 'deepseek',
-  lastSelectedCharacter: undefined
+  lastSelectedCharacter: undefined,
 }
 
 export function useLocalSettings() {
@@ -21,7 +21,7 @@ export function useLocalSettings() {
       settings.value = {
         aiProcessor: aiProcessor || defaultSettings.aiProcessor,
         backupProcessor: backupProcessor || defaultSettings.backupProcessor,
-        lastSelectedCharacter: lastSelectedCharacter || undefined
+        lastSelectedCharacter: lastSelectedCharacter || undefined,
       }
     } catch (error) {
       console.warn('Failed to load settings from localStorage, using defaults:', error)
@@ -36,7 +36,10 @@ export function useLocalSettings() {
       localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
 
       if (settings.value.lastSelectedCharacter) {
-        localStorage.setItem(`${STORAGE_PREFIX}last_character`, settings.value.lastSelectedCharacter)
+        localStorage.setItem(
+          `${STORAGE_PREFIX}last_character`,
+          settings.value.lastSelectedCharacter
+        )
       }
     } catch (error) {
       console.error('Failed to save settings to localStorage:', error)
@@ -65,6 +68,6 @@ export function useLocalSettings() {
     settings,
     loadSettings,
     updateSetting,
-    clearSettings
+    clearSettings,
   }
 }

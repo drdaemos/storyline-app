@@ -65,7 +65,6 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'xAI (Grok)', id: 'grok' },
   { label: 'DeepSeek', id: 'deepseek' },
   { label: 'GPT OSS', id: 'gpt-oss' },
-  { label: 'InclusionAI (Ling)', id: 'ling' }
+  { label: 'InclusionAI (Ling)', id: 'ling' },
 ])
-
 </script>

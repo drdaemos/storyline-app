@@ -87,33 +87,35 @@ const parsedContent = computed(() => {
   if (match) {
     return {
       visible: content.replace(hiddenContextRegex, '').trim(),
-      hiddenContext: match[1].trim()
+      hiddenContext: match[1].trim(),
     }
   }
 
   return {
     visible: content,
-    hiddenContext: null
+    hiddenContext: null,
   }
 })
 
 // Convert message to AI SDK v5 parts format
 const messageParts = computed(() => {
-  return [{
-    type: 'text',
-    text: parsedContent.value.visible
-  }]
+  return [
+    {
+      type: 'text',
+      text: parsedContent.value.visible,
+    },
+  ]
 })
 
 // Avatar configuration
 const avatarProps = computed(() => {
   if (props.message.isUser) {
     return {
-      icon: 'i-lucide-user'
+      icon: 'i-lucide-user',
     }
   }
   return {
-    text: props.message.author.charAt(0).toUpperCase()
+    text: props.message.author.charAt(0).toUpperCase(),
   }
 })
 
@@ -130,7 +132,7 @@ const messageActions = computed(() => {
       label: hiddenContextRevealed.value ? 'Hide context' : 'Show context',
       onClick: () => {
         hiddenContextRevealed.value = !hiddenContextRevealed.value
-      }
+      },
     })
   }
 
@@ -139,7 +141,7 @@ const messageActions = computed(() => {
     actions.push({
       icon: 'i-lucide-refresh-cw',
       label: 'Regenerate response',
-      onClick: () => emit('regenerate')
+      onClick: () => emit('regenerate'),
     })
   }
 

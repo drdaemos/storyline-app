@@ -26,6 +26,7 @@ declare module 'vue' {
     UChatMessage: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/ChatMessage.vue')['default']
     UChatMessages: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/ChatMessages.vue')['default']
     UChatPrompt: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/ChatPrompt.vue')['default']
+    UChatPromptSubmit: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/ChatPromptSubmit.vue')['default']
     UColorModeButton: typeof import('./node_modules/@nuxt/ui/dist/runtime/vue/components/color-mode/ColorModeButton.vue')['default']
     UContainer: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Container.vue')['default']
     UForm: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Form.vue')['default']

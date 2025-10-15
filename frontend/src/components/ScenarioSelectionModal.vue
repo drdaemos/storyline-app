@@ -67,8 +67,8 @@
             <p
               class="text-sm"
               :class="expandedScenario === index ? '' : 'line-clamp-2'"
+              v-html="highlight(scenario.intro_message)"
             >
-              {{ scenario.intro_message }}
             </p>
             <UButton
               color="neutral"
@@ -145,6 +145,7 @@ import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import type { Scenario } from '@/types'
+import { useChatHighlight } from '@/composables/useChatHighlight.ts'
 
 interface Props {
   show: boolean
@@ -157,6 +158,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const { highlight } = useChatHighlight()
 const router = useRouter()
 const { generateScenarios, startSessionWithScenario } = useApi()
 const { settings, loadSettings } = useLocalSettings()
@@ -173,19 +175,33 @@ const userDescription = ref('')
 const error = ref<string | null>(null)
 
 const moodOptions = [
-  'Normal', 'Romantic', 'Spicy', 'Dark', 'Unhinged',
-  'Mysterious', 'Comedic', 'Dramatic', 'Gritty',
-  'Philosophical', 'Chaotic'
+  'Normal',
+  'Romantic',
+  'Spicy',
+  'Dark',
+  'Unhinged',
+  'Mysterious',
+  'Comedic',
+  'Dramatic',
+  'Gritty',
+  'Philosophical',
+  'Chaotic',
 ]
 
 const headerTitle = computed(() => {
   switch (currentStep.value) {
-    case 'choice': return 'Start New Session'
-    case 'mood': return 'Select Mood'
-    case 'loading': return 'Generating Scenarios'
-    case 'scenario': return 'Choose Scenario'
-    case 'userInfo': return 'Your Information'
-    default: return 'New Session'
+    case 'choice':
+      return 'Start New Session'
+    case 'mood':
+      return 'Select Mood'
+    case 'loading':
+      return 'Generating Scenarios'
+    case 'scenario':
+      return 'Choose Scenario'
+    case 'userInfo':
+      return 'Your Information'
+    default:
+      return 'New Session'
   }
 })
 
@@ -193,7 +209,7 @@ const isOpen = computed({
   get: () => props.show,
   set: (value: boolean) => {
     if (!value) emit('close')
-  }
+  },
 })
 
 const selectGenerateScenario = () => {
@@ -206,8 +222,8 @@ const selectSkipToChat = () => {
     name: 'chat',
     params: {
       characterName: props.characterName,
-      sessionId: 'new'
-    }
+      sessionId: 'new',
+    },
   })
 }
 
@@ -226,7 +242,7 @@ const generateScenariosForMood = async () => {
       count: 3,
       mood: selectedMood.value.toLowerCase(),
       processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor
+      backup_processor_type: settings.value.backupProcessor,
     })
 
     scenarios.value = response.scenarios
@@ -267,7 +283,7 @@ const startSession = async () => {
       user_name: userName.value.trim(),
       user_description: userDescription.value.trim(),
       processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor
+      backup_processor_type: settings.value.backupProcessor,
     })
 
     emit('close')
@@ -275,8 +291,8 @@ const startSession = async () => {
       name: 'chat',
       params: {
         characterName: props.characterName,
-        sessionId: response.session_id
-      }
+        sessionId: response.session_id,
+      },
     })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to start session'
@@ -294,11 +310,14 @@ const resetModal = () => {
   error.value = null
 }
 
-watch(() => props.show, (newShow) => {
-  if (newShow) {
-    loadSettings()
-  } else {
-    resetModal()
+watch(
+  () => props.show,
+  (newShow) => {
+    if (newShow) {
+      loadSettings()
+    } else {
+      resetModal()
+    }
   }
-})
+)
 </script>

@@ -40,7 +40,9 @@ describe('Auto-scroll Functionality', () => {
 
     // Test messages watcher
     const oldMessages = []
-    const newMessages = [{ id: '1', content: 'test', isUser: true, author: 'User', timestamp: new Date() }]
+    const newMessages = [
+      { id: '1', content: 'test', isUser: true, author: 'User', timestamp: new Date() },
+    ]
     messagesWatcher(newMessages, oldMessages)
     expect(messagesWatcher).toHaveBeenCalledWith(newMessages, oldMessages)
 
@@ -64,7 +66,7 @@ describe('Auto-scroll Functionality', () => {
     // Mock container
     const mockContainer = {
       scrollHeight: 1000,
-      scrollTop: 0
+      scrollTop: 0,
     }
 
     // Mock scrollToBottom function
@@ -84,7 +86,7 @@ describe('Auto-scroll Functionality', () => {
     const mockContainer = {
       scrollTop: 800,
       scrollHeight: 1000,
-      clientHeight: 150
+      clientHeight: 150,
     }
 
     let autoScroll = true

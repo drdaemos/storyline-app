@@ -40,7 +40,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   selected: false,
-  isCreateNew: false
+  isCreateNew: false,
 })
 
 const emit = defineEmits<{

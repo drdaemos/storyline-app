@@ -78,6 +78,14 @@ Guidelines:
 - Do not write as an overview, instead set it up as a scene that is already unfolding in front of the user
 - Respect the scenario tone guidelines provided by the user
 
+Your response may include the following:
+- Physical actions (in asterisks, in third person)
+- Spoken dialogue (in quotes, like "this")
+- Internal sensations or observations (in third person)
+- Environmental details (if relevant, in third person)
+
+Add line breaks to the intro_message for readability.
+
 Content Guidelines:
 {processor.get_processor_specific_prompt()}
 

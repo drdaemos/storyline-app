@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "@clerk/vue": "^1.14.3"
-  }
-}

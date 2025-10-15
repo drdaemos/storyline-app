@@ -10,7 +10,7 @@ import type {
   GenerateScenariosRequest,
   GenerateScenariosResponse,
   StartSessionRequest,
-  StartSessionResponse
+  StartSessionResponse,
 } from '@/types'
 import { useAuth } from './useAuth'
 
@@ -35,7 +35,11 @@ export function useApi() {
     return response.json()
   }
 
-  const makeRequest = async <T>(url: string, options: RequestInit = {}, retryAttempt = 0): Promise<T> => {
+  const makeRequest = async <T>(
+    url: string,
+    options: RequestInit = {},
+    retryAttempt = 0
+  ): Promise<T> => {
     loading.value = true
     error.value = null
 
@@ -46,7 +50,7 @@ export function useApi() {
       // Build headers with optional Authorization header
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...(options.headers as Record<string, string> || {})
+        ...((options.headers as Record<string, string>) || {}),
       }
 
       if (token) {
@@ -55,27 +59,26 @@ export function useApi() {
 
       const response = await fetch(url, {
         ...options,
-        headers
+        headers,
       })
 
       const data = await handleResponse(response)
       return data
     } catch (err) {
       // Handle 502 Bad Gateway errors with silent retry
-      const is502Error = err instanceof Error && (
-        err.message.includes('502') ||
-        ('status' in err && (err as any).status === 502)
-      )
+      const is502Error =
+        err instanceof Error &&
+        (err.message.includes('502') || ('status' in err && (err as any).status === 502))
 
       if (is502Error && retryAttempt === 0) {
         // Wait 5 seconds then retry silently
-        await new Promise(resolve => setTimeout(resolve, 5000))
+        await new Promise((resolve) => setTimeout(resolve, 5000))
         return makeRequest<T>(url, options, 1)
       }
 
       error.value = {
         message: err instanceof Error ? err.message : 'An unknown error occurred',
-        status: err instanceof Error && 'status' in err ? (err as any).status : undefined
+        status: err instanceof Error && 'status' in err ? (err as any).status : undefined,
       }
       throw err
     } finally {
@@ -95,37 +98,42 @@ export function useApi() {
     return makeRequest<SessionInfo[]>('/api/sessions')
   }
 
-  const createCharacter = async (payload: CreateCharacterRequest): Promise<CreateCharacterResponse> => {
+  const createCharacter = async (
+    payload: CreateCharacterRequest
+  ): Promise<CreateCharacterResponse> => {
     return makeRequest<CreateCharacterResponse>('/api/characters', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     })
   }
 
-  const generateCharacter = async (payload: GenerateCharacterRequest): Promise<GenerateCharacterResponse> => {
+  const generateCharacter = async (
+    payload: GenerateCharacterRequest
+  ): Promise<GenerateCharacterResponse> => {
     return makeRequest<GenerateCharacterResponse>('/api/characters/generate', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     })
   }
 
   const deleteSession = async (sessionId: string): Promise<{ message: string }> => {
     return makeRequest<{ message: string }>(`/api/sessions/${encodeURIComponent(sessionId)}`, {
-      method: 'DELETE'
+      method: 'DELETE',
     })
   }
 
-  const handleInteraction = async (payload: InteractRequest, retryAttempt = 0): Promise<EventSource> => {
-    const eventSource = new EventSource('/api/interact', {
-
-    })
+  const handleInteraction = async (
+    payload: InteractRequest,
+    retryAttempt = 0
+  ): Promise<EventSource> => {
+    const eventSource = new EventSource('/api/interact', {})
 
     // Get auth token if available
     const token = await getAuthToken()
 
     // Build headers with optional Authorization header
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     }
 
     if (token) {
@@ -137,50 +145,55 @@ export function useApi() {
     fetch('/api/interact', {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload)
-    }).then(response => {
-      if (!response.ok) {
-        const errorMessage = `HTTP ${response.status}: ${response.statusText}`
-        const error = new Error(errorMessage) as any
-        error.status = response.status
-        throw error
-      }
-      // The actual EventSource will be handled in the component
-    }).catch(err => {
-      // Handle 502 Bad Gateway errors with silent retry
-      const is502Error = err instanceof Error && (
-        err.message.includes('502') ||
-        ('status' in err && (err as any).status === 502)
-      )
-
-      if (is502Error && retryAttempt === 0) {
-        // Wait 5 seconds then retry silently
-        setTimeout(() => {
-          handleInteraction(payload, 1)
-        }, 5000)
-        return
-      }
-
-      error.value = {
-        message: err instanceof Error ? err.message : 'Failed to start interaction',
-        status: err instanceof Error && 'status' in err ? (err as any).status : undefined
-      }
+      body: JSON.stringify(payload),
     })
+      .then((response) => {
+        if (!response.ok) {
+          const errorMessage = `HTTP ${response.status}: ${response.statusText}`
+          const error = new Error(errorMessage) as any
+          error.status = response.status
+          throw error
+        }
+        // The actual EventSource will be handled in the component
+      })
+      .catch((err) => {
+        // Handle 502 Bad Gateway errors with silent retry
+        const is502Error =
+          err instanceof Error &&
+          (err.message.includes('502') || ('status' in err && (err as any).status === 502))
+
+        if (is502Error && retryAttempt === 0) {
+          // Wait 5 seconds then retry silently
+          setTimeout(() => {
+            handleInteraction(payload, 1)
+          }, 5000)
+          return
+        }
+
+        error.value = {
+          message: err instanceof Error ? err.message : 'Failed to start interaction',
+          status: err instanceof Error && 'status' in err ? (err as any).status : undefined,
+        }
+      })
 
     return eventSource
   }
 
-  const generateScenarios = async (payload: GenerateScenariosRequest): Promise<GenerateScenariosResponse> => {
+  const generateScenarios = async (
+    payload: GenerateScenariosRequest
+  ): Promise<GenerateScenariosResponse> => {
     return makeRequest<GenerateScenariosResponse>('/api/scenarios/generate', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     })
   }
 
-  const startSessionWithScenario = async (payload: StartSessionRequest): Promise<StartSessionResponse> => {
+  const startSessionWithScenario = async (
+    payload: StartSessionRequest
+  ): Promise<StartSessionResponse> => {
     return makeRequest<StartSessionResponse>('/api/sessions/start', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     })
   }
 
@@ -195,6 +208,6 @@ export function useApi() {
     deleteSession,
     handleInteraction,
     generateScenarios,
-    startSessionWithScenario
+    startSessionWithScenario,
   }
 }

@@ -11,6 +11,11 @@ export default defineConfig({
           primary: 'indigo',
           neutral: 'slate'
         },
+        chatMessage: {
+          slots: {
+            content: 'whitespace-pre-wrap break-words',
+          }
+        },
         pageGrid: {
           base: 'relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
         }

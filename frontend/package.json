@@ -5,18 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run build:grammar",
     "preview": "vite preview",
     "lint": "biome lint .",
     "lint:fix": "biome lint --fix .",
     "format": "biome format --write .",
     "type-check": "vue-tsc --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "build:grammar": "nearleyc src/parsers/chat-highlight.ne -o src/parsers/chat-highlight.ts"
   },
   "dependencies": {
     "@clerk/vue": "^1.14.3",
     "@nuxt/ui": "^4.0.1",
+    "chevrotain": "^11.0.3",
     "lucide-vue-next": "^0.544.0",
     "uuid": "^13.0.0",
     "vue": "^3.4.0",

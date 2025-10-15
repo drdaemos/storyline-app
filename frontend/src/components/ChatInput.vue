@@ -1,22 +1,23 @@
 <template>
-  <div class="fixed bottom-0 left-0 right-0 px-4 pb-4 bg-gradient-to-t from-white dark:from-gray-950 via-white/80 dark:via-gray-950/80 to-transparent pt-4">
-    <div class="max-w-2xl mx-auto">
+  <div class="sticky bottom-4 left-4 right-4 pt-4 max-w-2xl w-full">
+    <div class="mx-auto">
       <UChatPrompt
         v-model="message"
         placeholder="Type your message..."
         :autofocus="true"
         :disabled="disabled"
-        variant="outline"
+        variant="soft"
+        :error="error"
         @submit="sendMessage"
+        class="border-1 border-primary/40 shadow-md shadow-primary/20"
       >
-        <UButton
-          type="submit"
-          :disabled="disabled || !message.trim()"
-          :icon="disabled ? 'i-lucide-loader-2' : 'i-lucide-send'"
-          :loading="disabled"
-          color="primary"
-          size="sm"
-          class="rounded-full"
+        <UChatPromptSubmit
+            :status="chatStatus"
+            @stop="emit('stop')"
+            @reload="emit('regenerate')"
+            :variant="disabled ? 'ghost' : 'solid'"
+            :class="disabled ? 'cursor-default' : 'cursor-pointer'"
+            streaming-icon="i-lucide-square-stop"
         />
       </UChatPrompt>
     </div>
@@ -26,15 +27,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+type ChatStatus = 'submitted' | 'streaming' | 'ready' | 'error'
+
 interface Props {
+  chatStatus: ChatStatus
+  error?: Error
   disabled?: boolean
-  characterName?: string
 }
 
 defineProps<Props>()
 
 const emit = defineEmits<{
   send: [message: string]
+  regenerate: []
+  stop: []
 }>()
 
 const message = ref('')

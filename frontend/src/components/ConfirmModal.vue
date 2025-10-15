@@ -50,12 +50,12 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  confirmText: 'Confirm'
+  confirmText: 'Confirm',
 })
 
 const emit = defineEmits<{
-  'confirm': []
-  'cancel': []
+  confirm: []
+  cancel: []
 }>()
 
 const isOpen = computed({
@@ -64,7 +64,7 @@ const isOpen = computed({
     if (!value) {
       emit('cancel')
     }
-  }
+  },
 })
 
 const handleConfirm = () => {

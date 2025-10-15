@@ -35,6 +35,6 @@ export function useAuth() {
   return {
     getAuthToken,
     isSignedIn,
-    isLoaded
+    isLoaded,
   }
 }

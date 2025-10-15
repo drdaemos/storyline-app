@@ -8,7 +8,7 @@ import CharacterSelectionView from './views/CharacterSelectionView.vue'
 import CharacterPageView from './views/CharacterPageView.vue'
 import ChatView from './views/ChatView.vue'
 import CharacterCreationView from './views/CharacterCreationView.vue'
-import {clerkPlugin} from "@clerk/vue";
+import { clerkPlugin } from '@clerk/vue'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -16,30 +16,30 @@ const routes = [
   {
     path: '/',
     name: 'start',
-    component: CharacterSelectionView
+    component: CharacterSelectionView,
   },
   {
     path: '/character/:characterId',
     name: 'character',
     component: CharacterPageView,
-    props: true
+    props: true,
   },
   {
     path: '/chat/:characterId/:sessionId',
     name: 'chat',
     component: ChatView,
-    props: true
+    props: true,
   },
   {
     path: '/create',
     name: 'create',
-    component: CharacterCreationView
-  }
+    component: CharacterCreationView,
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 })
 
 const app = createApp(App)

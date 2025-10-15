@@ -64,8 +64,8 @@ export interface StreamEvent {
   session_id?: string
   content?: string
   error?: string
-  stage?: string  // For thinking events: 'summarizing' | 'deliberating' | 'responding'
-  succeeded?: string  // For command events: 'true' | 'false'
+  stage?: string // For thinking events: 'summarizing' | 'deliberating' | 'responding'
+  succeeded?: string // For command events: 'true' | 'false'
 }
 
 export interface LocalSettings {
