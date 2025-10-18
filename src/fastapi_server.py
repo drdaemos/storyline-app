@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.auth import UserIdDep
+from src.character_creation_assistant import CharacterCreationAssistant
 from src.character_creator import CharacterCreator
 from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
@@ -16,6 +17,8 @@ from src.character_responder import CharacterResponder
 from src.memory.conversation_memory import ConversationMemory
 from src.memory.summary_memory import SummaryMemory
 from src.models.api_models import (
+    CharacterCreationRequest,
+    CharacterCreationStreamEvent,
     CharacterSummary,
     CreateCharacterRequest,
     CreateCharacterResponse,
@@ -185,6 +188,119 @@ async def generate_character(request: GenerateCharacterRequest, user_id: UserIdD
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate character: {str(e)}") from e
+
+
+@app.post("/api/characters/create-stream")
+async def create_character_stream(request: CharacterCreationRequest, user_id: UserIdDep) -> StreamingResponse:
+    """
+    Interactive character creation with AI assistant via Server-Sent Events.
+
+    The response will be streamed as Server-Sent Events with the following format:
+    - data: {"type": "message", "message": "AI response text chunk"}
+    - data: {"type": "update", "updates": {"name": "...", "backstory": "..."}}
+    - data: {"type": "complete"}
+    - data: {"type": "error", "error": "error_message"}
+    """
+    try:
+        # Get the appropriate prompt processor
+        dependencies = CharacterResponderDependencies.create_default(
+            character_name="temp",  # Temp name for processor creation
+            processor_type=request.processor_type,
+            backup_processor_type=request.backup_processor_type,
+        )
+
+        # Create character creation assistant with the selected processor
+        assistant = CharacterCreationAssistant(prompt_processor=dependencies.primary_processor)
+
+        # Create async generator for streaming response
+        async def generate_sse_response() -> AsyncGenerator[str, None]:
+            """Generate Server-Sent Events for streaming character creation."""
+            try:
+                # Convert conversation history to the format expected by assistant
+                conversation_history = [
+                    {
+                        "author": msg.author,
+                        "content": msg.content,
+                        "is_user": msg.is_user,
+                    }
+                    for msg in request.conversation_history
+                ]
+
+                # Create queue for streaming chunks
+                chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
+                ai_response_parts: list[str] = []
+                loop = asyncio.get_event_loop()
+
+                def streaming_callback(chunk: str) -> None:
+                    """Called by assistant when a chunk is available."""
+                    ai_response_parts.append(chunk)
+                    # Use call_soon_threadsafe to safely add to queue from executor thread
+                    loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
+
+                # Run the assistant processing in a separate task
+                async def run_assistant() -> tuple[str, dict]:
+                    try:
+                        # Process message with streaming
+                        response, updates = await loop.run_in_executor(
+                            None,
+                            lambda: assistant.process_message(
+                                user_message=request.user_message,
+                                current_character=request.current_character,
+                                conversation_history=conversation_history,
+                                streaming_callback=streaming_callback,
+                            ),
+                        )
+                        return response, updates
+                    finally:
+                        # Signal completion
+                        await chunk_queue.put(None)
+
+                # Start the assistant task
+                assistant_task = asyncio.create_task(run_assistant())
+
+                # Stream message chunks as they become available
+                while True:
+                    chunk = await chunk_queue.get()
+                    if chunk is None:  # Completion signal
+                        break
+
+                    # Clean the chunk (remove any character_update tags)
+                    clean_chunk = assistant.clean_response_text(chunk)
+                    if clean_chunk:  # Only send non-empty chunks
+                        event_data = CharacterCreationStreamEvent(type="message", message=clean_chunk)
+                        yield f"data: {event_data.model_dump_json()}\n\n"
+
+                # Wait for assistant task to complete and get the updates
+                full_response, character_updates = await assistant_task
+
+                # Send character updates if any
+                if character_updates:
+                    update_event = CharacterCreationStreamEvent(type="update", updates=character_updates)
+                    yield f"data: {update_event.model_dump_json()}\n\n"
+
+                # Send completion marker
+                complete_event = CharacterCreationStreamEvent(type="complete")
+                yield f"data: {complete_event.model_dump_json()}\n\n"
+
+            except Exception as e:
+                error_event = CharacterCreationStreamEvent(type="error", error=str(e))
+                yield f"data: {error_event.model_dump_json()}\n\n"
+
+        return StreamingResponse(
+            generate_sse_response(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process character creation: {str(e)}") from e
 
 
 @app.post("/api/scenarios/generate")

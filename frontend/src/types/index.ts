@@ -119,3 +119,22 @@ export interface StartSessionRequest {
 export interface StartSessionResponse {
   session_id: string
 }
+
+export interface CharacterCreationRequest {
+  user_message: string
+  current_character: Partial<Character>
+  conversation_history?: Array<{
+    author: string
+    content: string
+    is_user: boolean
+  }>
+  processor_type?: string
+  backup_processor_type?: string
+}
+
+export interface CharacterCreationStreamEvent {
+  type: 'message' | 'update' | 'complete' | 'error'
+  message?: string // AI message to show in chat
+  updates?: Partial<Character> // Character fields to update
+  error?: string
+}

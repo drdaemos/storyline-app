@@ -35,7 +35,8 @@
       "Bash(AUTH_ENABLED=false python:*)",
       "Bash(xargs cat:*)",
       "Bash(find:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(uv run pytest:*)"
     ],
     "deny": []
   }

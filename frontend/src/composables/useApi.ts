@@ -11,6 +11,7 @@ import type {
   GenerateScenariosResponse,
   StartSessionRequest,
   StartSessionResponse,
+  CharacterCreationRequest,
 } from '@/types'
 import { useAuth } from './useAuth'
 
@@ -197,6 +198,101 @@ export function useApi() {
     })
   }
 
+  const streamCharacterCreation = async (
+    payload: CharacterCreationRequest,
+    onMessage: (message: string) => void,
+    onUpdate: (updates: any) => void,
+    onComplete: () => void,
+    onError: (errorMessage: string) => void
+  ): Promise<void> => {
+    const token = await getAuthToken()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    try {
+      const response = await fetch('/api/characters/create-stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        onError(errorMessage)
+        return
+      }
+
+      if (!response.body) {
+        onError('Response body is null')
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const readStream = async (): Promise<void> => {
+        try {
+          const { done, value } = await reader.read()
+
+          if (done) {
+            return
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          // Keep the last incomplete line in buffer
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const jsonData = line.slice(6).trim()
+                if (jsonData === '[DONE]') {
+                  return
+                }
+
+                const data = JSON.parse(jsonData)
+
+                if (data.type === 'message' && data.message) {
+                  onMessage(data.message)
+                } else if (data.type === 'update' && data.updates) {
+                  onUpdate(data.updates)
+                } else if (data.type === 'complete') {
+                  onComplete()
+                  return
+                } else if (data.type === 'error') {
+                  onError(data.error || 'An error occurred')
+                  return
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError, 'Line:', line)
+              }
+            }
+          }
+
+          // Continue reading
+          await readStream()
+        } catch (readError) {
+          onError(readError instanceof Error ? readError.message : 'Stream read error')
+        }
+      }
+
+      await readStream()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to connect to stream')
+    }
+  }
+
   return {
     loading,
     error,
@@ -209,5 +305,6 @@ export function useApi() {
     handleInteraction,
     generateScenarios,
     startSessionWithScenario,
+    streamCharacterCreation,
   }
 }

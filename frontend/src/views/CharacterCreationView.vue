@@ -1,539 +1,488 @@
 <template>
   <!-- Header -->
-  <div class="flex  mb-8 gap-4">
+  <div class="flex mb-8 gap-4 items-center">
     <h2 class="text-3xl font-bold font-serif">Create New Character</h2>
-    <UTabs
-      v-model="activeTab"
-      :items="[
-        { key: 'manual', label: 'Manual Entry' },
-        { key: 'yaml', label: 'Import YAML' }
-      ]"
-    />
   </div>
 
-  <!-- Tabs -->
-
-
-  <!-- Manual Entry Form -->
-  <div v-if="activeTab === 'manual'">
-    <form @submit.prevent="saveCharacter" class="space-y-6">
-      <UCard>
-        <template #header>
-          <h3 class="text-lg font-semibold">Basic Information</h3>
-        </template>
-
-        <div class="space-y-4">
-          <UFormField label="Character Name" required :error="errors.name">
-            <UInput
-              v-model="formData.name"
-              placeholder="Enter character name"
-              size="lg"
-            />
-          </UFormField>
-
-          <UFormField label="Role/Profession" required :error="errors.role">
-            <UInput
-              v-model="formData.tagline"
-              placeholder="e.g., Detective, Teacher, Wizard"
-              size="lg"
-            />
-          </UFormField>
-
-          <UFormField label="Backstory" required :error="errors.backstory">
-            <UTextarea
-              v-model="formData.backstory"
-              :rows="4"
-              placeholder="Character's history, experiences, and background"
-            />
-          </UFormField>
+  <!-- 2 Column Layout -->
+  <UMain>
+    <div class="grid lg:grid-cols-2 grid-cols-1 gap-6 flex-1 overflow-hidden">
+      <!-- Left Column: AI Chat Assistant -->
+      <div class="flex flex-col border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-sparkles" class="w-5 h-5 text-primary" />
+            <h3 class="text-lg font-semibold">AI Assistant</h3>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Describe your character naturally, and I'll help build their profile.
+          </p>
         </div>
-      </UCard>
 
-      <UCard>
-        <template #header>
-          <h3 class="text-lg font-semibold">Character Details</h3>
-        </template>
-
-        <div class="space-y-4">
-          <UFormField label="Personality">
-            <UTextarea
-              v-model="formData.personality"
-              :rows="3"
-              placeholder="Personality traits and characteristics"
-            />
-          </UFormField>
-
-          <UFormField label="Physical Appearance">
-            <UTextarea
-              v-model="formData.appearance"
-              :rows="3"
-              placeholder="Physical description for avatar generation"
-            />
-          </UFormField>
-
-          <UFormField label="Setting Description">
-            <UTextarea
-              v-model="formData.setting_description"
-              :rows="3"
-              placeholder="Description of the world/setting the character exists in"
-            />
-          </UFormField>
-        </div>
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <h3 class="text-lg font-semibold">Locations</h3>
-        </template>
-
-        <div class="space-y-4">
-          <p class="text-sm text-gray-600 dark:text-gray-400">Add up to 10 key locations for this character.</p>
-
-          <div class="space-y-3">
-            <div
-              v-for="(location, index) in formData.key_locations"
-              :key="index"
-              class="flex gap-2 items-center"
-            >
-              <UInput
-                v-model="formData.key_locations[index]"
-                :placeholder="`Location ${index + 1}`"
-                class="flex-1"
-              />
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-x"
-                size="sm"
-                @click="removeLocation(index)"
-              />
+        <!-- Chat Messages -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+          <!-- Welcome message -->
+          <div v-if="messages.length === 0" class="space-y-3">
+            <div class="p-3 rounded-lg bg-primary/10 border border-primary/20">
+              <p class="text-sm">
+                Welcome! Describe the character you want to create. You can talk about their personality,
+                backstory, appearance, or any other details.
+              </p>
             </div>
           </div>
 
-          <UButton
-            v-if="formData.key_locations.length < 10"
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-plus"
-            @click="addLocation"
-          >
-            Add Location
-          </UButton>
-        </div>
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <h3 class="text-lg font-semibold">Relationships</h3>
-        </template>
-
-        <div class="space-y-4">
-          <p class="text-sm text-gray-600 dark:text-gray-400">Define relationships with other characters.</p>
-
-          <div class="space-y-3">
+          <!-- Chat messages -->
+          <div v-for="(message, index) in messages" :key="index" class="space-y-3">
             <div
-              v-for="(relationship, index) in relationships"
-              :key="index"
-              class="flex gap-2 items-center"
+              :class="[
+                'p-3 rounded-lg max-w-[85%]',
+                message.isUser
+                  ? 'ml-auto bg-primary text-white'
+                  : 'bg-gray-100 dark:bg-gray-800'
+              ]"
             >
-              <UInput
-                v-model="relationship.name"
-                placeholder="Character name"
-                class="flex-1"
-              />
-              <UInput
-                v-model="relationship.relationship"
-                placeholder="Relationship type"
-                class="flex-1"
-              />
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-x"
-                size="sm"
-                @click="removeRelationship(index)"
-              />
+              <div class="flex items-start gap-2">
+                <UIcon
+                  :name="message.isUser ? 'i-lucide-user' : 'i-lucide-sparkles'"
+                  class="w-4 h-4 mt-0.5 flex-shrink-0"
+                />
+                <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+              </div>
             </div>
           </div>
 
-          <UButton
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-plus"
-            @click="addRelationship"
-          >
-            Add Relationship
-          </UButton>
-        </div>
-      </UCard>
+          <!-- Thinking indicator -->
+          <div v-if="isThinking" class="flex items-center gap-2 text-sm text-gray-500">
+            <div class="flex gap-1">
+              <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0s"></span>
+              <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0.2s"></span>
+              <span class="w-2 h-2 rounded-full bg-current opacity-40 animate-pulse" style="animation-delay: 0.4s"></span>
+            </div>
+            <span>AI is thinking...</span>
+          </div>
 
-      <div class="flex gap-3 justify-end">
-        <UButton
-          color="primary"
-          variant="outline"
-          icon="i-lucide-wand-2"
-          :disabled="loading || !canGenerate"
-          :loading="generating"
-          @click="handleGenerateCharacter"
-        >
-          {{ generating ? 'Generating...' : 'AI Generate Missing Fields' }}
-        </UButton>
+          <!-- Error message -->
+          <div v-if="error" class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <div class="flex items-start gap-2">
+              <UIcon name="i-lucide-alert-circle" class="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5" />
+              <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+            </div>
+          </div>
 
-        <UButton
-          type="submit"
-          color="primary"
-          :disabled="loading || !isFormValid"
-          :loading="loading"
-        >
-          Create Character
-        </UButton>
-      </div>
-    </form>
-  </div>
-
-  <!-- YAML Import -->
-  <div v-if="activeTab === 'yaml'">
-    <UCard>
-      <template #header>
-        <h3 class="text-lg font-semibold">Import Character from YAML</h3>
-      </template>
-
-      <div class="space-y-4">
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          Paste your character definition in YAML format below. The system will parse and validate it.
-        </p>
-
-        <UFormField label="YAML Content">
-          <UTextarea
-            v-model="yamlContent"
-            :rows="20"
-            class="font-mono text-sm"
-            placeholder="name: Character Name
-tagline: Character tagline
-backstory: Character backstory...
-personality: Character personality...
-appearance: Physical description...
-key_locations:
-- Location 1
-- Location 2
-relationships:
-friend_name: friend
-family_member: sister
-setting_description: World description..."
-          />
-        </UFormField>
-
-        <div class="flex gap-3">
-          <UButton
-            color="neutral"
-            variant="outline"
-            :disabled="loading || !yamlContent.trim()"
-            :loading="processingYaml"
-            @click="processYaml"
-          >
-            {{ processingYaml ? 'Processing...' : 'Parse YAML' }}
-          </UButton>
-
-          <UButton
-            color="primary"
-            :disabled="loading || !yamlContent.trim()"
-            :loading="loading"
-            @click="saveYamlCharacter"
-          >
-            Create from YAML
-          </UButton>
+          <div ref="chatEndRef"></div>
         </div>
 
-        <div v-if="yamlPreview">
-          <UDivider />
-          <h4 class="text-md font-semibold mb-2">Preview</h4>
-          <pre class="font-mono text-sm bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto">{{ yamlPreview }}</pre>
+        <!-- Chat Input -->
+        <div class="p-4 border-t border-gray-200 dark:border-gray-800">
+          <form @submit.prevent="sendMessage" class="flex gap-2">
+            <UInput
+              v-model="userInput"
+              placeholder="Describe your character..."
+              :disabled="isThinking"
+              class="flex-1"
+              size="lg"
+            />
+            <UButton
+              type="submit"
+              color="primary"
+              icon="i-lucide-send"
+              :disabled="isThinking || !userInput.trim()"
+              :loading="isThinking"
+            />
+          </form>
         </div>
       </div>
-    </UCard>
-  </div>
 
-  <!-- Success/Error Messages -->
-  <UAlert
-    v-if="successMessage"
-    color="success"
-    variant="soft"
-    icon="i-lucide-check-circle"
-    :description="successMessage"
-    @close="successMessage = ''"
-  />
+      <!-- Right Column: Character Sheet -->
+      <div class="overflow-y-auto">
+        <h2 class="text-lg font-semibold mb-2 font-serif">Character card</h2>
+          <div class="flex items-center gap-3 mb-6">
+            <div class="flex-1 space-y-2">
+              <UFormField>
+                <UInput
+                  v-model="characterData.name"
+                  placeholder="Jane Doe..."
+                  size="lg"
+                  variant="ghost"
+                  class="w-full"
+                />
+              </UFormField>
+              <UFormField>
+                <UInput
+                  v-model="characterData.tagline"
+                  placeholder="e.g., 'A whisper in the wind, a shadow in the night.'"
+                  variant="ghost"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+            <div class="w-20 h-20 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+              <UIcon v-if="!characterData.appearance" name="i-lucide-user" class="w-10 h-10 text-gray-400" />
+              <img v-else :src="characterData.appearance" alt="Character" class="w-full h-full object-cover" />
+            </div>
+          </div>
 
-  <UAlert
-    v-if="errorMessage"
-    color="error"
-    variant="soft"
-    icon="i-lucide-alert-circle"
-    :description="errorMessage"
-    @close="errorMessage = ''"
-  />
+          <div class="space-y-6">
+            <!-- Backstory Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-2 font-serif">Backstory</h3>
+              <UFormField>
+                <UTextarea
+                  v-model="characterData.backstory"
+                  :rows="4"
+                  autoresize 
+                  variant="ghost"
+                  class="w-full"
+                  placeholder="Character's history and background..."
+                />
+              </UFormField>
+            </div>
+
+            <!-- Personality Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-2 font-serif">Personality</h3>
+              <UFormField>
+                <UTextarea
+                  v-model="characterData.personality"
+                  :rows="4"
+                  autoresize 
+                  variant="ghost"
+                  class="w-full"
+                  placeholder="Personality traits and characteristics..."
+                />
+              </UFormField>
+            </div>
+
+            <!-- Appearance Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-2 font-serif">Appearance</h3>
+              <UFormField>
+                <UTextarea
+                  v-model="characterData.appearance"
+                  :rows="4"
+                  autoresize 
+                  variant="ghost"
+                  class="w-full"
+                  placeholder="Physical description..."
+                />
+              </UFormField>
+            </div>
+
+            <!-- Relationships Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-2 font-serif">Relationships</h3>
+              <div class="space-y-3">
+                <div
+                  v-for="(rel, index) in relationshipsList"
+                  :key="index"
+                  class="p-3 border border-gray-200 dark:border-gray-800 rounded-lg space-y-2"
+                >
+                  <div class="flex gap-2 items-start">
+                    <UFormField label="Name" class="flex-1">
+                      <UInput
+                        v-model="rel.name"
+                        placeholder="Character name"
+                      />
+                    </UFormField>
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-x"
+                      size="sm"
+                      class="mt-6"
+                      @click="removeRelationship(index)"
+                    />
+                  </div>
+                  <UFormField label="Description">
+                    <UTextarea
+                      v-model="rel.description"
+                      :rows="2"
+                      variant="ghost"
+                      class="w-full"
+                      placeholder="Describe the relationship..."
+                    />
+                  </UFormField>
+                </div>
+              </div>
+              <UButton
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                size="sm"
+                class="mt-2"
+                @click="addRelationship"
+              >
+                Add Relationship
+              </UButton>
+            </div>
+
+            <!-- World Building Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-3 font-serif">World setting</h3>
+
+              <!-- Setting Description -->
+              <div class="mb-4">
+                <UFormField>
+                  <UTextarea
+                    v-model="characterData.setting_description"
+                    :rows="4"
+                    autoresize 
+                    variant="ghost"
+                    class="w-full"
+                    placeholder="Description of the world/setting..."
+                  />
+                </UFormField>
+              </div>
+
+              <!-- Key Locations -->
+              <div>
+                <h3 class="text-md font-semibold mb-3 font-serif">Key locations</h3>
+                <UFormField>
+                  <div class="space-y-4">
+                    <div
+                      v-for="(location, index) in characterData.key_locations"
+                      :key="index"
+                      class="flex gap-2"
+                    >
+                      <UInput
+                        v-model="characterData.key_locations[index]"
+                        :placeholder="`Location ${index + 1}`"
+                        class="flex-1"
+                      />
+                      <UButton
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-x"
+                        size="sm"
+                        @click="removeLocation(index)"
+                      />
+                    </div>
+                  </div>
+                </UFormField>
+                <UButton
+                  v-if="(characterData.key_locations?.length || 0) < 10"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-plus"
+                  size="sm"
+                  class="mt-3"
+                  @click="addLocation"
+                >
+                  Add Location
+                </UButton>
+              </div>
+
+              <div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3 justify-end">
+            <UButton
+              color="neutral"
+              variant="outline"
+              @click="navigateBack"
+            >
+              Cancel
+            </UButton>
+            <UButton
+              color="primary"
+              :disabled="!isCharacterValid || saving"
+              :loading="saving"
+              @click="saveCharacter"
+            >
+              Create Character
+            </UButton>
+          </div>
+      </div>
+    </div>
+  </UMain>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
-import { validateCharacterName, debounce } from '@/utils/formatters'
-import type { Character } from '@/types'
+import type { Character, ChatMessage, CharacterCreationRequest } from '@/types'
 
 const router = useRouter()
-const { createCharacter, generateCharacter, loading, error } = useApi()
-const { settings, loadSettings } = useLocalSettings()
+const { streamCharacterCreation, createCharacter } = useApi()
+const { settings } = useLocalSettings()
 
-const activeTab = ref<'manual' | 'yaml'>('manual')
-const generating = ref(false)
-const processingYaml = ref(false)
-const successMessage = ref('')
-const errorMessage = ref('')
-const yamlContent = ref('')
-const yamlPreview = ref('')
+const userInput = ref('')
+const messages = ref<ChatMessage[]>([])
+const isThinking = ref(false)
+const error = ref('')
+const saving = ref(false)
+const chatEndRef = ref<HTMLElement | null>(null)
 
 interface RelationshipItem {
   name: string
-  relationship: string
+  description: string
 }
 
-const formData = reactive<Character>({
+const characterData = reactive<Partial<Character>>({
   name: '',
   tagline: '',
   backstory: '',
   personality: '',
   appearance: '',
   relationships: {},
-  key_locations: [''],
+  key_locations: [],
   setting_description: '',
 })
 
-const relationships = ref<RelationshipItem[]>([{ name: '', relationship: '' }])
+const relationshipsList = ref<RelationshipItem[]>([])
 
-const errors = reactive({
-  name: '',
-  role: '',
-  backstory: '',
+// Watch for relationships changes and sync with characterData
+watch(relationshipsList, (newList) => {
+  const relationshipsObj: Record<string, string> = {}
+  newList.forEach((rel) => {
+    if (rel.name.trim() && rel.description.trim()) {
+      relationshipsObj[rel.name.trim()] = rel.description.trim()
+    }
+  })
+  characterData.relationships = relationshipsObj
+}, { deep: true })
+
+// Watch for characterData.relationships changes from AI and sync with list
+watch(() => characterData.relationships, (newRelationships) => {
+  if (newRelationships) {
+    const newList = Object.entries(newRelationships).map(([name, description]) => ({
+      name,
+      description,
+    }))
+
+    // Only update if different to avoid infinite loop
+    if (JSON.stringify(newList) !== JSON.stringify(relationshipsList.value)) {
+      relationshipsList.value = newList
+    }
+  }
+}, { deep: true })
+
+const isCharacterValid = computed(() => {
+  return true
 })
 
-const isFormValid = computed(() => {
-  return (
-    formData.name.trim().length > 0 &&
-    formData.tagline.trim().length > 0 &&
-    formData.backstory.trim().length > 0 &&
-    validateCharacterName(formData.name)
-  )
-})
-
-const canGenerate = computed(() => {
-  return (
-    formData.name.trim().length > 0 ||
-    formData.tagline.trim().length > 0 ||
-    formData.backstory.trim().length > 0
-  )
-})
-
-const validateForm = () => {
-  errors.name = ''
-  errors.role = ''
-  errors.backstory = ''
-
-  if (!formData.name.trim()) {
-    errors.name = 'Character name is required'
-  } else if (!validateCharacterName(formData.name)) {
-    errors.name = 'Character name must be 1-50 characters'
-  }
-
-  if (!formData.tagline.trim()) {
-    errors.role = 'Tagline is required'
-  }
-
-  if (!formData.backstory.trim()) {
-    errors.backstory = 'Backstory is required'
-  }
-
-  return !errors.name && !errors.role && !errors.backstory
+const navigateBack = () => {
+  router.push('/')
 }
 
-const addLocation = () => {
-  if (formData.key_locations.length < 10) {
-    formData.key_locations.push('')
+const scrollToBottom = () => {
+  nextTick(() => {
+    chatEndRef.value?.scrollIntoView({ behavior: 'smooth' })
+  })
+}
+
+const sendMessage = async () => {
+  if (!userInput.value.trim() || isThinking.value) return
+
+  const message = userInput.value.trim()
+
+  // Add user message to chat
+  messages.value.push({
+    author: 'User',
+    content: message,
+    isUser: true,
+    timestamp: new Date(),
+  })
+
+  userInput.value = ''
+  isThinking.value = true
+  error.value = ''
+  scrollToBottom()
+
+  try {
+    const payload: CharacterCreationRequest = {
+      user_message: message,
+      current_character: characterData,
+      conversation_history: messages.value.map(msg => ({
+        author: msg.author,
+        content: msg.content,
+        is_user: msg.isUser
+      })),
+      processor_type: settings.value.aiProcessor,
+      backup_processor_type: settings.value.backupProcessor,
+    }
+
+    let aiMessage = ''
+
+    await streamCharacterCreation(
+      payload,
+      // onMessage callback
+      (messageChunk: string) => {
+        aiMessage += messageChunk
+      },
+      // onUpdate callback
+      (updates: Partial<Character>) => {
+        // Merge updates into characterData
+        Object.assign(characterData, updates)
+      },
+      // onComplete callback
+      () => {
+        // Add AI message to chat
+        if (aiMessage) {
+          messages.value.push({
+            author: 'AI Assistant',
+            content: aiMessage,
+            isUser: false,
+            timestamp: new Date(),
+          })
+        }
+        isThinking.value = false
+        scrollToBottom()
+      },
+      // onError callback
+      (errorMessage: string) => {
+        error.value = errorMessage
+        isThinking.value = false
+      }
+    )
+  } catch (err) {
+    console.error('Failed to send message:', err)
+    error.value = 'Failed to send message. Please try again.'
+    isThinking.value = false
   }
 }
 
-const removeLocation = (index: number) => {
-  formData.key_locations.splice(index, 1)
-  if (formData.key_locations.length === 0) {
-    formData.key_locations.push('')
+const saveCharacter = async () => {
+  if (!isCharacterValid.value) return
+
+  saving.value = true
+  try {
+    const response = await createCharacter({
+      data: characterData as Character,
+      is_yaml_text: false,
+    })
+
+    // Navigate back with success
+    router.push('/')
+  } catch (err) {
+    error.value = (err as any)?.message || 'Failed to create character'
+  } finally {
+    saving.value = false
   }
 }
 
 const addRelationship = () => {
-  relationships.value.push({ name: '', relationship: '' })
+  relationshipsList.value.push({ name: '', description: ''})
 }
 
 const removeRelationship = (index: number) => {
-  relationships.value.splice(index, 1)
-  if (relationships.value.length === 0) {
-    relationships.value.push({ name: '', relationship: '' })
+  relationshipsList.value.splice(index, 1)
+}
+
+const addLocation = () => {
+  if (!characterData.key_locations) {
+    characterData.key_locations = []
+  }
+  if (characterData.key_locations.length < 10) {
+    characterData.key_locations.push('')
   }
 }
 
-const processRelationships = () => {
-  const relationshipsObj: Record<string, string> = {}
-
-  relationships.value.forEach((rel) => {
-    if (rel.name.trim() && rel.relationship.trim()) {
-      relationshipsObj[rel.name.trim()] = rel.relationship.trim()
-    }
-  })
-
-  return relationshipsObj
+const removeLocation = (index: number) => {
+  characterData.key_locations?.splice(index, 1)
 }
-
-const handleGenerateCharacter = debounce(async () => {
-  generating.value = true
-
-  try {
-    // Prepare partial character data, including relationships
-    const partialCharacter: Partial<Character> = {}
-
-    // Add non-empty fields to partial character
-    if (formData.name.trim()) partialCharacter.name = formData.name.trim()
-    if (formData.tagline.trim()) partialCharacter.tagline = formData.tagline.trim()
-    if (formData.backstory.trim()) partialCharacter.backstory = formData.backstory.trim()
-    if (formData.personality?.trim()) partialCharacter.personality = formData.personality.trim()
-    if (formData.appearance?.trim()) partialCharacter.appearance = formData.appearance.trim()
-    if (formData.setting_description?.trim())
-      partialCharacter.setting_description = formData.setting_description.trim()
-
-    // Add non-empty locations
-    const filteredLocations = formData.key_locations?.filter((loc) => loc.trim().length > 0) || []
-    if (filteredLocations.length > 0) partialCharacter.key_locations = filteredLocations
-
-    // Add relationships
-    const processedRelationships = processRelationships()
-    if (Object.keys(processedRelationships).length > 0) {
-      partialCharacter.relationships = processedRelationships
-    }
-
-    // Call the API to generate missing fields
-    const response = await generateCharacter({
-      partial_character: partialCharacter,
-      processor_type: settings.value.aiProcessor,
-    })
-
-    // Update form data with generated character
-    const generatedCharacter = response.character
-    formData.name = generatedCharacter.name
-    formData.tagline = generatedCharacter.tagline
-    formData.backstory = generatedCharacter.backstory
-    formData.personality = generatedCharacter.personality || ''
-    formData.appearance = generatedCharacter.appearance || ''
-    formData.setting_description = generatedCharacter.setting_description || ''
-    formData.key_locations = generatedCharacter.key_locations || ['']
-
-    // Update relationships
-    if (generatedCharacter.relationships) {
-      relationships.value = Object.entries(generatedCharacter.relationships).map(
-        ([name, relationship]) => ({
-          name,
-          relationship,
-        })
-      )
-      // Ensure there's always at least one empty relationship slot
-      if (relationships.value.length === 0) {
-        relationships.value.push({ name: '', relationship: '' })
-      }
-    }
-
-    // Show success message with generated fields
-    const generatedCount = response.generated_fields.length
-    if (generatedCount > 0) {
-      successMessage.value = `AI generated ${generatedCount} field(s): ${response.generated_fields.join(', ')}. Review and modify as needed!`
-    } else {
-      successMessage.value = 'All fields were already filled. No generation needed!'
-    }
-    setTimeout(() => (successMessage.value = ''), 8000)
-  } catch (err: unknown) {
-    console.error('Character generation failed:', err)
-    errorMessage.value =
-      (err as any)?.message || 'Failed to generate character fields. Please try again.'
-    setTimeout(() => (errorMessage.value = ''), 5000)
-  } finally {
-    generating.value = false
-  }
-}, 500)
-
-const processYaml = debounce(async () => {
-  if (!yamlContent.value.trim()) return
-
-  processingYaml.value = true
-
-  try {
-    // Simple YAML preview - in production, this would use a proper YAML parser
-    yamlPreview.value = yamlContent.value
-    successMessage.value = 'YAML parsed successfully!'
-    setTimeout(() => (successMessage.value = ''), 3000)
-  } catch (_err) {
-    errorMessage.value = 'Invalid YAML format. Please check your syntax.'
-    setTimeout(() => (errorMessage.value = ''), 5000)
-  } finally {
-    processingYaml.value = false
-  }
-}, 300)
-
-const saveCharacter = async () => {
-  if (!validateForm()) return
-
-  try {
-    // Process relationships
-    formData.relationships = processRelationships()
-
-    // Filter out empty locations
-    formData.key_locations = formData.key_locations.filter((loc) => loc.trim().length > 0)
-
-    const response = await createCharacter({
-      data: formData,
-      is_yaml_text: false,
-    })
-
-    successMessage.value = response.message
-    setTimeout(() => {
-      router.push('/')
-    }, 2000)
-  } catch (err: unknown) {
-    validateForm()
-    errorMessage.value =
-      (err as any)?.value?.message || 'Failed to create character. Please try again.'
-    setTimeout(() => (errorMessage.value = ''), 5000)
-  }
-}
-
-const saveYamlCharacter = async () => {
-  if (!yamlContent.value.trim()) return
-
-  try {
-    const response = await createCharacter({
-      data: yamlContent.value,
-      is_yaml_text: true,
-    })
-
-    successMessage.value = response.message
-    setTimeout(() => {
-      router.push('/')
-    }, 2000)
-  } catch (err: unknown) {
-    errorMessage.value =
-      (err as any)?.value?.message ||
-      'Failed to create character from YAML. Please check your format.'
-    setTimeout(() => (errorMessage.value = ''), 5000)
-  }
-}
-
-// Reload settings on mount to pick up any changes
-onMounted(() => {
-  loadSettings()
-})
 </script>
