@@ -9,8 +9,10 @@ const defaultSettings: LocalSettings = {
   lastSelectedCharacter: undefined,
 }
 
+// Create a singleton ref that's shared across all component instances
+const settings: Ref<LocalSettings> = ref({ ...defaultSettings })
+
 export function useLocalSettings() {
-  const settings: Ref<LocalSettings> = ref({ ...defaultSettings })
 
   const loadSettings = () => {
     try {
@@ -58,16 +60,50 @@ export function useLocalSettings() {
     }
   }
 
-  // Watch for changes and auto-save
-  watch(settings, saveSettings, { deep: true })
-
-  // Load settings on initialization
-  loadSettings()
-
   return {
     settings,
     loadSettings,
     updateSetting,
     clearSettings,
   }
+}
+
+// Initialize settings and set up watchers once at module level
+let initialized = false
+if (!initialized) {
+  // Watch for changes and auto-save
+  watch(settings, () => {
+    try {
+      localStorage.removeItem(`{STORAGE_PREFIX}last_character`)
+      localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
+      localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
+
+      if (settings.value.lastSelectedCharacter) {
+        localStorage.setItem(
+          `${STORAGE_PREFIX}last_character`,
+          settings.value.lastSelectedCharacter
+        )
+      }
+    } catch (error) {
+      console.error('Failed to save settings to localStorage:', error)
+    }
+  }, { deep: true })
+
+  // Load settings on initialization
+  try {
+    const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
+    const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
+    const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
+
+    settings.value = {
+      aiProcessor: aiProcessor || defaultSettings.aiProcessor,
+      backupProcessor: backupProcessor || defaultSettings.backupProcessor,
+      lastSelectedCharacter: lastSelectedCharacter || undefined,
+    }
+  } catch (error) {
+    console.warn('Failed to load settings from localStorage, using defaults:', error)
+    settings.value = { ...defaultSettings }
+  }
+
+  initialized = true
 }

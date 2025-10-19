@@ -37,7 +37,7 @@ const appearance = {
     <UHeader>
       <template #title>
         <SquareLibrary :size="28" class="drop-shadow-sm drop-shadow-primary" />
-        <span class="font-serif text-shadow-sm text-shadow-primary/50">Storyline</span>
+        <span class="font-display font-light text-shadow-sm text-shadow-primary/50">Storyline</span>
       </template>
 
       <SignedIn>

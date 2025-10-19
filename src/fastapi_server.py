@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -191,7 +192,7 @@ async def generate_character(request: GenerateCharacterRequest, user_id: UserIdD
 
 
 @app.post("/api/characters/create-stream")
-async def create_character_stream(request: CharacterCreationRequest, user_id: UserIdDep) -> StreamingResponse:
+async def create_character_stream(request: CharacterCreationRequest, _user_id: UserIdDep) -> StreamingResponse:
     """
     Interactive character creation with AI assistant via Server-Sent Events.
 
@@ -216,16 +217,6 @@ async def create_character_stream(request: CharacterCreationRequest, user_id: Us
         async def generate_sse_response() -> AsyncGenerator[str, None]:
             """Generate Server-Sent Events for streaming character creation."""
             try:
-                # Convert conversation history to the format expected by assistant
-                conversation_history = [
-                    {
-                        "author": msg.author,
-                        "content": msg.content,
-                        "is_user": msg.is_user,
-                    }
-                    for msg in request.conversation_history
-                ]
-
                 # Create queue for streaming chunks
                 chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
                 ai_response_parts: list[str] = []
@@ -246,7 +237,7 @@ async def create_character_stream(request: CharacterCreationRequest, user_id: Us
                             lambda: assistant.process_message(
                                 user_message=request.user_message,
                                 current_character=request.current_character,
-                                conversation_history=conversation_history,
+                                conversation_history=request.conversation_history,
                                 streaming_callback=streaming_callback,
                             ),
                         )
@@ -264,8 +255,10 @@ async def create_character_stream(request: CharacterCreationRequest, user_id: Us
                     if chunk is None:  # Completion signal
                         break
 
-                    # Clean the chunk (remove any character_update tags)
-                    clean_chunk = assistant.clean_response_text(chunk)
+                    # Remove character_update tags from chunk but preserve spacing
+                    # Don't use clean_response_text() as it strips whitespace which breaks streaming
+                    clean_chunk = re.sub(r"<character_update>[\s\S]*?</character_update>", "", chunk)
+
                     if clean_chunk:  # Only send non-empty chunks
                         event_data = CharacterCreationStreamEvent(type="message", message=clean_chunk)
                         yield f"data: {event_data.model_dump_json()}\n\n"

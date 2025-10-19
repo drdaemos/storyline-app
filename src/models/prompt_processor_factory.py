@@ -27,20 +27,28 @@ class PromptProcessorFactory:
         match processor_type.lower():
             case "cohere":
                 return CoherePromptProcessor()
-            case "claude":
-                return ClaudePromptProcessor()
+            case "claude-sonnet":
+                return ClaudePromptProcessor(model="claude-sonnet-4-5-20250929")
+            case "claude-haiku":
+                return ClaudePromptProcessor(model="claude-haiku-4.5-20251015")
             case "gpt":
                 return OpenAiPromptProcessor()
+            case "gpt-4.1":
+                return OpenAiPromptProcessor(model="gpt-4.1")
             case "grok":
                 return OpenRouterPromptProcessor(model="x-ai/grok-4-fast")
             case "deepseek":
-                return OpenRouterPromptProcessor(model="deepseek/deepseek-v3.1-terminus")
-            case "gpt-oss":
-                return OpenRouterPromptProcessor(model="openai/gpt-oss-120b")
-            case "google":
+                return OpenRouterPromptProcessor(model="deepseek/deepseek-r1-0528")
+            case "deepseek-chimera":
+                return OpenRouterPromptProcessor(model="tngtech/deepseek-r1t2-chimera")
+            case "google-flash":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
-            case "ling":
-                return OpenRouterPromptProcessor(model="inclusionai/ling-1t")
+            case "google-pro":
+                return OpenRouterPromptProcessor(model="google/gemini-2.5-pro")
+            case "ring":
+                return OpenRouterPromptProcessor(model="inclusionai/ring-1t")
+            case "glm":
+                return OpenRouterPromptProcessor(model="z-ai/glm-4.6")
             case _:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
 
@@ -62,4 +70,4 @@ class PromptProcessorFactory:
         Returns:
             List of supported processor type names
         """
-        return ["cohere", "claude", "gpt", "grok", "deepseek", "gpt-oss", "google", "ling"]
+        return ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chimera", "google-flash", "google-pro", "ring", "glm"]

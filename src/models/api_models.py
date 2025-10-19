@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from .character import Character
+from .character import Character, PartialCharacter
 
 
 class CharacterSummary(BaseModel):
@@ -152,7 +152,7 @@ class CharacterCreationRequest(BaseModel):
     """Request model for interactive character creation with AI assistant."""
 
     user_message: str = Field(..., min_length=1, description="User's message describing the character")
-    current_character: dict[str, str | list[str] | dict[str, str] | None] = Field(default_factory=dict, description="Current partial character data")
+    current_character: PartialCharacter = Field(default_factory=dict, description="Current partial character data")
     conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages for context")
     processor_type: str = Field(default="claude", description="AI processor type to use")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
@@ -163,5 +163,5 @@ class CharacterCreationStreamEvent(BaseModel):
 
     type: str = Field(..., description="Event type: 'message', 'update', 'complete', 'error'")
     message: str | None = Field(None, description="AI message chunk to show in chat")
-    updates: dict[str, str | list[str] | dict[str, str] | None] | None = Field(None, description="Character field updates")
+    updates: PartialCharacter | None = Field(None, description="Character field updates")
     error: str | None = Field(None, description="Error message if type is 'error'")

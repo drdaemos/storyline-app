@@ -230,6 +230,30 @@ I've created the character for you."""
         callback.assert_any_call("Streaming ")
         callback.assert_any_call("response")
 
+    def test_streaming_preserves_spaces_in_chunks(self, assistant, mock_processor):
+        """Test that streaming chunks with leading/trailing spaces are preserved."""
+        callback = Mock()
+        # Mock streaming response with chunks that have spaces
+        # These should be preserved and not stripped
+        mock_processor.respond_with_stream.return_value = iter(["Hello", " world", " from", " AI"])
+
+        response, _ = assistant.process_message(
+            user_message="Create a character",
+            current_character={},
+            conversation_history=[],
+            streaming_callback=callback,
+        )
+
+        # Verify callback was invoked with original chunks (including spaces)
+        assert callback.call_count == 4
+        callback.assert_any_call("Hello")
+        callback.assert_any_call(" world")
+        callback.assert_any_call(" from")
+        callback.assert_any_call(" AI")
+
+        # Verify the assembled response preserves spaces
+        assert response == "Hello world from AI"
+
     def test_extract_character_updates_ignores_empty_values(self, assistant):
         """Test that empty string values are filtered out from updates."""
         ai_response = """<character_update>

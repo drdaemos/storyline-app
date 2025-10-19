@@ -58,13 +58,17 @@ const open = ref(false)
 const { settings, clearSettings } = useLocalSettings()
 
 const processorOptions = ref<SelectItem[]>([
-  { label: 'Google (Gemini)', id: 'google' },
-  { label: 'OpenAI (GPT)', id: 'gpt' },
-  { label: 'Cohere', id: 'cohere' },
-  { label: 'Anthropic (Claude)', id: 'claude' },
-  { label: 'xAI (Grok)', id: 'grok' },
-  { label: 'DeepSeek', id: 'deepseek' },
-  { label: 'GPT OSS', id: 'gpt-oss' },
-  { label: 'InclusionAI (Ling)', id: 'ling' },
+  { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
+  { label: 'Claude Haiku 4.5 ($5/M)', id: 'claude-haiku' },
+  { label: 'Gemini 2.5 Flash ($2.50/M)', id: 'google-flash' },
+  { label: 'Gemini 2.5 Pro ($10/M)', id: 'google-pro' },
+  { label: 'o4-mini ($4.40/M)', id: 'gpt' },
+  { label: 'GPT-4.1 ($8/M)', id: 'gpt-4.1' },
+  { label: 'Grok 4 Fast ($0.50/M)', id: 'grok' },
+  { label: 'DeepSeek R1 ($1.75/M)', id: 'deepseek' },
+  { label: 'DeepSeek R1T2 Chimera ($1.20/M)', id: 'deepseek-chimera' },
+  { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
+  { label: 'Ring-1T ($2.28/M)', id: 'ring' },
+  { label: 'Cohere ($10/M)', id: 'cohere' },
 ])
 </script>

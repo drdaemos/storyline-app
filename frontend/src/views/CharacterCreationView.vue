@@ -46,7 +46,26 @@
                   :name="message.isUser ? 'i-lucide-user' : 'i-lucide-sparkles'"
                   class="w-4 h-4 mt-0.5 flex-shrink-0"
                 />
-                <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+                <div class="text-sm flex-1">
+                  <template v-for="(segment, idx) in parseMessageSegments(message.content)" :key="idx">
+                    <!-- Regular text segment -->
+                    <span v-if="segment.type === 'text'" class="whitespace-pre-wrap">{{ segment.content }}</span>
+
+                    <!-- Character update block -->
+                    <div
+                      v-else-if="segment.type === 'update'"
+                      class="inline-flex items-center gap-2 px-3 py-1.5 my-1 rounded-md bg-primary/10 border border-primary/20 text-primary"
+                    >
+                      <UIcon
+                        :name="segment.complete ? 'i-lucide-check-circle' : 'i-lucide-loader-circle'"
+                        :class="['w-3.5 h-3.5', !segment.complete && 'animate-spin']"
+                      />
+                      <span class="text-xs font-medium">
+                        {{ segment.complete ? 'Character updated' : 'Updating character...' }}
+                      </span>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
@@ -197,6 +216,7 @@
                     <UTextarea
                       v-model="rel.description"
                       :rows="2"
+                      autoresize
                       variant="ghost"
                       class="w-full"
                       placeholder="Describe the relationship..."
@@ -391,7 +411,7 @@ const sendMessage = async () => {
   userInput.value = ''
   isThinking.value = true
   error.value = ''
-  scrollToBottom()
+  // scrollToBottom()
 
   try {
     const payload: CharacterCreationRequest = {
@@ -406,13 +426,22 @@ const sendMessage = async () => {
       backup_processor_type: settings.value.backupProcessor,
     }
 
-    let aiMessage = ''
+    // Create a temporary AI message that will be updated in real-time
+    const aiMessageIndex = messages.value.length
+    messages.value.push({
+      author: 'AI Assistant',
+      content: '',
+      isUser: false,
+      timestamp: new Date(),
+    })
 
     await streamCharacterCreation(
       payload,
       // onMessage callback
       (messageChunk: string) => {
-        aiMessage += messageChunk
+        // Update the AI message content in real-time
+        messages.value[aiMessageIndex].content += messageChunk
+        // scrollToBottom()
       },
       // onUpdate callback
       (updates: Partial<Character>) => {
@@ -421,21 +450,18 @@ const sendMessage = async () => {
       },
       // onComplete callback
       () => {
-        // Add AI message to chat
-        if (aiMessage) {
-          messages.value.push({
-            author: 'AI Assistant',
-            content: aiMessage,
-            isUser: false,
-            timestamp: new Date(),
-          })
+        // Remove empty message if no content was received
+        if (!messages.value[aiMessageIndex].content) {
+          messages.value.splice(aiMessageIndex, 1)
         }
         isThinking.value = false
-        scrollToBottom()
+        // scrollToBottom()
       },
       // onError callback
       (errorMessage: string) => {
         error.value = errorMessage
+        // Remove the empty AI message on error
+        messages.value.splice(aiMessageIndex, 1)
         isThinking.value = false
       }
     )
@@ -451,7 +477,7 @@ const saveCharacter = async () => {
 
   saving.value = true
   try {
-    const response = await createCharacter({
+    await createCharacter({
       data: characterData as Character,
       is_yaml_text: false,
     })
@@ -484,5 +510,43 @@ const addLocation = () => {
 
 const removeLocation = (index: number) => {
   characterData.key_locations?.splice(index, 1)
+}
+
+interface MessageSegment {
+  type: 'text' | 'update'
+  content: string
+  complete: boolean
+}
+
+const parseMessageSegments = (content: string): MessageSegment[] => {
+  if (!content) return []
+
+  const segments: MessageSegment[] = []
+
+  // Split by <character_update> tags and track positions
+  const parts = content.split(/(<character_update>[\s\S]*?(?:<\/character_update>|$))/g)
+
+  for (const part of parts) {
+    if (!part) continue
+
+    // Check if this part is a character update block
+    if (part.startsWith('<character_update>')) {
+      const hasClosingTag = part.includes('</character_update>')
+      segments.push({
+        type: 'update',
+        content: '', // We don't need the actual content for display
+        complete: hasClosingTag,
+      })
+    } else {
+      // Regular text
+      segments.push({
+        type: 'text',
+        content: part,
+        complete: true,
+      })
+    }
+  }
+
+  return segments
 }
 </script>

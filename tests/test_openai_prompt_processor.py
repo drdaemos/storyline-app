@@ -20,7 +20,7 @@ class TestOpenAiPromptProcessor:
     def test_init_with_env_key(self):
         processor = OpenAiPromptProcessor()
         assert processor.client.api_key == "test-key"
-        assert processor.model == "gpt-5"
+        assert processor.model == "o4-mini"
 
     def test_init_with_explicit_key(self):
         processor = OpenAiPromptProcessor(api_key="explicit-key")

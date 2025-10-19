@@ -1,2 +1,9 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+@theme {
+    --font-sans: 'Lexend Deca', 'Bricolage Grotesque', system-ui, sans-serif;
+    --font-serif: 'Lora', serif;
+    --font-display: 'BBH Sans Bogle', serif;
+    --font-display-serif: 'Playfair Display', serif;
+}

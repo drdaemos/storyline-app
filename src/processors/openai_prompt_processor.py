@@ -25,7 +25,7 @@ class OpenAiPromptProcessor(PromptProcessor):
     - String outputs for simple text responses
     """
 
-    def __init__(self, api_key: str | None = None, model: str = "gpt-5") -> None:
+    def __init__(self, api_key: str | None = None, model: str = "o4-mini") -> None:
         """
         Initialize the PromptProcessor.
 

@@ -36,7 +36,8 @@
       "Bash(xargs cat:*)",
       "Bash(find:*)",
       "Bash(cat:*)",
-      "Bash(uv run pytest:*)"
+      "Bash(uv run pytest:*)",
+      "WebFetch(domain:openrouter.ai)"
     ],
     "deny": []
   }

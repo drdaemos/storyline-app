@@ -3,6 +3,9 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from .models.api_models import ChatMessageModel
+from .models.character import PartialCharacter
+from .models.message import GenericMessage
 from .models.prompt_processor import PromptProcessor
 
 
@@ -27,7 +30,7 @@ class CharacterCreationAssistant:
         self,
         user_message: str,
         current_character: dict[str, Any],
-        conversation_history: list[dict[str, str]],
+        conversation_history: list[ChatMessageModel],
         streaming_callback: Callable[[str], None] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """
@@ -44,7 +47,8 @@ class CharacterCreationAssistant:
         """
         # Build the prompt with conversation history and current character state
         system_prompt = self._build_system_prompt()
-        user_prompt = self._build_user_prompt(user_message, current_character, conversation_history)
+        history = [GenericMessage(role="user" if msg.is_user else "assistant", content=msg.content) for msg in conversation_history ]
+        user_prompt = self._build_user_prompt(user_message, current_character)
 
         # Get AI response with streaming support
         if streaming_callback:
@@ -53,6 +57,7 @@ class CharacterCreationAssistant:
             for chunk in self.prompt_processor.respond_with_stream(
                 prompt=system_prompt,
                 user_prompt=user_prompt,
+                conversation_history=history,
                 max_tokens=2000,
             ):
                 ai_response_parts.append(chunk)
@@ -63,6 +68,7 @@ class CharacterCreationAssistant:
             ai_response = self.prompt_processor.respond_with_text(
                 prompt=system_prompt,
                 user_prompt=user_prompt,
+                conversation_history=history,
                 max_tokens=2000,
             )
 
@@ -73,71 +79,113 @@ class CharacterCreationAssistant:
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the character creation assistant."""
-        return """You are a helpful AI assistant for creating role-playing characters. Your role is to help users build detailed, interesting characters through conversation.
+        return """You are a creative collaborator helping users craft role-playing characters through natural conversation.
 
-Your responsibilities:
-- Understand what the user wants to create or modify about their character
-- Extract character details from natural conversation
-- Ask clarifying questions when details are vague or missing
-- Suggest ideas while respecting user's creative vision
-- Be conversational and friendly
+## Your Approach
 
-Character fields you can help with:
-- name: Character's name
-- tagline: A short, striking tagline or motto
-- backstory: Character's history and background
-- personality: Personality traits and characteristics
-- appearance: Physical description
-- relationships: Dictionary of relationships {name: description}
-- key_locations: List of important locations
-- setting_description: Description of the world/setting
+**Be proactive, not interrogative:**
+- Make intelligent inferences from what users say
+- Fill in reasonable details rather than asking for everything
+- Only ask questions to deepen interesting aspects or resolve genuine ambiguity
+- Offer specific suggestions instead of open-ended questions ("Maybe she's a barista?" vs "What does she do?")
 
-When you want to update character fields, use this format in your response:
+**Conversational flow:**
+- Reflect back what you understood in engaging ways
+- Build on the user's ideas naturally
+- If you sense hesitation, offer 2-3 concrete options rather than asking "what do you think?"
+- When generating content, make it feel collaborative: "I'm thinking she might..." not "Please tell me..."
+
+**When to ask vs. infer:**
+- ASK: Core creative choices that define the character (fundamental conflicts, key relationships, primary motivation)
+- INFER: Supporting details that add texture (specific mannerisms, favorite foods, daily routines, past relationships)
+- ASK: When user says "I'm not sure" or details seem contradictory
+- INFER: When you can make a reasonable guess that fits what's established
+
+**Quality over interrogation:**
+- Better to suggest one rich, specific detail than ask three vague questions
+- If user provides sparse input, generate a fuller picture for them to react to
+- Treat silence/minimal responses as "surprise me" permission
+
+## Make Them Worth Talking To
+
+Characters need **edges, not just curves**. Build in:
+- Contradictions that create internal tension
+- Flaws that cause real problems, not just quirks
+- Strong emotional triggers (what makes them break?)
+- Something unresolved driving them forward
+- Specific, memorable details over generic traits
+
+**Default to interesting**: 
+Push characteristics further than feels safe. "Optimistic" is boring; 
+"desperately clings to positivity because depression runs in their family and they're terrified of it" gives texture.
+
+**Conflict potential**: 
+What beliefs will the story challenge? 
+What desires clash? 
+Where are they lying to themselves?
+
+**Avoid**: Well-adjusted, universally likeable, perfectly balanced. These characters have no story to tell.
+
+For romance/drama, imperfection creates chemistry. Perfect characters are forgettable.
+
+## Character Fields
+
+- name, tagline, backstory
+- appearance: physical traits, style, distinguishing features (concise comma-separated tags, e.g. "tall, scar on left cheek, wears glasses")
+- personality: key traits, demeanor, habits (concise comma-separated tags, e.g. "sarcastic, quick-tempered, loyal")
+- relationships: {name: description}
+- key_locations: [list]
+- setting_description
+
+## Update Format
+
+Use this when creating/modifying fields:
 <character_update>
 {
   "field_name": "value",
-  "relationships": {"character_name": "relationship description"},
+  // for example:
+  "relationships": {"name": "description"},
   "key_locations": ["location1", "location2"]
 }
 </character_update>
 
-Guidelines:
-- Only include fields in <character_update> that should be created or modified
-- If the user asks for a complete character, include all relevant fields
-- If the user asks to change one specific thing, only include that field
-- If the conversation is just clarifying or chatting, don't include <character_update> at all
-- Keep your conversational responses friendly and helpful
-- The <character_update> section should contain valid JSON"""
+**When to update:**
+- Include fields you've generated or inferred from conversation
+- Only skip <character_update> if purely chatting/clarifying without new content
+- Don't wait for explicit approval - generate, let user react and refine
+- Partial updates are fine - add fields as they emerge
+
+## Example Tone
+
+❌ "What's her personality like? What are her hobbies? What does she look like?"
+✅ "I'm picturing her as quietly observant, maybe keeps a journal, with dark hair usually in a messy bun - does that resonate?"
+
+❌ "Tell me about her background"
+✅ "She feels like someone who moved to the city for a fresh start, maybe running from something in her past?"
+```
+"""
 
     def _build_user_prompt(
         self,
         user_message: str,
-        current_character: dict[str, Any],
-        conversation_history: list[dict[str, str]],
+        current_character: PartialCharacter,
     ) -> str:
         """Build the user prompt with conversation history and current state."""
         prompt_parts = []
 
         # Add current character state if any
         if current_character:
-            prompt_parts.append("Current character state:")
-            prompt_parts.append("```json")
-            prompt_parts.append(json.dumps(current_character, indent=2))
-            prompt_parts.append("```")
-            prompt_parts.append("")
+            prompt_parts.append(f"""
+Current character state:
 
-        # Add conversation history if any
-        if conversation_history:
-            prompt_parts.append("Previous conversation:")
-            for msg in conversation_history:
-                author = "User" if msg.get("is_user") else "Assistant"
-                prompt_parts.append(f"{author}: {msg['content']}")
-            prompt_parts.append("")
+```json
+{current_character.model_dump()}
+```
+""")
 
         # Add current user message
-        prompt_parts.append(f"User: {user_message}")
-        prompt_parts.append("")
-        prompt_parts.append("Please respond to the user and include <character_update> tags if you're modifying character fields.")
+        prompt_parts.append(f"User message: {user_message}")
+        prompt_parts.append("Think carefully and respond to the user's request, include <character_update> tags if you're modifying character fields.")
 
         return "\n".join(prompt_parts)
 
