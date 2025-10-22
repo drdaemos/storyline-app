@@ -65,20 +65,22 @@ class ScenarioGenerator:
     def _build_scenario_generation_prompt(self, processor: PromptProcessor) -> str:
         """Build the system prompt for scenario generation."""
         prompt = f"""You are an expert creative writer specializing in interactive storytelling and handcrafted role-play scenarios for your players.
-Your task is to generate several different scenarios starters for a role-play based on a character description and world setting provided by the user.
+Your task is to generate several different scenarios starters for a role-play based on the AI character description and world setting provided by the user.
+User is going to play for another character in the scenario, so make sure to leave room for their interaction with the AI character.
 Make sure the scenarios are diverse and cover a range of genres and tones, with some having unexpected twists, or curious mixes of genres or dark elements.
-You can go as extreme as you want with the scenarios in order to make them unique and interesting to explore.
+You should go as extreme as needed with the scenarios in order to make them unique and interesting to explore.
 
 Guidelines:
 - Absolutely avoid scenarios that too cliché or generic - and avoid having similar scenarios
 - Establish clear context for interaction (where they are, what's happening, what needs to happen)
-- Ensure the scenario is requiring the immediate user response and interaction
-- Never mention user as a "user" / "player" / "you" in the scenario description - invent a name for them or refer to them indirectly
-- Do not stick to the character definition too closely - feel free to introduce surprising elements that test the character
+- Write the scenario that leaves a room for the user character and has them interacting with the AI character
+- Ensure the scenario is requiring the immediate user response and interaction with the AI character
+- Never mention user as a "user" / "player" / "you" in the scenario description - refer to them indirectly
+- Do not stick to the character definition too closely - feel free to introduce surprising elements that test both user and AI characters
 - Do not write as an overview, instead set it up as a scene that is already unfolding in front of the user
 - Respect the scenario tone guidelines provided by the user
 
-Your response may include the following:
+Your scenario intro may include the following:
 - Physical actions (in asterisks, in third person)
 - Spoken dialogue (in quotes, like "this")
 - Internal sensations or observations (in third person)
@@ -100,9 +102,9 @@ Output your scenarios as a JSON object with a 'scenarios' array containing objec
 
     def _build_user_prompt(self, character: Character, count: int, mood: str) -> str:
         """Build the user prompt with character data and scenario count."""
-        prompt = """Generate exactly {count} different engaging scenarios for a role-play based on the following character description:
+        prompt = """Generate exactly {count} different engaging scenarios for a role-play with the following character and world setting:
 
-## Character Information
+## AI Character Information
 
 Character Name: {character_name}
 Character Background: {character_background}

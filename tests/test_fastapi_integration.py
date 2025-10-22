@@ -1,4 +1,7 @@
 import os
+import shutil
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -8,15 +11,32 @@ from src.fastapi_server import app
 from src.models.character import Character
 
 
+@pytest.fixture(scope="function", autouse=True)
+def setup_test_db():
+    """Set up test database for each test."""
+    temp_dir = tempfile.mkdtemp()
+    original_database_url = os.environ.get("DATABASE_URL")
+    test_db_path = Path(temp_dir) / "test_fastapi.db"
+    os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
+    os.environ["AUTH_ENABLED"] = "false"
+
+    yield
+
+    # Restore original environment
+    if original_database_url is not None:
+        os.environ["DATABASE_URL"] = original_database_url
+    elif "DATABASE_URL" in os.environ:
+        del os.environ["DATABASE_URL"]
+
+    # Clean up temp directory
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+
+
 @pytest.fixture
 def client():
     """Create test client."""
     return TestClient(app)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def set_env():
-    os.environ["AUTH_ENABLED"] = "false"
 
 
 @pytest.fixture

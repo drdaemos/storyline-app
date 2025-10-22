@@ -32,8 +32,14 @@ class MockPromptProcessor:
 class TestCharacterResponderSummaryIntegration:
     def setup_method(self):
         """Set up test fixtures."""
+        import os
         self.temp_dir = tempfile.mkdtemp()
         self.memory_dir = Path(self.temp_dir)
+
+        # Set environment variable to use test database in temp directory
+        self.original_database_url = os.environ.get("DATABASE_URL")
+        test_db_path = Path(self.temp_dir) / "test_integration.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
 
         # Create test character
         self.character = Character(
@@ -57,7 +63,24 @@ class TestCharacterResponderSummaryIntegration:
 
     def teardown_method(self):
         """Clean up test files."""
-        # SQLAlchemy handles cleanup automatically
+        import os
+        import shutil
+
+        # Close database connections
+        if hasattr(self, 'conversation_memory'):
+            self.conversation_memory.close()
+        if hasattr(self, 'summary_memory'):
+            self.summary_memory.close()
+
+        # Clean up temp directory
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+        # Restore original environment
+        if self.original_database_url is not None:
+            os.environ["DATABASE_URL"] = self.original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
 
     def create_dependencies_with_mock_responses(self, evaluation_response, summary_response: str) -> CharacterResponderDependencies:
         """Create dependencies with mock processors that return specific responses."""
@@ -100,12 +123,16 @@ class TestCharacterResponderSummaryIntegration:
         primary_processor = MockProcessorWithSummary(evaluation_response, summary_response)
         backup_processor = MockProcessorWithSummary(evaluation_response, summary_response)
 
+        # Create mock chat logger
+        from unittest.mock import Mock
+        chat_logger = Mock()
+
         return CharacterResponderDependencies(
             primary_processor=primary_processor,
             backup_processor=backup_processor,
             conversation_memory=self.conversation_memory,
             summary_memory=self.summary_memory,
-            chat_logger=None,
+            chat_logger=chat_logger,
             session_id=self.session_id,
         )
 
@@ -164,10 +191,15 @@ class TestCharacterResponderSummaryIntegration:
 
     def test_existing_summaries_loading(self):
         """Test that existing summaries are properly loaded and concatenated on initialization."""
-        # Pre-populate summary memory with test summaries
-        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary="First summary of early conversation", start_offset=0, end_offset=5)
+        # Pre-populate summary memory with test summaries using XML format
+        summary1 = """<story_summary>First summary of early conversation (messages 0-5)</story_summary>
+<character_learnings>User introduced themselves</character_learnings>"""
 
-        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary="Second summary of middle conversation", start_offset=6, end_offset=11)
+        summary2 = """<story_summary>Second summary of middle conversation (messages 6-11)</story_summary>
+<character_learnings>Discussed the case details</character_learnings>"""
+
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary=summary1, start_offset=0, end_offset=5)
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary=summary2, start_offset=6, end_offset=11)
 
         # Create responder which should load existing summaries
         dependencies = self.create_dependencies_with_mock_responses("test", "test")
@@ -177,8 +209,6 @@ class TestCharacterResponderSummaryIntegration:
         assert responder.memory_summary != ""
         assert "First summary of early conversation" in responder.memory_summary
         assert "Second summary of middle conversation" in responder.memory_summary
-        assert "messages 0-5" in responder.memory_summary
-        assert "messages 6-11" in responder.memory_summary
 
     def test_clear_session_removes_summaries(self):
         """Test that clearing session also removes associated summaries."""
@@ -228,14 +258,18 @@ class TestCharacterResponderSummaryIntegration:
         assert responder2._current_message_offset == 4
 
     def test_summary_memory_disabled_gracefully_handled(self):
-        """Test that the system works gracefully when summary memory is disabled."""
-        # Create dependencies without summary memory
+        """Test that the system works gracefully when summary memory is empty."""
+        # Create mock chat logger
+        from unittest.mock import Mock
+        chat_logger = Mock()
+
+        # Create dependencies with summary memory that returns empty results
         dependencies = CharacterResponderDependencies(
             primary_processor=MockPromptProcessor("test response"),
             backup_processor=MockPromptProcessor("backup response"),
             conversation_memory=self.conversation_memory,
-            summary_memory=None,  # No summary memory
-            chat_logger=None,
+            summary_memory=self.summary_memory,  # Use normal summary memory
+            chat_logger=chat_logger,
             session_id=self.session_id,
         )
 
@@ -293,31 +327,34 @@ class TestCharacterResponderSummaryIntegration:
         assert should_trigger is True
 
     def test_summarization_trigger_fallback_without_summary_memory(self):
-        """Test that summarization falls back to memory size when summary memory is disabled."""
-        # Create dependencies without summary memory
+        """Test that summarization works with summary memory that has no existing summaries."""
+        # Create mock chat logger
+        from unittest.mock import Mock
+        chat_logger = Mock()
+
+        # Create dependencies with summary memory that returns no summaries
         dependencies = CharacterResponderDependencies(
             primary_processor=MockPromptProcessor("test response"),
             backup_processor=MockPromptProcessor("backup response"),
             conversation_memory=self.conversation_memory,
-            summary_memory=None,  # No summary memory
-            chat_logger=None,
+            summary_memory=self.summary_memory,  # Use normal summary memory
+            chat_logger=chat_logger,
             session_id=self.session_id,
         )
 
         responder = CharacterResponder(self.character, dependencies)
 
-        # Should use memory size as trigger when summary memory is not available
+        # When no summaries exist, max_processed_offset is None, which becomes -1
+        # Then messages_since_last_summary = _current_message_offset - (-1) - 1 = _current_message_offset
         trigger_threshold = responder.RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * responder.EPOCH_MESSAGES
 
-        # Add messages below threshold
-        for i in range(trigger_threshold - 1):
-            responder.memory.append({"role": "user", "content": f"Message {i}"})
-
+        # Set offset just below threshold
+        responder._current_message_offset = trigger_threshold - 1
         should_trigger = responder._should_trigger_summarization("new message")
         assert should_trigger is False
 
         # Add one more message to reach threshold
-        responder.memory.append({"role": "user", "content": "final message"})
+        responder._current_message_offset = trigger_threshold
         should_trigger = responder._should_trigger_summarization("new message")
         assert should_trigger is True
 

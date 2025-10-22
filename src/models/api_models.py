@@ -163,5 +163,5 @@ class CharacterCreationStreamEvent(BaseModel):
 
     type: str = Field(..., description="Event type: 'message', 'update', 'complete', 'error'")
     message: str | None = Field(None, description="AI message chunk to show in chat")
-    updates: PartialCharacter | None = Field(None, description="Character field updates")
+    updates: PartialCharacter | None = Field(None, description="Updated character state with current values")
     error: str | None = Field(None, description="Error message if type is 'error'")

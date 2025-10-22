@@ -268,7 +268,9 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
 
                 # Send character updates if any
                 if character_updates:
-                    update_event = CharacterCreationStreamEvent(type="update", updates=character_updates)
+                    # Merge updates with current character to get complete state
+                    updated_character = request.current_character.model_copy(update=character_updates)
+                    update_event = CharacterCreationStreamEvent(type="update", updates=updated_character)
                     yield f"data: {update_event.model_dump_json()}\n\n"
 
                 # Send completion marker
@@ -351,7 +353,7 @@ async def list_sessions(user_id: UserIdDep) -> list[SessionInfo]:
                 # Get the last character response from this session (conversation type only, not evaluations)
                 last_character_response = None
                 try:
-                    recent_messages = conversation_memory.get_recent_messages(session_info["session_id"], user_id, limit=1, type="conversation")
+                    recent_messages = conversation_memory.get_recent_messages(session_info["session_id"], user_id, limit=1)
                     last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
                 except Exception:
                     # If there's an issue getting recent messages, just set to None
@@ -385,7 +387,7 @@ async def get_session(session_id: str, user_id: UserIdDep) -> SessionDetails:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
     try:
-        session_messages = memory.get_recent_messages(session_id, user_id, limit=50, type="conversation")
+        session_messages = memory.get_recent_messages(session_id, user_id, limit=50)
 
         last_messages = [
             SessionMessage(
@@ -557,6 +559,8 @@ async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingRes
     except HTTPException:
         raise
     except Exception as e:
+        if 'responder' in locals() and responder and hasattr(responder, 'chat_logger') and responder.chat_logger:
+            responder.chat_logger.log_exception(e)
         raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
 
 

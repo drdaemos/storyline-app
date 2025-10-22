@@ -16,10 +16,10 @@ class CharacterResponderDependencies:
     primary_processor: PromptProcessor
     backup_processor: PromptProcessor
     session_id: str
+    conversation_memory: ConversationMemory
+    summary_memory: SummaryMemory
+    chat_logger: ChatLogger
     user_id: str = "anonymous"
-    conversation_memory: ConversationMemory | None = None
-    summary_memory: SummaryMemory | None = None
-    chat_logger: ChatLogger | None = None
 
     @classmethod
     def create_default(

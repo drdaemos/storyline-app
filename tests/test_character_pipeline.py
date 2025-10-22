@@ -163,6 +163,7 @@ class TestCharacterPipeline:
 
         input_data: CharacterResponseInput = {
             "summary": "Discussion about missing person case",
+            "plans": "Continue investigating the case with the new evidence",
             "previous_response": "I understand you need help",
             "character": self.test_character,
             "user_name": "John",

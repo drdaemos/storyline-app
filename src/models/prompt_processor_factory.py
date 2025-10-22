@@ -28,9 +28,9 @@ class PromptProcessorFactory:
             case "cohere":
                 return CoherePromptProcessor()
             case "claude-sonnet":
-                return ClaudePromptProcessor(model="claude-sonnet-4-5-20250929")
+                return ClaudePromptProcessor(model="claude-sonnet-4-5")
             case "claude-haiku":
-                return ClaudePromptProcessor(model="claude-haiku-4.5-20251015")
+                return ClaudePromptProcessor(model="claude-haiku-4-5")
             case "gpt":
                 return OpenAiPromptProcessor()
             case "gpt-4.1":
@@ -39,14 +39,16 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="x-ai/grok-4-fast")
             case "deepseek":
                 return OpenRouterPromptProcessor(model="deepseek/deepseek-r1-0528")
-            case "deepseek-chimera":
-                return OpenRouterPromptProcessor(model="tngtech/deepseek-r1t2-chimera")
+            case "deepseek-chat-v3.1":
+                return OpenRouterPromptProcessor(model="deepseek/deepseek-chat-v3.1")
             case "google-flash":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
             case "google-pro":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-pro")
-            case "ring":
-                return OpenRouterPromptProcessor(model="inclusionai/ring-1t")
+            case "hermes":
+                return OpenRouterPromptProcessor(model="nousresearch/hermes-4-405b")
+            case "kimi":
+                return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-0905")
             case "glm":
                 return OpenRouterPromptProcessor(model="z-ai/glm-4.6")
             case _:
@@ -70,4 +72,4 @@ class PromptProcessorFactory:
         Returns:
             List of supported processor type names
         """
-        return ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chimera", "google-flash", "google-pro", "ring", "glm"]
+        return ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chat-v3.1", "google-flash", "google-pro", "hermes", "kimi", "glm"]

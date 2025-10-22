@@ -428,20 +428,22 @@ const sendMessage = async () => {
 
     // Create a temporary AI message that will be updated in real-time
     const aiMessageIndex = messages.value.length
-    messages.value.push({
-      author: 'AI Assistant',
-      content: '',
-      isUser: false,
-      timestamp: new Date(),
-    })
 
     await streamCharacterCreation(
       payload,
       // onMessage callback
       (messageChunk: string) => {
+        if (!messages.value[aiMessageIndex]) {
+          messages.value.push({
+            author: 'AI Assistant',
+            content: '',
+            isUser: false,
+            timestamp: new Date(),
+          })
+        }
         // Update the AI message content in real-time
         messages.value[aiMessageIndex].content += messageChunk
-        // scrollToBottom()
+        isThinking.value = false
       },
       // onUpdate callback
       (updates: Partial<Character>) => {
@@ -455,7 +457,6 @@ const sendMessage = async () => {
           messages.value.splice(aiMessageIndex, 1)
         }
         isThinking.value = false
-        // scrollToBottom()
       },
       // onError callback
       (errorMessage: string) => {

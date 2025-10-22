@@ -9,20 +9,31 @@ class TestCharacterRegistry:
     def setup_method(self):
         """Set up a temporary memory directory with test database for each test."""
         self.temp_dir = tempfile.mkdtemp()
-        # Set environment variable to use test database
-        self.original_db_name = os.environ.get("DB_NAME")
-        os.environ["DB_NAME"] = "characters_test.db"
+        # Set environment variable to use test database in temp directory
+        self.original_database_url = os.environ.get("DATABASE_URL")
+        test_db_path = Path(self.temp_dir) / "test_characters.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
         # Create custom registry instance that uses test database
         self.registry = CharacterRegistry(memory_dir=Path(self.temp_dir))
         self.character_id = "test_character"
 
     def teardown_method(self):
         """Clean up test environment."""
+        import shutil
+
+        # Close database connection
+        if hasattr(self, 'registry'):
+            self.registry.close()
+
+        # Clean up temp directory
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
         # Restore original environment
-        if self.original_db_name is not None:
-            os.environ["DB_NAME"] = self.original_db_name
-        elif "DB_NAME" in os.environ:
-            del os.environ["DB_NAME"]
+        if self.original_database_url is not None:
+            os.environ["DATABASE_URL"] = self.original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
 
     def test_save_character_new(self):
         """Test saving a new character."""

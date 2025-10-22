@@ -10,20 +10,30 @@ class TestConversationMemory:
     def setup_method(self):
         """Set up a temporary memory directory with test database for each test."""
         self.temp_dir = tempfile.mkdtemp()
-        # Set environment variable to use test database
-        self.original_db_name = os.environ.get("DB_NAME")
-        os.environ["DB_NAME"] = "conversations_test.db"
+        # Set environment variable to use test database in temp directory
+        self.original_database_url = os.environ.get("DATABASE_URL")
+        test_db_path = Path(self.temp_dir) / "test_conversations.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
         # Create custom memory instance that uses test database
         self.memory = ConversationMemory(memory_dir=Path(self.temp_dir))
         self.character_id = "test_character"
 
     def teardown_method(self):
         """Clean up test environment."""
+        # Close the database connection
+        if hasattr(self, 'memory'):
+            self.memory.close()
+
+        # Clean up temp directory and all files in it
+        import shutil
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
         # Restore original environment
-        if self.original_db_name is not None:
-            os.environ["DB_NAME"] = self.original_db_name
-        elif "DB_NAME" in os.environ:
-            del os.environ["DB_NAME"]
+        if self.original_database_url is not None:
+            os.environ["DATABASE_URL"] = self.original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
 
     def test_create_session(self):
         """Test session creation."""

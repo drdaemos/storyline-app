@@ -66,9 +66,10 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'GPT-4.1 ($8/M)', id: 'gpt-4.1' },
   { label: 'Grok 4 Fast ($0.50/M)', id: 'grok' },
   { label: 'DeepSeek R1 ($1.75/M)', id: 'deepseek' },
-  { label: 'DeepSeek R1T2 Chimera ($1.20/M)', id: 'deepseek-chimera' },
+  { label: 'DeepSeek Chat V3.1 ($1.00/M)', id: 'deepseek-chat-v3.1' },
+  { label: 'Hermes 4 405B ($1.20/M)', id: 'hermes' },
+  { label: 'Kimi K2 ($1.90/M)', id: 'kimi' },
   { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
-  { label: 'Ring-1T ($2.28/M)', id: 'ring' },
   { label: 'Cohere ($10/M)', id: 'cohere' },
 ])
 </script>

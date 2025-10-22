@@ -23,7 +23,7 @@ class ClaudePromptProcessor(PromptProcessor):
     - String outputs for simple text responses
     """
 
-    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-5-20250929") -> None:
+    def __init__(self, api_key: str | None = None, model: str = "claude-haiku-4-5") -> None:
         """
         Initialize the ClaudePromptProcessor.
 

@@ -177,29 +177,31 @@ class ConversationMemory:
 
             return None
 
-    def get_recent_messages(self, session_id: str, user_id: str, limit: int = 10, type: str | None = None) -> list[GenericMessage]:
+    def get_recent_messages(self, session_id: str, user_id: str, limit: int = 10, from_offset: int = 0) -> list[GenericMessage]:
         """
-        Get the most recent messages from a session.
+        Get the most recent messages from a session, optionally starting from a specific offset.
 
         Args:
             session_id: Session ID
             user_id: ID of the user to filter messages for
             limit: Number of recent messages to retrieve
-            type: Optional message type filter
+            from_offset: Only retrieve messages with offset >= from_offset (default 0 gets all messages)
 
         Returns:
             List of recent messages in chronological order
         """
         with self.db_config.create_session() as session:
-            # Build the subquery for recent messages
-            subquery = session.query(Message).filter(Message.session_id == session_id, Message.user_id == user_id)
+            # Build the query for recent messages from the specified offset onwards
+            query = session.query(Message).filter(
+                Message.session_id == session_id,
+                Message.user_id == user_id,
+                Message.offset >= from_offset
+            )
 
-            if type is not None:
-                subquery = subquery.filter(Message.type == type)
+            # Order by offset DESC to get most recent, limit, then reverse to chronological order
+            subquery = query.order_by(Message.offset.desc()).limit(limit).subquery()
 
-            subquery = subquery.order_by(Message.offset.desc()).limit(limit).subquery()
-
-            # Query the subquery ordered by offset ascending
+            # Query the subquery ordered by offset ascending (chronological order)
             messages = session.query(subquery).order_by(subquery.c.offset).all()
 
             return [{"role": msg.role, "content": msg.content, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]

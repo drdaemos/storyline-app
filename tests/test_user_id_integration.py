@@ -1,5 +1,6 @@
 """Tests for user_id integration across database tables."""
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -15,7 +16,18 @@ from src.memory.summary_memory import SummaryMemory
 def temp_memory_dir():
     """Create a temporary directory for database."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        # Set DATABASE_URL to use test database in temp directory
+        original_database_url = os.environ.get("DATABASE_URL")
+        test_db_path = Path(tmpdir) / "test_integration.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
+
         yield Path(tmpdir)
+
+        # Restore original environment
+        if original_database_url is not None:
+            os.environ["DATABASE_URL"] = original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
 
 
 @pytest.fixture

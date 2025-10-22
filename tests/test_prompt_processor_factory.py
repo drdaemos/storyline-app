@@ -18,13 +18,13 @@ class TestPromptProcessorFactory:
         """Test creating Claude Sonnet processor."""
         processor = PromptProcessorFactory.create_processor("claude-sonnet")
         assert isinstance(processor, ClaudePromptProcessor)
-        assert processor.model == "claude-sonnet-4-5-20250929"
+        assert processor.model == "claude-sonnet-4-5"
 
     def test_create_claude_haiku_processor(self) -> None:
         """Test creating Claude Haiku processor."""
         processor = PromptProcessorFactory.create_processor("claude-haiku")
         assert isinstance(processor, ClaudePromptProcessor)
-        assert processor.model == "claude-haiku-4.5-20251015"
+        assert processor.model == "claude-haiku-4-5"
 
     @patch.dict("os.environ", {"CO_API_KEY": "test_key"})
     def test_create_cohere_processor(self) -> None:
@@ -53,11 +53,11 @@ class TestPromptProcessorFactory:
         assert processor.model == "deepseek/deepseek-r1-0528"
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
-    def test_create_deepseek_chimera_processor(self) -> None:
-        """Test creating DeepSeek Chimera processor."""
-        processor = PromptProcessorFactory.create_processor("deepseek-chimera")
+    def test_create_deepseek_chat_v3_1_processor(self) -> None:
+        """Test creating DeepSeek Chat V3.1 processor."""
+        processor = PromptProcessorFactory.create_processor("deepseek-chat-v3.1")
         assert isinstance(processor, OpenRouterPromptProcessor)
-        assert processor.model == "tngtech/deepseek-r1t2-chimera"
+        assert processor.model == "deepseek/deepseek-chat-v3.1"
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
     def test_create_google_flash_processor(self) -> None:
@@ -81,11 +81,18 @@ class TestPromptProcessorFactory:
         assert processor.model == "gpt-4.1"
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
-    def test_create_ring_processor(self) -> None:
-        """Test creating Ring processor."""
-        processor = PromptProcessorFactory.create_processor("ring")
+    def test_create_hermes_processor(self) -> None:
+        """Test creating Hermes processor."""
+        processor = PromptProcessorFactory.create_processor("hermes")
         assert isinstance(processor, OpenRouterPromptProcessor)
-        assert processor.model == "inclusionai/ring-1t"
+        assert processor.model == "nousresearch/hermes-4-405b"
+
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
+    def test_create_kimi_processor(self) -> None:
+        """Test creating Kimi processor."""
+        processor = PromptProcessorFactory.create_processor("kimi")
+        assert isinstance(processor, OpenRouterPromptProcessor)
+        assert processor.model == "moonshotai/kimi-k2-0905"
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
     def test_create_glm_processor(self) -> None:
@@ -117,7 +124,7 @@ class TestPromptProcessorFactory:
     def test_get_available_processor_types(self) -> None:
         """Test getting list of available processor types."""
         types = PromptProcessorFactory.get_available_processor_types()
-        expected_types = ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chimera", "google-flash", "google-pro", "ring", "glm"]
+        expected_types = ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chat-v3.1", "google-flash", "google-pro", "hermes", "kimi", "glm"]
         assert types == expected_types
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key", "CO_API_KEY": "test_key", "OPENAI_API_KEY": "test_key"})

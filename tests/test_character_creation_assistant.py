@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.character_creation_assistant import CharacterCreationAssistant
+from src.models.character import PartialCharacter
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         # Process the message
         response, updates = assistant.process_message(
             user_message="Create a character named Alice",
-            current_character={},
+            current_character=PartialCharacter(),
             conversation_history=[],
         )
 
@@ -63,7 +64,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         # Process the message
         response, updates = assistant.process_message(
             user_message="I want to create a character",
-            current_character={},
+            current_character=PartialCharacter(),
             conversation_history=[],
         )
 
@@ -73,36 +74,40 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 
     def test_process_message_with_conversation_history(self, assistant, mock_processor):
         """Test processing includes conversation history in the prompt."""
+        from src.models.api_models import ChatMessageModel
+
         mock_processor.respond_with_text.return_value = "Great! Let me help with that."
 
         conversation_history = [
-            {"author": "User", "content": "I want a warrior", "is_user": True},
-            {"author": "AI", "content": "What's the warrior's name?", "is_user": False},
+            ChatMessageModel(author="User", content="I want a warrior", is_user=True),
+            ChatMessageModel(author="AI", content="What's the warrior's name?", is_user=False),
         ]
 
         assistant.process_message(
             user_message="Call them Bob",
-            current_character={},
+            current_character=PartialCharacter(),
             conversation_history=conversation_history,
         )
 
         # Verify processor was called
         assert mock_processor.respond_with_text.called
-        # Verify conversation history was included in the prompt
+        # Verify conversation history was passed as parameter
         call_kwargs = mock_processor.respond_with_text.call_args[1]
-        user_prompt = call_kwargs["user_prompt"]
-        assert "Previous conversation:" in user_prompt
-        assert "User: I want a warrior" in user_prompt
-        assert "Assistant: What's the warrior's name?" in user_prompt
+        conversation_history = call_kwargs["conversation_history"]
+        assert len(conversation_history) == 2
+        assert conversation_history[0]["role"] == "user"
+        assert conversation_history[0]["content"] == "I want a warrior"
+        assert conversation_history[1]["role"] == "assistant"
+        assert conversation_history[1]["content"] == "What's the warrior's name?"
 
     def test_process_message_with_current_character(self, assistant, mock_processor):
         """Test processing includes current character state in the prompt."""
         mock_processor.respond_with_text.return_value = "Updated the backstory!"
 
-        current_character = {
-            "name": "Bob",
-            "tagline": "The brave",
-        }
+        current_character = PartialCharacter(
+            name="Bob",
+            tagline="The brave",
+        )
 
         assistant.process_message(
             user_message="Add a backstory",
@@ -218,7 +223,7 @@ I've created the character for you."""
 
         assistant.process_message(
             user_message="Create a character",
-            current_character={},
+            current_character=PartialCharacter(),
             conversation_history=[],
             streaming_callback=callback,
         )
@@ -239,7 +244,7 @@ I've created the character for you."""
 
         response, _ = assistant.process_message(
             user_message="Create a character",
-            current_character={},
+            current_character=PartialCharacter(),
             conversation_history=[],
             streaming_callback=callback,
         )
@@ -269,3 +274,39 @@ I've created the character for you."""
         assert "name" in updates
         assert "personality" in updates
         assert "backstory" not in updates  # Empty string should be filtered
+
+    def test_extract_character_updates_filters_whitespace_only_strings(self, assistant):
+        """Test that whitespace-only strings are filtered out from updates."""
+        ai_response = """<character_update>
+{
+  "name": "Valid",
+  "backstory": "   ",
+  "personality": "Cheerful",
+  "appearance": " \\t\\n ",
+  "tagline": ""
+}
+</character_update>"""
+
+        updates = assistant._extract_character_updates(ai_response, {})
+
+        assert updates == {"name": "Valid", "personality": "Cheerful"}
+        assert "backstory" not in updates
+        assert "appearance" not in updates
+        assert "tagline" not in updates
+
+    def test_extract_character_updates_filters_empty_collections(self, assistant):
+        """Test that empty dicts and lists are filtered out from updates."""
+        ai_response = """<character_update>
+{
+  "name": "Valid",
+  "relationships": {},
+  "key_locations": [],
+  "personality": "Brave"
+}
+</character_update>"""
+
+        updates = assistant._extract_character_updates(ai_response, {})
+
+        assert updates == {"name": "Valid", "personality": "Brave"}
+        assert "relationships" not in updates
+        assert "key_locations" not in updates

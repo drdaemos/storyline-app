@@ -1,3 +1,5 @@
+import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -8,6 +10,25 @@ from src.memory.character_registry import CharacterRegistry
 
 
 class TestCharacterLoader:
+    def setup_method(self):
+        """Set up test database for each test."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_database_url = os.environ.get("DATABASE_URL")
+        test_db_path = Path(self.temp_dir) / "test_characters.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
+
+    def teardown_method(self):
+        """Clean up test database."""
+        # Restore original environment
+        if self.original_database_url is not None:
+            os.environ["DATABASE_URL"] = self.original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
+
+        # Clean up temp directory
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
     def test_init_default_directory(self):
         loader = CharacterLoader()
         assert loader.registry is not None

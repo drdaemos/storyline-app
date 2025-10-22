@@ -26,6 +26,7 @@ class PlanGenerationInput(TypedDict):
 
 class CharacterResponseInput(TypedDict):
     summary: str
+    plans: str
     previous_response: str
     character: Character
     user_name: str
@@ -259,13 +260,13 @@ Key Locations: {key_locations}
 
 ## STORY CONTEXT
 {summary}
+
+## SHORT TERM STORY DEVELOPMENT
+{plans}
 """
         user_prompt = """
 User has responded with:
 {user_message}
-
-Scenario is evaluated as follows:
-{scenario_state}
 
 Respond to the user now:
 """
@@ -376,29 +377,46 @@ Format the summary as a bullet list, creating the following document:
 
 <story_information>
 Story main genre: [romance / mystery / thriller / etc.]
-Story narrative phase: [e.g. beginning, rising action, climax, falling action, resolution]
+Story tone tags: [spicy / dark / comedic / etc.]
+
+Characters Emotional State:
+ - [List emotional state]
+ - [List internal debates, conflicts, desires]
+Characters Physical State:
+ - [Characters physical position, condition]
+ - [Characters clothing]
+ - [User's physical position, condition]
+ - [User's clothing]
+State of the surroundings:
+ - [List out key details about surroundings, e.g. type of place, time of day]
+ - [Mention objects relevant for the plot]
+ - [Environmental or timing factors to track]
 </story_information>
 
-Character's learnings about the user (exclude vague generalities, focus on specific facts and details):
+Character's learnings about the user (max 3, exclude vague generalities, focus on specific facts and details which are unusual or important):
 <character_learnings>
 - [Learning 1, e.g. "User enjoys outdoor activities"]
 - [Learning 2]
 - [Continue as needed]
 </character_learnings>
 
-Summary of exchanges (aim for no more than 30 items, group exchanges into story beats, list them chronologically):
+Summary of exchanges (aim for no more than 10 items, condense, list them chronologically):
 <story_summary>
 - [Brief description of what happened in this part of the story]
 - [Brief description of what happened in another part of the story]
 - [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
 </story_summary>
 
-<goals_overview>
-Current scene overview: [brief description of what is happening between the characters right now]
+<narrative_overview>
 Current day / time in the story: [e.g. Day 3, Monday, afternoon]
-Character's short-term goals: [describe what they want to achieve in the current scene or next few scenes]
-Character's long-term goals: [describe where the character wants the story to climax or end up, in long-term]
-</goals_overview>
+Is the pacing right: [does user indicate/hint at pacing issues, is it too slow/fast, does anything happen in the scene except dialogue (if not - it is an issue)]
+What ends the scene: [at what point, e.g. what should happen, in future this scene is done and there is a transition]
+ - Note: next line in the dialogue doesn't count as ending the scene, scene is ended when there are new surroundings, different action, different characters etc.
+Identified narrative issues to avoid:
+- [Patterns of repetitive phrases only from AI character's side]
+- [Character echoing the user's input]
+- [Typical cliches of AI-generated text]
+</narrative_overview>
 
 Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
 """

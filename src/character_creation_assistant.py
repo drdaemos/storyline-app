@@ -29,7 +29,7 @@ class CharacterCreationAssistant:
     def process_message(
         self,
         user_message: str,
-        current_character: dict[str, Any],
+        current_character: PartialCharacter,
         conversation_history: list[ChatMessageModel],
         streaming_callback: Callable[[str], None] | None = None,
     ) -> tuple[str, dict[str, Any]]:
@@ -39,7 +39,7 @@ class CharacterCreationAssistant:
         Args:
             user_message: The user's message describing or modifying the character
             current_character: Current partial character data
-            conversation_history: List of previous messages (dicts with 'author', 'content', 'is_user')
+            conversation_history: List of previous messages (ChatMessageModel objects)
             streaming_callback: Optional callback for streaming AI response chunks
 
         Returns:
@@ -111,17 +111,18 @@ class CharacterCreationAssistant:
 Characters need **edges, not just curves**. Build in:
 - Contradictions that create internal tension
 - Flaws that cause real problems, not just quirks
+- Desires that might be unconventional, but drive their actions
 - Strong emotional triggers (what makes them break?)
 - Something unresolved driving them forward
 - Specific, memorable details over generic traits
 
-**Default to interesting**: 
-Push characteristics further than feels safe. "Optimistic" is boring; 
+**Default to interesting**:
+Push characteristics further than feels safe. "Optimistic" is boring;
 "desperately clings to positivity because depression runs in their family and they're terrified of it" gives texture.
 
-**Conflict potential**: 
-What beliefs will the story challenge? 
-What desires clash? 
+**Conflict potential**:
+What beliefs will the story challenge?
+What desires clash?
 Where are they lying to themselves?
 
 **Avoid**: Well-adjusted, universally likeable, perfectly balanced. These characters have no story to tell.
@@ -154,6 +155,8 @@ Use this when creating/modifying fields:
 - Only skip <character_update> if purely chatting/clarifying without new content
 - Don't wait for explicit approval - generate, let user react and refine
 - Partial updates are fine - add fields as they emerge
+- If current character state already has some info, rewrite it incorporating new insights and retaining previous information (unless it contradicts your idea and you need to remove it)
+- The UI will completely replace current fields with your updates, so make sure you keep all relevant info in your updates
 
 ## Example Tone
 
@@ -179,7 +182,7 @@ Use this when creating/modifying fields:
 Current character state:
 
 ```json
-{current_character.model_dump()}
+{current_character.model_dump_json(indent=2)}
 ```
 """)
 
@@ -189,7 +192,7 @@ Current character state:
 
         return "\n".join(prompt_parts)
 
-    def _extract_character_updates(self, ai_response: str, current_character: dict[str, Any]) -> dict[str, Any]:
+    def _extract_character_updates(self, ai_response: str, current_character: PartialCharacter) -> dict[str, Any]:
         """
         Extract character updates from AI response.
 
@@ -226,9 +229,24 @@ Current character state:
                 "setting_description",
             }
 
-            filtered_updates = {
-                key: value for key, value in updates.items() if key in valid_fields and value
-            }
+            # Filter and convert empty strings to None
+            filtered_updates = {}
+            for key, value in updates.items():
+                if key not in valid_fields:
+                    continue
+
+                # Convert empty strings to None, filter out empty collections
+                if isinstance(value, str):
+                    filtered_updates[key] = None if value.strip() == "" else value
+                elif isinstance(value, dict):
+                    filtered_updates[key] = value if value else None
+                elif isinstance(value, list):
+                    filtered_updates[key] = value if value else None
+                elif value is not None:
+                    filtered_updates[key] = value
+
+            # Remove None values from the final updates
+            filtered_updates = {k: v for k, v in filtered_updates.items() if v is not None}
 
             return filtered_updates
 

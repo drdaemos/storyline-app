@@ -24,8 +24,25 @@ def test_character_responder_dependencies_creation():
     primary_processor = MockPromptProcessor("Primary response")
     backup_processor = MockPromptProcessor("Backup response")
 
-    # Create dependencies without memory or logger
-    dependencies = CharacterResponderDependencies(primary_processor=primary_processor, backup_processor=backup_processor, conversation_memory=None, chat_logger=None, session_id="test-session")
+    # Create mock memory and logger
+    conversation_memory = Mock()
+    conversation_memory.get_recent_messages.return_value = []
+    conversation_memory.get_session_messages.return_value = []
+
+    summary_memory = Mock()
+    summary_memory.get_session_summaries.return_value = []
+
+    chat_logger = Mock()
+
+    # Create dependencies
+    dependencies = CharacterResponderDependencies(
+        primary_processor=primary_processor,
+        backup_processor=backup_processor,
+        conversation_memory=conversation_memory,
+        summary_memory=summary_memory,
+        chat_logger=chat_logger,
+        session_id="test-session"
+    )
 
     # Create CharacterResponder with dependencies
     responder = CharacterResponder(character, dependencies)
@@ -33,8 +50,9 @@ def test_character_responder_dependencies_creation():
     # Verify dependencies are correctly set
     assert responder.processor is primary_processor
     assert responder.backup_processor is backup_processor
-    assert responder.persistent_memory is None
-    assert responder.chat_logger is None
+    assert responder.persistent_memory is conversation_memory
+    assert responder.summary_memory is summary_memory
+    assert responder.chat_logger is chat_logger
     assert responder.character is character
     assert responder.session_id == "test-session"  # Session_id provided in dependencies
 
@@ -58,9 +76,24 @@ def test_character_responder_default_dependencies(mock_claude, mock_cohere):
         setting_description="Default office environment",
     )
 
+    # Create mock memory and logger
+    conversation_memory = Mock()
+    conversation_memory.get_recent_messages.return_value = []
+    conversation_memory.get_session_messages.return_value = []
+
+    summary_memory = Mock()
+    summary_memory.get_session_summaries.return_value = []
+
+    chat_logger = Mock()
+
     # Create dependencies manually
     dependencies = CharacterResponderDependencies(
-        primary_processor=MockPromptProcessor("Claude response"), backup_processor=MockPromptProcessor("Cohere response"), conversation_memory=None, chat_logger=None, session_id="default-session"
+        primary_processor=MockPromptProcessor("Claude response"),
+        backup_processor=MockPromptProcessor("Cohere response"),
+        conversation_memory=conversation_memory,
+        summary_memory=summary_memory,
+        chat_logger=chat_logger,
+        session_id="default-session"
     )
 
     # Create CharacterResponder with dependencies

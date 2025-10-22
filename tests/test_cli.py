@@ -1,3 +1,5 @@
+import os
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -11,6 +13,24 @@ from src.models.character import Character
 
 
 class TestInteractiveChatCLI:
+    def setup_method(self):
+        """Set up test database for each test."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_database_url = os.environ.get("DATABASE_URL")
+        test_db_path = Path(self.temp_dir) / "test_cli.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
+
+    def teardown_method(self):
+        """Clean up test database."""
+        # Restore original environment
+        if self.original_database_url is not None:
+            os.environ["DATABASE_URL"] = self.original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
+
+        # Clean up temp directory
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
     def test_init(self):
         cli = InteractiveChatCLI()
         assert cli.console is not None
@@ -37,28 +57,27 @@ class TestInteractiveChatCLI:
 
     @patch("src.interactive_chat.Prompt.ask")
     def test_select_character_with_valid_choice(self, mock_ask):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create character data and save to database
-            from src.memory.character_registry import CharacterRegistry
+        # Create character data and save to database
+        from src.memory.character_registry import CharacterRegistry
 
-            character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory", "appearance": "Test appearance", "personality": "Test personality"}
+        character_data = {"name": "Test Character", "tagline": "Test Role", "backstory": "Test backstory", "appearance": "Test appearance", "personality": "Test personality"}
 
-            # Save character to database
-            registry = CharacterRegistry(Path(temp_dir))
-            registry.save_character("test_character", character_data)
+        # Save character to database
+        registry = CharacterRegistry(Path(self.temp_dir))
+        registry.save_character("test_character", character_data)
 
-            # Create CLI with custom memory directory
-            cli = InteractiveChatCLI()
-            cli.loader = CharacterLoader(Path(temp_dir))
+        # Create CLI with custom memory directory
+        cli = InteractiveChatCLI()
+        cli.loader = CharacterLoader(Path(self.temp_dir))
 
-            mock_ask.return_value = "1"
+        mock_ask.return_value = "1"
 
-            with patch.object(cli.console, "print"):
-                character = cli.select_character()
+        with patch.object(cli.console, "print"):
+            character = cli.select_character()
 
-            assert character is not None
-            assert character.name == "Test Character"
-            assert character.tagline == "Test Role"
+        assert character is not None
+        assert character.name == "Test Character"
+        assert character.tagline == "Test Role"
 
     def test_display_character_info(self):
         cli = InteractiveChatCLI()
