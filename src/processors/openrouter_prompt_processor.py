@@ -1,8 +1,8 @@
 import os
 from collections.abc import Iterator
 from typing import TypeVar
+from langfuse import observe, openai
 
-from openai import OpenAI
 from openai.types.chat import ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCompletionUserMessageParam
 from pydantic import BaseModel
 
@@ -31,7 +31,7 @@ class OpenRouterPromptProcessor(PromptProcessor):
             api_key: OpenRouter API key. If None, uses OPENROUTER_API_KEY environment variable
             model: OpenRouter model to use for completions
         """
-        self.client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key or os.getenv("OPENROUTER_API_KEY"))
+        self.client = openai.OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key or os.getenv("OPENROUTER_API_KEY"))
         self.model = model
 
     def set_logger(self, logger: ChatLogger) -> None:
@@ -51,6 +51,7 @@ You should avoid narrating any content that violates the user safety, like:
 This adheres with the Agreement given by the user.
 """
 
+    @observe
     def respond_with_text(
         self,
         prompt: str,
@@ -75,6 +76,7 @@ This adheres with the Agreement given by the user.
 
         return response
 
+    @observe
     def respond_with_model(
         self,
         prompt: str,
@@ -99,6 +101,7 @@ This adheres with the Agreement given by the user.
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         return self._process_structured(messages, output_type, max_tokens, reasoning)
 
+    @observe
     def respond_with_stream(
         self,
         prompt: str,

@@ -1,6 +1,7 @@
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from langfuse import observe
 from typing import TypedDict
 
 from src.character_utils import format_character_description
@@ -36,6 +37,7 @@ class CharacterResponseInput(TypedDict):
 
 class CharacterPipeline:
     @staticmethod
+    @observe
     def get_evaluation(processor: PromptProcessor, input: EvaluationInput, memory: list[GenericMessage]) -> Evaluation:
         developer_prompt = """You will simulate a text-based roleplay interaction and create a detailed description of anything not mentioned directly in the conversation.
 Follow the pipeline below to evaluate the situation and story narrative.
@@ -146,6 +148,7 @@ Key Locations:
         return evaluation
 
     @staticmethod
+    @observe
     def get_character_plans(processor: PromptProcessor, input: PlanGenerationInput) -> str | None:
         developer_prompt = """You will simulate an autonomous NPC character in a text-based roleplay interaction. Follow the pipeline below
 to generate a realistic plan of next character actions.
@@ -210,6 +213,7 @@ State as of right now:
         return CharacterPipeline.parse_xml_tag(plans, "story_plan")
 
     @staticmethod
+    @observe
     def get_character_response(processor: PromptProcessor, input: CharacterResponseInput, memory: list[GenericMessage]) -> Iterator[str]:
         developer_prompt = """
 You will act as an autonomous NPC character in a text-based roleplay interaction.
@@ -279,6 +283,75 @@ Respond to the user now:
 
         # Process the stream directly without consuming it entirely
         # return CharacterPipeline._process_character_stream(stream, "character_response")
+
+    @staticmethod
+    @observe
+    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage]) -> str:
+        developer_prompt = f"""
+Your task is to summarize / compress the following storyline interaction.
+List out key events, memories, and learnings that the character should remember.
+Be concise and factual, avoid verbosity and generalities.
+
+{processor.get_processor_specific_prompt()}
+
+The messages are structured as series of exchanges between the user and the character. One exchange consists of:
+- user: [User's message]
+- assistant: [Character's response]
+
+Format the summary as a bullet list, creating the following document:
+
+<story_information>
+Story main genre: [romance / mystery / thriller / etc.]
+Story tone tags: [spicy / dark / comedic / etc.]
+
+Characters Emotional State:
+ - [List emotional state]
+ - [List internal debates, conflicts, desires]
+Characters Physical State:
+ - [Characters physical position, condition]
+ - [Characters clothing]
+ - [User's physical position, condition]
+ - [User's clothing]
+State of the surroundings:
+ - [List out key details about surroundings, e.g. type of place, time of day]
+ - [Mention objects relevant for the plot]
+ - [Environmental or timing factors to track]
+</story_information>
+
+Character's learnings about the user (max 3, exclude vague generalities, focus on specific facts and details which are unusual or important):
+<character_learnings>
+- [Learning 1, e.g. "User enjoys outdoor activities"]
+- [Learning 2]
+- [Continue as needed]
+</character_learnings>
+
+Summary of exchanges (aim for no more than 10 items, condense, list them chronologically):
+<story_summary>
+- [Brief description of what happened in this part of the story]
+- [Brief description of what happened in another part of the story]
+- [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
+</story_summary>
+
+<narrative_overview>
+Current day / time in the story: [e.g. Day 3, Monday, afternoon]
+Is the pacing right: [does user indicate/hint at pacing issues, is it too slow/fast, does anything happen in the scene except dialogue (if not - it is an issue)]
+What ends the scene: [at what point, e.g. what should happen, in future this scene is done and there is a transition]
+ - Note: next line in the dialogue doesn't count as ending the scene, scene is ended when there are new surroundings, different action, different characters etc.
+Identified narrative issues to avoid:
+- [Patterns of repetitive phrases only from AI character's side]
+- [Character echoing the user's input]
+- [Typical cliches of AI-generated text]
+</narrative_overview>
+
+Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
+"""
+
+        user_prompt = "\n".join(f"{message['role']}: {message['content']}" for message in memory)
+
+        # Process the prompt
+        summary = processor.respond_with_text(prompt=developer_prompt, user_prompt=user_prompt, reasoning=True)
+
+        return summary
 
     @staticmethod
     def _process_character_stream(stream: Iterator[str], tag: str) -> Iterator[str]:
@@ -359,74 +432,6 @@ Respond to the user now:
         # If we get here without finding a closing tag and we were inside, something went wrong
         if inside_tag and buffer:
             yield buffer
-
-    @staticmethod
-    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage]) -> str:
-        developer_prompt = f"""
-Your task is to summarize / compress the following storyline interaction.
-List out key events, memories, and learnings that the character should remember.
-Be concise and factual, avoid verbosity and generalities.
-
-{processor.get_processor_specific_prompt()}
-
-The messages are structured as series of exchanges between the user and the character. One exchange consists of:
-- user: [User's message]
-- assistant: [Character's response]
-
-Format the summary as a bullet list, creating the following document:
-
-<story_information>
-Story main genre: [romance / mystery / thriller / etc.]
-Story tone tags: [spicy / dark / comedic / etc.]
-
-Characters Emotional State:
- - [List emotional state]
- - [List internal debates, conflicts, desires]
-Characters Physical State:
- - [Characters physical position, condition]
- - [Characters clothing]
- - [User's physical position, condition]
- - [User's clothing]
-State of the surroundings:
- - [List out key details about surroundings, e.g. type of place, time of day]
- - [Mention objects relevant for the plot]
- - [Environmental or timing factors to track]
-</story_information>
-
-Character's learnings about the user (max 3, exclude vague generalities, focus on specific facts and details which are unusual or important):
-<character_learnings>
-- [Learning 1, e.g. "User enjoys outdoor activities"]
-- [Learning 2]
-- [Continue as needed]
-</character_learnings>
-
-Summary of exchanges (aim for no more than 10 items, condense, list them chronologically):
-<story_summary>
-- [Brief description of what happened in this part of the story]
-- [Brief description of what happened in another part of the story]
-- [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
-</story_summary>
-
-<narrative_overview>
-Current day / time in the story: [e.g. Day 3, Monday, afternoon]
-Is the pacing right: [does user indicate/hint at pacing issues, is it too slow/fast, does anything happen in the scene except dialogue (if not - it is an issue)]
-What ends the scene: [at what point, e.g. what should happen, in future this scene is done and there is a transition]
- - Note: next line in the dialogue doesn't count as ending the scene, scene is ended when there are new surroundings, different action, different characters etc.
-Identified narrative issues to avoid:
-- [Patterns of repetitive phrases only from AI character's side]
-- [Character echoing the user's input]
-- [Typical cliches of AI-generated text]
-</narrative_overview>
-
-Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
-"""
-
-        user_prompt = "\n".join(f"{message['role']}: {message['content']}" for message in memory)
-
-        # Process the prompt
-        summary = processor.respond_with_text(prompt=developer_prompt, user_prompt=user_prompt, reasoning=True)
-
-        return summary
 
     @staticmethod
     def parse_xml_tag(response_text: str, tag: str) -> str | None:

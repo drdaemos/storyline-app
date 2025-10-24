@@ -1,6 +1,7 @@
 import re
 from datetime import UTC, datetime
 from typing import Protocol
+from langfuse import observe, get_client
 
 from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
 from src.models.character import Character
@@ -78,6 +79,7 @@ class CharacterResponder:
         self.user_name = ""
         self.plans = ""
 
+    @observe
     def respond(self, user_message: str, streaming_callback: StreamingCallback | None = None, event_callback: EventCallback | None = None) -> str:
         """
         Generate a character response to the user message or handle commands.
@@ -90,6 +92,9 @@ class CharacterResponder:
         Returns:
             The character's response text or command result
         """
+        # set up Langfuse trace
+        langfuse = get_client()
+        langfuse.update_current_trace(session_id=self.session_id, user_id=self.user_id)
         self.streaming_callback = streaming_callback
         self.event_callback = event_callback
 

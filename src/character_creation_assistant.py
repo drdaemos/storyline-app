@@ -1,5 +1,6 @@
 import json
 import re
+from langfuse import observe
 from collections.abc import Callable
 from typing import Any
 
@@ -26,6 +27,7 @@ class CharacterCreationAssistant:
         """
         self.prompt_processor = prompt_processor
 
+    @observe
     def process_message(
         self,
         user_message: str,

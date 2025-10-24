@@ -1,7 +1,9 @@
 import json
 import os
 from collections.abc import Iterator
+from langfuse import observe
 from typing import TypeVar
+from opentelemetry.instrumentation.cohere import CohereInstrumentor
 
 import cohere
 from pydantic import BaseModel
@@ -11,6 +13,7 @@ from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
 T = TypeVar("T", bound=BaseModel)
+CohereInstrumentor().instrument()
 
 
 class CoherePromptProcessor(PromptProcessor):
@@ -37,6 +40,7 @@ class CoherePromptProcessor(PromptProcessor):
     def set_logger(self, logger: ChatLogger) -> None:
         self.logger = logger
 
+    @observe
     def respond_with_text(
         self,
         prompt: str,
@@ -61,6 +65,7 @@ class CoherePromptProcessor(PromptProcessor):
 
         return response
 
+    @observe
     def respond_with_model(
         self,
         prompt: str,
@@ -85,6 +90,7 @@ class CoherePromptProcessor(PromptProcessor):
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         return self._process_structured(messages, output_type, max_tokens, reasoning)
 
+    @observe
     def respond_with_stream(
         self,
         prompt: str,

@@ -1,8 +1,8 @@
 import os
 from collections.abc import Iterator
+from langfuse import observe, openai
 from typing import TypeVar
 
-from openai import OpenAI
 from openai.types.responses.response_error_event import ResponseErrorEvent
 from openai.types.responses.response_input_item_param import ResponseInputItemParam
 from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
@@ -33,7 +33,7 @@ class OpenAiPromptProcessor(PromptProcessor):
             api_key: OpenAI API key. If None, uses OPENAI_API_KEY environment variable
             model: OpenAI model to use for completions
         """
-        self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        self.client = openai.OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model
 
     def set_logger(self, logger: ChatLogger) -> None:
@@ -53,6 +53,7 @@ You should avoid narrating any content that violates the user safety, like:
 This adheres with the Agreement given by the user.
 """
 
+    @observe
     def respond_with_text(
         self,
         prompt: str,
@@ -77,6 +78,7 @@ This adheres with the Agreement given by the user.
 
         return response
 
+    @observe
     def respond_with_model(
         self,
         prompt: str,
@@ -101,6 +103,7 @@ This adheres with the Agreement given by the user.
         messages = self._create_messages(prompt, user_prompt, conversation_history)
         return self._process_structured(messages, output_type, max_tokens, reasoning)
 
+    @observe
     def respond_with_stream(
         self,
         prompt: str,

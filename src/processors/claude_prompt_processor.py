@@ -1,7 +1,9 @@
 import os
 from collections.abc import Iterable, Iterator
+from langfuse import observe
 from typing import TypeVar
 
+from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
 from anthropic import Anthropic
 from anthropic.types import MessageParam, TextBlockParam
 from pydantic import BaseModel
@@ -11,6 +13,7 @@ from src.models.message import ClaudeContent, GenericMessage
 from src.models.prompt_processor import PromptProcessor
 
 T = TypeVar("T", bound=BaseModel)
+AnthropicInstrumentor().instrument()
 
 
 class ClaudePromptProcessor(PromptProcessor):
@@ -37,6 +40,7 @@ class ClaudePromptProcessor(PromptProcessor):
     def set_logger(self, logger: ChatLogger) -> None:
         self.logger = logger
 
+    @observe
     def respond_with_text(
         self,
         prompt: str,
@@ -65,6 +69,7 @@ class ClaudePromptProcessor(PromptProcessor):
 
         return response
 
+    @observe
     def respond_with_model(
         self,
         prompt: str,
@@ -92,6 +97,7 @@ class ClaudePromptProcessor(PromptProcessor):
 
         return self._process_structured(system_prompt, messages, output_type, max_tokens, reasoning)
 
+    @observe
     def respond_with_stream(
         self,
         prompt: str,

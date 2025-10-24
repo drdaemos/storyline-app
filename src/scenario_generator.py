@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from langfuse import observe
 
 from .character_utils import format_character_description
 from .chat_logger import ChatLogger
@@ -26,6 +27,7 @@ class ScenarioGenerator:
         self.processors = processors
         self.logger = logger
 
+    @observe
     def generate_scenarios(self, character: Character, count: int = 3, mood: str = "normal") -> list[Scenario]:
         """
         Generate scenario intros for a given character.
@@ -50,7 +52,7 @@ class ScenarioGenerator:
                 user_prompt = self._build_user_prompt(character, count, mood)
 
                 # Use prompt processor to generate scenarios
-                scenario_response = processor.respond_with_model(prompt=system_prompt, user_prompt=user_prompt, output_type=ScenarioList, reasoning=True)
+                scenario_response = processor.respond_with_model(prompt=system_prompt, user_prompt=user_prompt, output_type=ScenarioList)
 
                 if not scenario_response.scenarios or len(scenario_response.scenarios) == 0:
                     raise ValueError("Failed to generate scenarios")
