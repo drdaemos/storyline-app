@@ -6,9 +6,9 @@
 
   <!-- 2 Column Layout -->
   <UMain>
-    <div class="grid lg:grid-cols-2 grid-cols-1 gap-6 flex-1 overflow-hidden">
+    <div class="grid lg:grid-cols-2 grid-cols-1 gap-6 flex-1 pb-8">
       <!-- Left Column: AI Chat Assistant -->
-      <div class="flex flex-col border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+      <div class="flex flex-col border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden max-h-[88vh] lg:sticky top-24">
         <div class="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-sparkles" class="w-5 h-5 text-primary" />

@@ -29,7 +29,7 @@ class PromptProcessorFactory:
                 return CoherePromptProcessor()
             case "claude-sonnet":
                 return ClaudePromptProcessor(model="claude-sonnet-4-5")
-            case "claude-haiku":
+            case "claude" | "claude-haiku":
                 return ClaudePromptProcessor(model="claude-haiku-4-5")
             case "gpt":
                 return OpenAiPromptProcessor()
@@ -41,7 +41,7 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="deepseek/deepseek-r1-0528")
             case "deepseek-chat-v3.1":
                 return OpenRouterPromptProcessor(model="deepseek/deepseek-chat-v3.1")
-            case "google-flash":
+            case "google" | "google-flash":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
             case "google-pro":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-pro")

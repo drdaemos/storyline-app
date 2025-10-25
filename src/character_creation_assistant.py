@@ -32,7 +32,7 @@ class CharacterCreationAssistant:
         current_character: PartialCharacter,
         conversation_history: list[ChatMessageModel],
         streaming_callback: Callable[[str], None] | None = None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, PartialCharacter]:
         """
         Process a user message and return AI response + character updates.
 
@@ -73,9 +73,9 @@ class CharacterCreationAssistant:
             )
 
         # Extract character updates from the AI response
-        character_updates = self._extract_character_updates(ai_response, current_character)
+        updated_character = self._extract_character_updates(ai_response, current_character)
 
-        return ai_response, character_updates
+        return ai_response, updated_character
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the character creation assistant."""
@@ -192,7 +192,7 @@ Current character state:
 
         return "\n".join(prompt_parts)
 
-    def _extract_character_updates(self, ai_response: str, current_character: PartialCharacter) -> dict[str, Any]:
+    def _extract_character_updates(self, ai_response: str, current_character: PartialCharacter) -> PartialCharacter:
         """
         Extract character updates from AI response.
 
@@ -210,50 +210,19 @@ Current character state:
         match = re.search(update_pattern, ai_response)
 
         if not match:
-            return {}
+            return current_character
 
         try:
             # Parse the JSON inside the tags
             update_json = match.group(1)
-            updates = json.loads(update_json)
+            updated_character = PartialCharacter.model_validate_json(update_json)
 
-            # Validate that updates only contain valid character fields
-            valid_fields = {
-                "name",
-                "tagline",
-                "backstory",
-                "personality",
-                "appearance",
-                "relationships",
-                "key_locations",
-                "setting_description",
-            }
-
-            # Filter and convert empty strings to None
-            filtered_updates = {}
-            for key, value in updates.items():
-                if key not in valid_fields:
-                    continue
-
-                # Convert empty strings to None, filter out empty collections
-                if isinstance(value, str):
-                    filtered_updates[key] = None if value.strip() == "" else value
-                elif isinstance(value, dict):
-                    filtered_updates[key] = value if value else None
-                elif isinstance(value, list):
-                    filtered_updates[key] = value if value else None
-                elif value is not None:
-                    filtered_updates[key] = value
-
-            # Remove None values from the final updates
-            filtered_updates = {k: v for k, v in filtered_updates.items() if v is not None}
-
-            return filtered_updates
+            return current_character.model_copy(update=updated_character.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True), deep=True)
 
         except (json.JSONDecodeError, AttributeError) as e:
             # If parsing fails, log and return empty updates
             print(f"Failed to parse character updates from AI response: {e}")
-            return {}
+            return current_character
 
     def clean_response_text(self, ai_response: str) -> str:
         """

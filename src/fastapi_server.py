@@ -35,7 +35,7 @@ from src.models.api_models import (
     StartSessionRequest,
     StartSessionResponse,
 )
-from src.models.character import Character
+from src.models.character import Character, PartialCharacter
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.scenario_generator import ScenarioGenerator
 from src.session_starter import SessionStarter
@@ -229,7 +229,7 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
                     loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
 
                 # Run the assistant processing in a separate task
-                async def run_assistant() -> tuple[str, dict]:
+                async def run_assistant() -> tuple[str, PartialCharacter]:
                     try:
                         # Process message with streaming
                         response, updates = await loop.run_in_executor(
@@ -264,12 +264,10 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
                         yield f"data: {event_data.model_dump_json()}\n\n"
 
                 # Wait for assistant task to complete and get the updates
-                full_response, character_updates = await assistant_task
+                full_response, updated_character = await assistant_task
 
                 # Send character updates if any
-                if character_updates:
-                    # Merge updates with current character to get complete state
-                    updated_character = request.current_character.model_copy(update=character_updates)
+                if updated_character != request.current_character:
                     update_event = CharacterCreationStreamEvent(type="update", updates=updated_character)
                     yield f"data: {update_event.model_dump_json()}\n\n"
 
