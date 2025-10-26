@@ -110,6 +110,10 @@ Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
+Character Interests: {character_interests}
+Character Desires: {character_desires}
+Character Dislikes: {character_dislikes}
+Character Kinks: {character_kinks}
 Established Relationships:
 {relationships}
 

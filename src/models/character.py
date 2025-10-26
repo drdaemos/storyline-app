@@ -15,6 +15,10 @@ class Character(BaseModel):
     relationships: dict[str, str] = Field(default_factory=dict, description="Relationships with other characters")
     key_locations: list[str] = Field(default_factory=list, description="Important locations for the character")
     setting_description: str = Field("", description="Description of the world/setting the character exists in")
+    interests: list[str] = Field(default_factory=list, description="Character's interests and hobbies")
+    dislikes: list[str] = Field(default_factory=list, description="Things the character dislikes")
+    desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
+    kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
 
     @classmethod
     def from_dict(cls, data: dict[str, str | Any]) -> "Character":
@@ -34,3 +38,7 @@ class PartialCharacter(BaseModel):
     relationships: dict[str, str] = Field(default_factory=dict, description="Relationships with other characters")
     key_locations: list[str] = Field(default_factory=list, description="Important locations for the character")
     setting_description: str = Field(default="", description="Description of the world/setting the character exists in")
+    interests: list[str] = Field(default_factory=list, description="Character's interests and hobbies")
+    dislikes: list[str] = Field(default_factory=list, description="Things the character dislikes")
+    desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
+    kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")

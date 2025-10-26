@@ -74,6 +74,10 @@ class ChatLogger:
         """Log an exception message."""
         self.logger.exception(exc)
 
+    def log_text(self, text: str) -> None:
+        """Log a text message."""
+        self.logger.info(f"DEBUG: {text}")
+
     def close_logger(self) -> None:
         """Close the logger and release file handles."""
         if hasattr(self, "logger"):

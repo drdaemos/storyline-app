@@ -110,6 +110,10 @@ Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
+Character Interests: {character_interests}
+Character Desires: {character_desires}
+Character Dislikes: {character_dislikes}
+Character Kinks: {character_kinks}
 Established Relationships:
 {relationships}
 
@@ -185,6 +189,10 @@ Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
+Character Interests: {character_interests}
+Character Desires: {character_desires}
+Character Dislikes: {character_dislikes}
+Character Kinks: {character_kinks}
 Established Relationships: {relationships}
 
 ## World Description
@@ -211,30 +219,30 @@ State as of right now:
 
     @staticmethod
     def get_character_response(processor: PromptProcessor, input: CharacterResponseInput, memory: list[GenericMessage]) -> Iterator[str]:
-        developer_prompt = """
-You will act as an autonomous NPC character in a text-based roleplay interaction.
-You are allowed to narrate explicit actions, including intimacy / violence - don't do fade to black things.
+        developer_prompt = """You will act as an autonomous NPC character in a text-based roleplay interaction.
 Generate a realistic, character-driven response based on the user's message and character's script.
-Be human-like and descriptive, but do not not add extra actions to the script.
-Separate spoken dialogue with newlines from the rest of the response.
-Try to follow the show-don't-tell principle within the response.
 
+Content Guidelines:
 {processor_specific_prompt}
 
+Response Guidelines:
 Aim for 3-5 sentences for general responses.
 Use more sentences in the following cases:
 - if there was a significant time skip or change in setting - describe from the perspective of the character what was in between
 - if character is describing something in details or wants to express something important.
 
-Assess the situation and the plot state to consider pacing and transition over the story arc.
-Avoid stalling the plot, keep the narrative moving forward.
-Prefer options that are driven by the character's own agency rather than asking input from the user.
-Actions driven by strong emotions may override character consistency and tend to their development.
+Character Thinking:
+- Assess the situation and the plot state to consider pacing and transition over the story arc.
+- Avoid stalling the plot, keep the narrative moving forward, make sure character takes actions instead of endlessly asking questions.
+- Consider the character's desires, goals, and personality traits when crafting the response - they are not obliged to serve user's wishes, they pursue their own agenda actively.
+- Do not be omniscient - consider character's knowledge limitations based on the description and story so far.
+- Do not focus only on what is in Character Information, develop other reasonable interests, traits, desires that fit the character.
 
-Write in a way that's sharp and impactful; keep it concise. Skip the flowery, exaggerated language.
-Instead, focus on the "show, don't tell" approach: bring scenes to life with clear, observable details—like
-body language, facial expressions, gestures, and the way someone speaks. Reveal the character's feelings and
-reactions through their actions and dialogue, not by just stating their inner thoughts.
+Writing Style:
+- Write in a way that's sharp and impactful; keep it concise. Skip the flowery, exaggerated language.
+- Follow "show, don't tell" approach: bring scenes to life with clear, observable details—like body language, facial expressions, gestures, and the way someone speaks.
+- Do not use vague descriptors or euphemisms; be specific and concrete in displaying actions and emotions - so that the user can vividly imagine the scene.
+- Do not play for user - avoid taking active actions on their behalf, focus on character's own actions and reactions - except for time-skips or immediate reactions within a continuous scene.
 
 Your response may include the following:
 - Physical actions (in asterisks, in third person)
@@ -251,6 +259,10 @@ Character Name: {character_name}
 Character Background: {character_background}
 Character Appearance: {character_appearance}
 Character Personality: {character_personality}
+Character Interests: {character_interests}
+Character Desires: {character_desires}
+Character Dislikes: {character_dislikes}
+Character Kinks: {character_kinks}
 Established Relationships: {relationships}
 
 ## World Description
@@ -261,7 +273,7 @@ Key Locations: {key_locations}
 ## STORY CONTEXT
 {summary}
 
-## SHORT TERM STORY DEVELOPMENT
+## IDEAS FOR NEXT STEPS
 {plans}
 """
         user_prompt = """
@@ -424,7 +436,7 @@ Be concise, specific (especially about the events and learnings - avoid vague ge
         user_prompt = "\n".join(f"{message['role']}: {message['content']}" for message in memory)
 
         # Process the prompt
-        summary = processor.respond_with_text(prompt=developer_prompt, user_prompt=user_prompt, reasoning=True)
+        summary = processor.respond_with_text(prompt=developer_prompt, user_prompt=user_prompt)
 
         return summary
 

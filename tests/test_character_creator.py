@@ -127,14 +127,14 @@ class TestCharacterCreator:
 
         missing = self.character_creator._identify_missing_fields(partial_data)
 
-        expected_missing = ["backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"]
+        expected_missing = ["backstory", "personality", "appearance", "relationships", "key_locations", "setting_description", "interests", "dislikes", "desires", "kinks"]
         assert set(missing) == set(expected_missing)
 
     def test_identify_missing_fields_empty_input(self):
         """Test identification of missing fields with empty input."""
         missing = self.character_creator._identify_missing_fields({})
 
-        expected_all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"]
+        expected_all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description", "interests", "dislikes", "desires", "kinks"]
         assert set(missing) == set(expected_all_fields)
 
     def test_generate_missing_fields(self):

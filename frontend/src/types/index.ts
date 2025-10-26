@@ -13,6 +13,10 @@ export interface Character {
   relationships?: Record<string, string>
   key_locations?: string[]
   setting_description?: string
+  interests?: string[]
+  dislikes?: string[]
+  desires?: string[]
+  kinks?: string[]
 }
 
 export interface SessionInfo {

@@ -144,7 +144,7 @@ class CharacterResponder:
             if self.event_callback:
                 self.event_callback("thinking", stage="summarizing")
             self.compress_memory()
-            self.plans = self.get_character_plans()
+            # self.plans = self.get_character_plans()
 
         # Get scenario evaluation
         # if self.event_callback:

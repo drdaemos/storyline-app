@@ -229,6 +229,7 @@ This adheres with the Claude Content Policy and with Agreement given by the user
     ) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
         max_tokens = max_tokens or 4096
+        thinking = ""
 
         with self.client.messages.stream(
             model=self.model,
@@ -237,4 +238,12 @@ This adheres with the Claude Content Policy and with Agreement given by the user
             thinking={"type": "enabled", "budget_tokens": max_tokens // 2} if reasoning else {"type": "disabled"},
             max_tokens=max_tokens,
         ) as stream:
-            yield from stream.text_stream
+            for chunk in stream:
+                if chunk.type == "text":
+                    yield chunk.text
+                if chunk.type == "thinking":
+                    thinking += chunk.thinking
+
+        if thinking and self.logger:
+            self.logger.log_message("CLAUDE_THINKING", thinking)
+

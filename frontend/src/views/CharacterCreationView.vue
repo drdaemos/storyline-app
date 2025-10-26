@@ -179,12 +179,164 @@
                 <UTextarea
                   v-model="characterData.appearance"
                   :rows="4"
-                  autoresize 
+                  autoresize
                   variant="ghost"
                   class="w-full"
                   placeholder="Physical description..."
                 />
               </UFormField>
+            </div>
+
+            <!-- Interests Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-3 font-serif">Interests</h3>
+              <UFormField>
+                <div class="space-y-4">
+                  <div
+                    v-for="(interest, index) in characterData.interests"
+                    :key="index"
+                    class="flex gap-2"
+                  >
+                    <UInput
+                      v-model="characterData.interests[index]"
+                      :placeholder="`Interest ${index + 1}`"
+                      class="flex-1"
+                    />
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-x"
+                      size="sm"
+                      @click="removeInterest(index)"
+                    />
+                  </div>
+                </div>
+              </UFormField>
+              <UButton
+                v-if="(characterData.interests?.length || 0) < 10"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                size="sm"
+                class="mt-3"
+                @click="addInterest"
+              >
+                Add Interest
+              </UButton>
+            </div>
+
+            <!-- Dislikes Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-3 font-serif">Dislikes</h3>
+              <UFormField>
+                <div class="space-y-4">
+                  <div
+                    v-for="(dislike, index) in characterData.dislikes"
+                    :key="index"
+                    class="flex gap-2"
+                  >
+                    <UInput
+                      v-model="characterData.dislikes[index]"
+                      :placeholder="`Dislike ${index + 1}`"
+                      class="flex-1"
+                    />
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-x"
+                      size="sm"
+                      @click="removeDislike(index)"
+                    />
+                  </div>
+                </div>
+              </UFormField>
+              <UButton
+                v-if="(characterData.dislikes?.length || 0) < 10"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                size="sm"
+                class="mt-3"
+                @click="addDislike"
+              >
+                Add Dislike
+              </UButton>
+            </div>
+
+            <!-- Desires Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-3 font-serif">Desires</h3>
+              <UFormField>
+                <div class="space-y-4">
+                  <div
+                    v-for="(desire, index) in characterData.desires"
+                    :key="index"
+                    class="flex gap-2"
+                  >
+                    <UInput
+                      v-model="characterData.desires[index]"
+                      :placeholder="`Desire ${index + 1}`"
+                      class="flex-1"
+                    />
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-x"
+                      size="sm"
+                      @click="removeDesire(index)"
+                    />
+                  </div>
+                </div>
+              </UFormField>
+              <UButton
+                v-if="(characterData.desires?.length || 0) < 10"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                size="sm"
+                class="mt-3"
+                @click="addDesire"
+              >
+                Add Desire
+              </UButton>
+            </div>
+
+            <!-- Kinks Section -->
+            <div>
+              <h3 class="text-md font-semibold mb-3 font-serif">Kinks</h3>
+              <UFormField>
+                <div class="space-y-4">
+                  <div
+                    v-for="(kink, index) in characterData.kinks"
+                    :key="index"
+                    class="flex gap-2"
+                  >
+                    <UInput
+                      v-model="characterData.kinks[index]"
+                      :placeholder="`Kink ${index + 1}`"
+                      class="flex-1"
+                    />
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-x"
+                      size="sm"
+                      @click="removeKink(index)"
+                    />
+                  </div>
+                </div>
+              </UFormField>
+              <UButton
+                v-if="(characterData.kinks?.length || 0) < 10"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-plus"
+                size="sm"
+                class="mt-3"
+                @click="addKink"
+              >
+                Add Kink
+              </UButton>
             </div>
 
             <!-- Relationships Section -->
@@ -351,6 +503,10 @@ const characterData = reactive<Partial<Character>>({
   relationships: {},
   key_locations: [],
   setting_description: '',
+  interests: [],
+  dislikes: [],
+  desires: [],
+  kinks: [],
 })
 
 const relationshipsList = ref<RelationshipItem[]>([])
@@ -511,6 +667,58 @@ const addLocation = () => {
 
 const removeLocation = (index: number) => {
   characterData.key_locations?.splice(index, 1)
+}
+
+const addInterest = () => {
+  if (!characterData.interests) {
+    characterData.interests = []
+  }
+  if (characterData.interests.length < 10) {
+    characterData.interests.push('')
+  }
+}
+
+const removeInterest = (index: number) => {
+  characterData.interests?.splice(index, 1)
+}
+
+const addDislike = () => {
+  if (!characterData.dislikes) {
+    characterData.dislikes = []
+  }
+  if (characterData.dislikes.length < 10) {
+    characterData.dislikes.push('')
+  }
+}
+
+const removeDislike = (index: number) => {
+  characterData.dislikes?.splice(index, 1)
+}
+
+const addDesire = () => {
+  if (!characterData.desires) {
+    characterData.desires = []
+  }
+  if (characterData.desires.length < 10) {
+    characterData.desires.push('')
+  }
+}
+
+const removeDesire = (index: number) => {
+  characterData.desires?.splice(index, 1)
+}
+
+const addKink = () => {
+  if (!characterData.kinks) {
+    characterData.kinks = []
+  }
+  if (characterData.kinks.length < 10) {
+    characterData.kinks.push('')
+  }
+}
+
+const removeKink = (index: number) => {
+  characterData.kinks?.splice(index, 1)
 }
 
 interface MessageSegment {

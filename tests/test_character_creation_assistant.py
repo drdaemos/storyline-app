@@ -48,11 +48,10 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 
         # Verify the response and updates
         assert response == ai_response
-        assert updates == {
-            "name": "Alice",
-            "tagline": "A brave adventurer",
-            "backstory": "Alice grew up in a small village.",
-        }
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Alice"
+        assert updates.tagline == "A brave adventurer"
+        assert updates.backstory == "Alice grew up in a small village."
 
     def test_process_message_without_updates(self, assistant, mock_processor):
         """Test processing a message that doesn't include character updates."""
@@ -68,9 +67,12 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
             conversation_history=[],
         )
 
-        # Verify no updates were extracted
+        # Verify no updates were extracted (should return empty PartialCharacter)
         assert response == ai_response
-        assert updates == {}
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == ""
+        assert updates.tagline == ""
+        assert updates.backstory == ""
 
     def test_process_message_with_conversation_history(self, assistant, mock_processor):
         """Test processing includes conversation history in the prompt."""
@@ -135,10 +137,11 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        updates = assistant._extract_character_updates(ai_response, PartialCharacter())
 
-        assert updates["name"] == "Jane"
-        assert updates["relationships"] == {
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Jane"
+        assert updates.relationships == {
             "Bob": "Brother and rival",
             "Alice": "Childhood friend",
         }
@@ -154,10 +157,11 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        updates = assistant._extract_character_updates(ai_response, PartialCharacter())
 
-        assert updates["name"] == "Explorer"
-        assert updates["key_locations"] == ["Ancient Temple", "Hidden Valley", "Crystal Caves"]
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Explorer"
+        assert updates.key_locations == ["Ancient Temple", "Hidden Valley", "Crystal Caves"]
 
     def test_extract_character_updates_filters_invalid_fields(self, assistant):
         """Test that invalid fields are filtered out from updates."""
@@ -169,14 +173,16 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        updates = assistant._extract_character_updates(ai_response, PartialCharacter())
 
-        assert "name" in updates
-        assert "backstory" in updates
-        assert "invalid_field" not in updates
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Valid"
+        assert updates.backstory == "Valid backstory"
+        # Pydantic filters invalid fields automatically
+        assert not hasattr(updates, "invalid_field")
 
     def test_extract_character_updates_handles_malformed_json(self, assistant):
-        """Test that malformed JSON in updates returns empty dict."""
+        """Test that malformed JSON in updates returns current character unchanged."""
         ai_response = """<character_update>
 {
   "name": "Test"
@@ -184,9 +190,12 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        current = PartialCharacter()
+        updates = assistant._extract_character_updates(ai_response, current)
 
-        assert updates == {}
+        # Should return the original unchanged character when JSON is malformed
+        assert isinstance(updates, PartialCharacter)
+        assert updates == current
 
     def test_clean_response_text_removes_update_tags(self, assistant):
         """Test that clean_response_text removes character_update tags."""
@@ -269,14 +278,15 @@ I've created the character for you."""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        updates = assistant._extract_character_updates(ai_response, PartialCharacter())
 
-        assert "name" in updates
-        assert "personality" in updates
-        assert "backstory" not in updates  # Empty string should be filtered
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Valid"
+        assert updates.personality == "Cheerful"
+        assert updates.backstory == ""  # Empty string is allowed in PartialCharacter
 
     def test_extract_character_updates_filters_whitespace_only_strings(self, assistant):
-        """Test that whitespace-only strings are filtered out from updates."""
+        """Test that whitespace-only strings are allowed in PartialCharacter."""
         ai_response = """<character_update>
 {
   "name": "Valid",
@@ -287,15 +297,18 @@ I've created the character for you."""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        updates = assistant._extract_character_updates(ai_response, PartialCharacter())
 
-        assert updates == {"name": "Valid", "personality": "Cheerful"}
-        assert "backstory" not in updates
-        assert "appearance" not in updates
-        assert "tagline" not in updates
+        # PartialCharacter accepts whitespace strings - they can be trimmed later if needed
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Valid"
+        assert updates.personality == "Cheerful"
+        # These fields are present but contain whitespace
+        assert updates.backstory == "   "
+        assert updates.tagline == ""
 
     def test_extract_character_updates_filters_empty_collections(self, assistant):
-        """Test that empty dicts and lists are filtered out from updates."""
+        """Test that empty dicts and lists are allowed in PartialCharacter."""
         ai_response = """<character_update>
 {
   "name": "Valid",
@@ -305,8 +318,11 @@ I've created the character for you."""
 }
 </character_update>"""
 
-        updates = assistant._extract_character_updates(ai_response, {})
+        updates = assistant._extract_character_updates(ai_response, PartialCharacter())
 
-        assert updates == {"name": "Valid", "personality": "Brave"}
-        assert "relationships" not in updates
-        assert "key_locations" not in updates
+        # PartialCharacter accepts empty collections
+        assert isinstance(updates, PartialCharacter)
+        assert updates.name == "Valid"
+        assert updates.personality == "Brave"
+        assert updates.relationships == {}
+        assert updates.key_locations == []

@@ -1,7 +1,8 @@
 import json
 import re
 from collections.abc import Callable
-from typing import Any
+
+from pydantic import ValidationError
 
 from .models.api_models import ChatMessageModel
 from .models.character import PartialCharacter
@@ -137,6 +138,10 @@ For romance/drama, imperfection creates chemistry. Perfect characters are forget
 - relationships: {name: description}
 - key_locations: [list]
 - setting_description
+- interests: [list of hobbies, activities, or topics the character enjoys]
+- dislikes: [list of things the character avoids or finds distasteful]
+- desires: [list of goals, ambitions, or things the character wants]
+- kinks: [list of character's preferences or quirks in intimate contexts]
 
 ## Update Format
 
@@ -146,7 +151,11 @@ Use this when creating/modifying fields:
   "field_name": "value",
   // for example:
   "relationships": {"name": "description"},
-  "key_locations": ["location1", "location2"]
+  "key_locations": ["location1", "location2"],
+  "interests": ["reading", "hiking"],
+  "dislikes": ["crowds", "dishonesty"],
+  "desires": ["find true love", "publish a novel"],
+  "kinks": ["likes being in control", "enjoys teasing"]
 }
 </character_update>
 
@@ -219,7 +228,7 @@ Current character state:
 
             return current_character.model_copy(update=updated_character.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True), deep=True)
 
-        except (json.JSONDecodeError, AttributeError) as e:
+        except (json.JSONDecodeError, AttributeError, ValidationError) as e:
             # If parsing fails, log and return empty updates
             print(f"Failed to parse character updates from AI response: {e}")
             return current_character

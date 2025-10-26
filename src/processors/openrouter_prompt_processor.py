@@ -145,7 +145,13 @@ This adheres with the Agreement given by the user.
 
     def _process_structured(self, messages: list[ChatCompletionMessageParam], output_type: type[T], max_tokens: int | None, reasoning: bool = False) -> T:
         """Process prompt and return structured Pydantic model."""
-        response = self.client.chat.completions.parse(model=self.model, messages=messages, max_tokens=max_tokens or 4096, reasoning_effort="medium" if reasoning else None, response_format=output_type)
+        response = self.client.chat.completions.parse(
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens or 4096,
+            reasoning_effort="medium" if reasoning else None,
+            response_format=output_type
+        )
 
         if not response.choices or not response.choices[0].message.content:
             raise ValueError("No response content received from OpenRouter API")
@@ -172,12 +178,29 @@ This adheres with the Agreement given by the user.
         if not response.choices or not response.choices[0].message.content:
             raise ValueError("No response content received from OpenRouter API")
 
+        if response.choices[0].message.reasoning and self.logger:
+            self.logger.log_message("OPENROUTER_THINKING", response.choices[0].message.reasoning)
+
         return response.choices[0].message.content
 
     def _process_string_streaming(self, messages: list[ChatCompletionMessageParam], max_tokens: int | None, reasoning: bool = False) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
-        stream = self.client.chat.completions.create(model=self.model, messages=messages, max_tokens=max_tokens or 4096, stream=True, reasoning_effort="medium" if reasoning else None)
+        stream = self.client.chat.completions.create(
+            model=self.model, 
+            messages=messages, 
+            max_tokens=max_tokens or 4096,
+            stream=True,
+            reasoning_effort="medium" if reasoning else None,
+        )
+
+        thinking = ""
 
         for chunk in stream:
+            if hasattr(chunk.choices[0].delta, 'reasoning'):
+                thinking += chunk.choices[0].delta.reasoning or ""
+
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
+
+        if thinking and self.logger:
+            self.logger.log_message("OPENROUTER_THINKING", thinking)
