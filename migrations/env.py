@@ -23,10 +23,19 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
-# Set URL from environment variable
+# Set URL from environment variable or use default
+from pathlib import Path
+database_url = os.getenv('DATABASE_URL')
+if not database_url:
+    # Default to SQLite database in memory directory
+    memory_dir = Path.cwd() / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    db_path = memory_dir / "conversations.db"
+    database_url = f"sqlite:///{db_path}"
+
 config.set_main_option(
     'sqlalchemy.url',
-    os.environ['DATABASE_URL']
+    database_url
 )
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

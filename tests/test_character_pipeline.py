@@ -141,7 +141,7 @@ class TestCharacterPipeline:
 
         # Check character information in prompt
         assert "Alice" in call["prompt"]
-        assert "John" in call["prompt"]
+        assert "John" in call["user_prompt"]  # User name is now in user_prompt
 
     def test_get_character_plans_missing_story_plan_tag(self):
         """Test plan generation fails when <story_plan> tag is missing."""
@@ -161,12 +161,18 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(character_response)
 
+        persona = Character(
+            name="John",
+            tagline="Detective colleague",
+            backstory="A detective colleague working on cases",
+        )
+
         input_data: CharacterResponseInput = {
             "summary": "Discussion about missing person case",
             "plans": "Continue investigating the case with the new evidence",
             "previous_response": "I understand you need help",
             "character": self.test_character,
-            "user_name": "John",
+            "persona": persona,
             "user_message": "Here are the case files",
             "scenario_state": "Office meeting, files on desk",
         }
@@ -184,9 +190,9 @@ class TestCharacterPipeline:
         assert len(mock_processor.call_history) == 1
         call = mock_processor.call_history[0]
 
-        # Check character information in prompt
+        # Check character information in prompt - both characters should be in cards
         assert "Alice" in call["prompt"]
-        assert "John" in call["prompt"]
+        assert "John" in call["prompt"]  # John is in user card in the prompt
 
     def test_get_memory_summary(self):
         """Test memory summarization."""
@@ -295,6 +301,10 @@ class TestCharacterPipeline:
             "relationships": "- user: professional acquaintance",
             "key_locations": "- downtown office\n- crime scenes\n- local diner",
             "setting_description": "Urban detective story setting",
+            "character_interests": "",
+            "character_dislikes": "",
+            "character_desires": "",
+            "character_kinks": "",
         }
 
         assert result == expected

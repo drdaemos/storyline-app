@@ -198,6 +198,7 @@ const sendInteractRequest = async (userMessage: string) => {
       session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
+      persona_id: settings.value.selectedPersonaId || null,
     }
 
     // Store payload for potential regeneration

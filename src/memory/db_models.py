@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Index, Integer, String, Text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.orm.session import sessionmaker as SessionMaker
@@ -63,6 +63,7 @@ class Character(Base):
     character_data: Mapped[dict] = mapped_column(JSON, nullable=False)  # All character fields as JSON
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     user_id: Mapped[str] = mapped_column(String, nullable=False, default="anonymous")
+    is_persona: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
 

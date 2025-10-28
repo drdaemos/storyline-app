@@ -37,6 +37,7 @@ from src.models.api_models import (
 )
 from src.models.character import Character, PartialCharacter
 from src.models.character_responder_dependencies import CharacterResponderDependencies
+from src.models.persona import create_default_persona
 from src.scenario_generator import ScenarioGenerator
 from src.session_starter import SessionStarter
 
@@ -106,6 +107,15 @@ async def list_characters(user_id: UserIdDep) -> list[CharacterSummary]:
         raise HTTPException(status_code=500, detail=f"Failed to list characters: {str(e)}") from e
 
 
+@app.get("/api/personas")
+async def list_personas(user_id: UserIdDep) -> list[CharacterSummary]:
+    """List available persona characters with their basic info."""
+    try:
+        return character_loader.list_persona_summaries(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list personas: {str(e)}") from e
+
+
 @app.get("/api/characters/{character_name}")
 async def get_character_info(character_name: str, user_id: UserIdDep) -> dict[str, str]:
     """Get information about a specific character."""
@@ -142,7 +152,7 @@ async def create_character(request: CreateCharacterRequest, user_id: UserIdDep) 
                 raise HTTPException(status_code=400, detail="When is_yaml_text is false, data must be structured character data")
             character_data = request.data.model_dump()
 
-        filename = character_manager.create_character_file(character_data, user_id=user_id)
+        filename = character_manager.create_character_file(character_data, user_id=user_id, is_persona=request.is_persona)
 
         return CreateCharacterResponse(message=f"Character '{character_data['name']}' created successfully", character_filename=filename)
 
@@ -460,7 +470,7 @@ async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingRes
     """
     try:
         responder = get_character_responder(
-            session_id=request.session_id, character_name=request.character_name, processor_type=request.processor_type, backup_processor_type=request.backup_processor_type, user_id=user_id
+            session_id=request.session_id, character_name=request.character_name, processor_type=request.processor_type, backup_processor_type=request.backup_processor_type, persona_id=request.persona_id, user_id=user_id
         )
 
         # Create async generator for streaming response
@@ -562,17 +572,29 @@ async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingRes
         raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
 
 
-def get_character_responder(session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None, user_id: str = "anonymous") -> CharacterResponder:
+def get_character_responder(
+    session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None, persona_id: str | None = None, user_id: str = "anonymous"
+) -> CharacterResponder:
     # Load character if not already loaded
     character = character_loader.load_character(character_name, user_id)
     if not character:
         raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
+
+    # Load persona character or create default
+    persona = create_default_persona()
+    if persona_id:
+        try:
+            persona = character_loader.load_character(persona_id, user_id)
+        except FileNotFoundError:
+            # If persona not found, use default
+            pass
+
     dependencies = CharacterResponderDependencies.create_default(
         character_name=character.name, session_id=session_id, logs_dir=None, processor_type=processor_type, backup_processor_type=backup_processor_type, user_id=user_id
     )
 
     session_id = dependencies.session_id
-    return CharacterResponder(character, dependencies)
+    return CharacterResponder(character, dependencies, persona)
 
 
 # Root route - serve the Vue.js app

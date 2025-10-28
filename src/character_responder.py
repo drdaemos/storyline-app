@@ -7,6 +7,7 @@ from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
+from src.models.persona import create_default_persona
 
 
 class EventCallback(Protocol):
@@ -28,18 +29,20 @@ class CharacterResponder:
     EPOCH_MESSAGES = 2
     PROPAGATED_MEMORY_SIZE = RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * EPOCH_MESSAGES
 
-    def __init__(self, character: Character, dependencies: CharacterResponderDependencies) -> None:
+    def __init__(self, character: Character, dependencies: CharacterResponderDependencies, persona: Character | None = None) -> None:
         """
         Initialize the CharacterResponder.
 
         Args:
             character: Character instance to respond as
             dependencies: Dependencies container with processors, memory, logger, and session config
+            persona: Optional persona character representing the user in the conversation
         """
         self.character = character
         self.streaming_callback: StreamingCallback | None = None
         self.event_callback: EventCallback | None = None
         self.dependencies = dependencies
+        self.persona = persona or create_default_persona()
 
         # Extract dependencies for easier access
         self.processor = dependencies.primary_processor
@@ -75,7 +78,7 @@ class CharacterResponder:
         self._current_message_offset = self._get_current_message_offset()
 
         self.status_update = ""
-        self.user_name = ""
+        self.user_name = self.persona.name
         self.plans = ""
 
     def respond(self, user_message: str, streaming_callback: StreamingCallback | None = None, event_callback: EventCallback | None = None) -> str:
@@ -166,7 +169,7 @@ class CharacterResponder:
         # status_update comes from the previous response
         if self.event_callback:
             self.event_callback("thinking", stage="responding")
-        character_response = self.get_character_response(user_message, None, self.user_name)
+        character_response = self.get_character_response(user_message, None)
 
         # Update memory with the new interaction
         response_msg: GenericMessage = {"role": "assistant", "content": character_response, "created_at": datetime.now(UTC).isoformat(), "type": "conversation"}
@@ -313,7 +316,7 @@ class CharacterResponder:
 
         return plans
 
-    def get_character_response(self, user_message: str, scenario_state: Evaluation | None, user_name: str) -> str:
+    def get_character_response(self, user_message: str, scenario_state: Evaluation | None) -> str:
         fallback = False
         input_data: CharacterResponseInput = {
             "summary": self.memory_summary,
@@ -321,7 +324,7 @@ class CharacterResponder:
             "previous_response": self.memory[-1]["content"] if self.memory else "",
             "user_message": user_message,
             "scenario_state": scenario_state.to_string() if scenario_state else "",
-            "user_name": user_name,
+            "persona": self.persona,
             "character": self.character,
         }
         # pass only the most recent messages for context (use only user msg and character comms)

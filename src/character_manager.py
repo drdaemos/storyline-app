@@ -94,13 +94,14 @@ class CharacterManager:
         self.validate_character_data(data)
         return data
 
-    def create_character_file(self, character_data: dict[str, Any], user_id: str = "anonymous") -> str:
+    def create_character_file(self, character_data: dict[str, Any], user_id: str = "anonymous", is_persona: bool = False) -> str:
         """
         Create a character file from validated data.
 
         Args:
             character_data: Validated character data dictionary
             user_id: ID of the user (defaults to 'anonymous')
+            is_persona: Whether this character is a persona (user character) (default: False)
 
         Returns:
             The filename of the created character file (without extension)
@@ -128,11 +129,11 @@ class CharacterManager:
             yaml.dump(character_data, file, default_flow_style=False, allow_unicode=True)
 
         # Also save to database
-        self.save_character_to_database(filename, character_data, user_id=user_id)
+        self.save_character_to_database(filename, character_data, user_id=user_id, is_persona=is_persona)
 
         return filename
 
-    def save_character_to_database(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1, user_id: str = "anonymous") -> bool:
+    def save_character_to_database(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1, user_id: str = "anonymous", is_persona: bool = False) -> bool:
         """
         Save character data to the database.
 
@@ -141,6 +142,7 @@ class CharacterManager:
             character_data: Character data dictionary
             schema_version: Schema version for the character data
             user_id: ID of the user (defaults to 'anonymous')
+            is_persona: Whether this character is a persona (user character) (default: False)
 
         Returns:
             True if saved successfully
@@ -148,7 +150,7 @@ class CharacterManager:
         # Validate the data first
         self.validate_character_data(character_data)
 
-        return self.registry.save_character(character_id, character_data, schema_version, user_id)
+        return self.registry.save_character(character_id, character_data, schema_version, user_id, is_persona)
 
     def load_character_from_file_to_database(self, character_id: str) -> bool:
         """

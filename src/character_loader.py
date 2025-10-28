@@ -67,6 +67,26 @@ class CharacterLoader:
         except Exception:
             return []
 
+    def list_persona_summaries(self, user_id: str = "anonymous") -> list[CharacterSummary]:
+        """
+        List all available persona characters with their basic info (name and tagline) for a specific user.
+
+        Args:
+            user_id: ID of the user (defaults to 'anonymous')
+
+        Returns:
+            List of CharacterSummary objects with name and tagline for personas only
+        """
+        try:
+            db_chars = self.registry.get_personas(user_id)
+            summaries = []
+            for char in db_chars:
+                character_data = char.get("character_data", {})
+                summaries.append(CharacterSummary(id=char["id"], name=character_data.get("name", char["id"]), tagline=character_data.get("tagline", "")))
+            return sorted(summaries, key=lambda x: x.name)
+        except Exception:
+            return []
+
     def get_character_info(self, character_name: str, user_id: str = "anonymous") -> Character | None:
         """
         Get character info, returning None if not found.

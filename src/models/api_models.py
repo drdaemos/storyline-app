@@ -16,6 +16,7 @@ class CreateCharacterRequest(BaseModel):
 
     data: Character | str = Field(..., description="Either structured character data or freeform YAML text")
     is_yaml_text: bool = Field(False, description="Set to true if 'data' contains freeform YAML text")
+    is_persona: bool = Field(False, description="Set to true if this character is a persona (user character)")
 
 
 class CreateCharacterResponse(BaseModel):
@@ -31,6 +32,7 @@ class InteractRequest(BaseModel):
     session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
     processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
+    persona_id: str | None = Field(None, description="Optional persona character ID to use as the user's representation")
 
 
 class SessionInfo(BaseModel):

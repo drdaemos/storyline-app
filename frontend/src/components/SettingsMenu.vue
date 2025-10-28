@@ -27,6 +27,16 @@
           />
         </UFormField>
 
+        <UFormField label="Selected Persona" description="Choose which persona character represents you in conversations.">
+          <USelect
+            class="w-full"
+            value-key="id"
+            v-model="settings.selectedPersonaId"
+            :items="personaOptions"
+            :loading="personasLoading"
+          />
+        </UFormField>
+
         <UFormField label="Last Selected Character">
           <div>{{ settings.lastSelectedCharacter || 'None' }}</div>
         </UFormField>
@@ -49,9 +59,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import type { SelectItem } from '@nuxt/ui'
 import { useLocalSettings } from '@/composables/useLocalSettings'
+import type { CharacterSummary } from '@/types'
 
 const open = ref(false)
 
@@ -72,4 +83,33 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
   { label: 'Cohere ($10/M)', id: 'cohere' },
 ])
+
+const personaOptions = ref<SelectItem[]>([])
+const personasLoading = ref(false)
+
+const fetchPersonas = async () => {
+  personasLoading.value = true
+  try {
+    const response = await fetch('/api/personas')
+    if (response.ok) {
+      const personas: CharacterSummary[] = await response.json()
+      personaOptions.value = [
+        { label: 'None', id: '' },
+        ...personas.map(p => ({ label: `${p.name} - ${p.tagline}`, id: p.id }))
+      ]
+    } else {
+      console.error('Failed to fetch personas')
+      personaOptions.value = [{ label: 'None', id: '' }]
+    }
+  } catch (error) {
+    console.error('Error fetching personas:', error)
+    personaOptions.value = [{ label: 'None', id: '' }]
+  } finally {
+    personasLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchPersonas()
+})
 </script>

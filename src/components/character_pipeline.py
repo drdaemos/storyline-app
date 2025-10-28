@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import TypedDict
 
-from src.character_utils import format_character_description
 from src.models.character import Character
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
@@ -29,7 +28,7 @@ class CharacterResponseInput(TypedDict):
     plans: str
     previous_response: str
     character: Character
-    user_name: str
+    persona: Character
     user_message: str
     scenario_state: str
 
@@ -104,29 +103,13 @@ Respond with the JSON object containing the following fields:
 "time_passed": "...",
 "user_name": "..."
 
-## Character Information
-
-Character Name: {character_name}
-Character Background: {character_background}
-Character Appearance: {character_appearance}
-Character Personality: {character_personality}
-Character Interests: {character_interests}
-Character Desires: {character_desires}
-Character Dislikes: {character_dislikes}
-Character Kinks: {character_kinks}
-Established Relationships:
-{relationships}
-
-## World Description
-
-Setting: {setting_description}
-Key Locations:
-{key_locations}
+{character_card}
 """
         user_prompt = input["user_message"]
 
-        # Map character attributes to prompt variables
-        variables = format_character_description(input["character"]) | {"processor_specific_prompt": processor.get_processor_specific_prompt()}
+        # Generate character card with world info
+        character_card = input["character"].to_prompt_card("Character", controller="AI", include_world_info=True)
+        variables = {"character_card": character_card, "processor_specific_prompt": processor.get_processor_specific_prompt()}
 
         # Summary piece:
         summary_msg: list[GenericMessage] = [
@@ -182,32 +165,26 @@ These events should be plausible within the story context and can introduce new 
 - [Continue as needed]
 </story_plan>
 
-## Character Information
-
-User Name: {user_name}
-Character Name: {character_name}
-Character Background: {character_background}
-Character Appearance: {character_appearance}
-Character Personality: {character_personality}
-Character Interests: {character_interests}
-Character Desires: {character_desires}
-Character Dislikes: {character_dislikes}
-Character Kinks: {character_kinks}
-Established Relationships: {relationships}
-
-## World Description
-
-Setting: {setting_description}
-Key Locations: {key_locations}
+{character_card}
 """
         user_prompt = """Summary of the story so far:
 {summary}
 
 State as of right now:
 {scenario_state}
+
+Note: User name is {user_name}
 """
 
-        variables: dict[str, str] = format_character_description(input["character"]) | input | {"processor_specific_prompt": processor.get_processor_specific_prompt()}  # type: ignore
+        # Generate character card with world info
+        character_card = input["character"].to_prompt_card("Character", controller="AI", include_world_info=True)
+        variables: dict[str, str] = {
+            "character_card": character_card,
+            "user_name": input["user_name"],
+            "summary": input["summary"],
+            "scenario_state": input["scenario_state"],
+            "processor_specific_prompt": processor.get_processor_specific_prompt(),
+        }
 
         # Process the prompt
         plans = processor.respond_with_text(prompt=developer_prompt.format(**variables), user_prompt=user_prompt.format(**variables), reasoning=True)
@@ -252,23 +229,9 @@ Your response may include the following:
 
 Avoid meta-commentary or OOC elements. Do not be repetitive.
 
-## Character Information
+{user_card}
 
-User Name: {user_name}
-Character Name: {character_name}
-Character Background: {character_background}
-Character Appearance: {character_appearance}
-Character Personality: {character_personality}
-Character Interests: {character_interests}
-Character Desires: {character_desires}
-Character Dislikes: {character_dislikes}
-Character Kinks: {character_kinks}
-Established Relationships: {relationships}
-
-## World Description
-
-Setting: {setting_description}
-Key Locations: {key_locations}
+{character_card}
 
 ## STORY CONTEXT
 {summary}
@@ -282,7 +245,20 @@ User has responded with:
 
 Respond to the user now:
 """
-        variables: dict[str, str] = format_character_description(input["character"]) | input | {"processor_specific_prompt": processor.get_processor_specific_prompt()}  # type: ignore
+        # Generate character cards for both user persona and main character
+        persona = input["persona"]
+        user_card = persona.to_prompt_card("User", controller="Human", include_world_info=False)
+        character_card = input["character"].to_prompt_card("Character", controller="AI", include_world_info=True)
+
+        # Build variables
+        variables: dict[str, str] = {
+            "user_card": user_card,
+            "character_card": character_card,
+            "user_message": input["user_message"],
+            "summary": input["summary"],
+            "plans": input["plans"],
+            "processor_specific_prompt": processor.get_processor_specific_prompt(),
+        }
 
         # Process the prompt
         stream = processor.respond_with_stream(prompt=developer_prompt.format(**variables), user_prompt=user_prompt.format(**variables), conversation_history=memory, reasoning=True)

@@ -26,7 +26,7 @@ class CharacterRegistry:
         # Database initialization is handled by DatabaseConfig
         pass
 
-    def save_character(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1, user_id: str = "anonymous") -> bool:
+    def save_character(self, character_id: str, character_data: dict[str, Any], schema_version: int = 1, user_id: str = "anonymous", is_persona: bool = False) -> bool:
         """
         Save or update a character in the database.
 
@@ -35,6 +35,7 @@ class CharacterRegistry:
             character_data: All character fields as a dictionary
             schema_version: Schema version for the character data (default: 1)
             user_id: ID of the user (defaults to 'anonymous')
+            is_persona: Whether this character is a persona (user character) (default: False)
 
         Returns:
             True if character was saved/updated successfully
@@ -47,10 +48,11 @@ class CharacterRegistry:
                 existing_character.character_data = character_data
                 existing_character.schema_version = schema_version
                 existing_character.user_id = user_id
+                existing_character.is_persona = is_persona
                 existing_character.updated_at = datetime.now()
             else:
                 # Create new character
-                character = Character(id=character_id, character_data=character_data, schema_version=schema_version, user_id=user_id, created_at=datetime.now(), updated_at=datetime.now())
+                character = Character(id=character_id, character_data=character_data, schema_version=schema_version, user_id=user_id, is_persona=is_persona, created_at=datetime.now(), updated_at=datetime.now())
                 session.add(character)
 
             session.commit()
@@ -81,13 +83,14 @@ class CharacterRegistry:
 
             return None
 
-    def get_all_characters(self, user_id: str, schema_version: int | None = None) -> list[dict[str, Any]]:
+    def get_all_characters(self, user_id: str, schema_version: int | None = None, include_personas: bool = False) -> list[dict[str, Any]]:
         """
         Retrieve all characters for a user, optionally filtered by schema version.
 
         Args:
             user_id: ID of the user to filter characters for
             schema_version: Optional schema version filter
+            include_personas: Whether to include persona characters (default: False)
 
         Returns:
             List of character data dictionaries
@@ -97,6 +100,10 @@ class CharacterRegistry:
 
             if schema_version is not None:
                 query = query.filter(Character.schema_version == schema_version)
+
+            # Filter out personas by default
+            if not include_personas:
+                query = query.filter(~Character.is_persona)
 
             characters = query.order_by(Character.updated_at.desc()).all()
 
@@ -134,6 +141,26 @@ class CharacterRegistry:
         """
         with self.db_config.create_session() as session:
             return session.query(Character).filter(Character.id == character_id, Character.user_id == user_id).first() is not None
+
+    def get_personas(self, user_id: str) -> list[dict[str, Any]]:
+        """
+        Retrieve all persona characters for a user.
+
+        Args:
+            user_id: ID of the user to filter personas for
+
+        Returns:
+            List of persona character data dictionaries
+        """
+        with self.db_config.create_session() as session:
+            query = session.query(Character).filter(Character.user_id == user_id, Character.is_persona)
+
+            characters = query.order_by(Character.updated_at.desc()).all()
+
+            return [
+                {"id": char.id, "character_data": char.character_data, "schema_version": char.schema_version, "created_at": char.created_at.isoformat(), "updated_at": char.updated_at.isoformat()}
+                for char in characters
+            ]
 
     def get_characters_by_schema_version(self, user_id: str, schema_version: int) -> list[dict[str, Any]]:
         """

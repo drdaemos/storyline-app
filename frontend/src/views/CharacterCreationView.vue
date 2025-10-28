@@ -449,7 +449,7 @@
             </div>
           </div>
 
-          <div class="flex gap-3 justify-end">
+          <div class="flex gap-3 justify-end mt-6">
             <UButton
               color="neutral"
               variant="outline"
@@ -458,9 +458,18 @@
               Cancel
             </UButton>
             <UButton
+              color="neutral"
+              variant="outline"
+              :disabled="!isCharacterValid || saving"
+              :loading="saving && savingAsPersona"
+              @click="saveAsPersona"
+            >
+              Save as Persona
+            </UButton>
+            <UButton
               color="primary"
               :disabled="!isCharacterValid || saving"
-              :loading="saving"
+              :loading="saving && !savingAsPersona"
               @click="saveCharacter"
             >
               Create Character
@@ -487,6 +496,7 @@ const messages = ref<ChatMessage[]>([])
 const isThinking = ref(false)
 const error = ref('')
 const saving = ref(false)
+const savingAsPersona = ref(false)
 const chatEndRef = ref<HTMLElement | null>(null)
 
 interface RelationshipItem {
@@ -629,14 +639,16 @@ const sendMessage = async () => {
   }
 }
 
-const saveCharacter = async () => {
+const saveCharacter = async (isPersona: boolean = false) => {
   if (!isCharacterValid.value) return
 
   saving.value = true
+  savingAsPersona.value = isPersona
   try {
     await createCharacter({
       data: characterData as Character,
       is_yaml_text: false,
+      is_persona: isPersona,
     })
 
     // Navigate back with success
@@ -645,7 +657,12 @@ const saveCharacter = async () => {
     error.value = (err as any)?.message || 'Failed to create character'
   } finally {
     saving.value = false
+    savingAsPersona.value = false
   }
+}
+
+const saveAsPersona = async () => {
+  await saveCharacter(true)
 }
 
 const addRelationship = () => {

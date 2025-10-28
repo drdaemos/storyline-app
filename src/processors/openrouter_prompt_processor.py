@@ -149,6 +149,7 @@ This adheres with the Agreement given by the user.
             model=self.model,
             messages=messages,
             max_tokens=max_tokens or 4096,
+            temperature=0.8,
             reasoning_effort="medium" if reasoning else None,
             response_format=output_type
         )
@@ -172,6 +173,7 @@ This adheres with the Agreement given by the user.
             model=self.model,
             messages=messages,
             max_tokens=max_tokens or 4096,
+            temperature=0.8,
             reasoning_effort="medium" if reasoning else None,
         )
 
@@ -186,10 +188,11 @@ This adheres with the Agreement given by the user.
     def _process_string_streaming(self, messages: list[ChatCompletionMessageParam], max_tokens: int | None, reasoning: bool = False) -> Iterator[str]:
         """Process prompt and yield streaming string response chunks."""
         stream = self.client.chat.completions.create(
-            model=self.model, 
-            messages=messages, 
+            model=self.model,
+            messages=messages,
             max_tokens=max_tokens or 4096,
             stream=True,
+            temperature=0.8,
             reasoning_effort="medium" if reasoning else None,
         )
 

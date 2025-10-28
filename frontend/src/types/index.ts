@@ -40,11 +40,13 @@ export interface InteractRequest {
   session_id?: string | null
   processor_type?: string
   backup_processor_type?: string
+  persona_id?: string | null
 }
 
 export interface CreateCharacterRequest {
   data: Character | string
   is_yaml_text?: boolean
+  is_persona?: boolean
 }
 
 export interface CreateCharacterResponse {
@@ -76,6 +78,7 @@ export interface LocalSettings {
   aiProcessor: string
   backupProcessor: string
   lastSelectedCharacter?: string
+  selectedPersonaId?: string
 }
 
 export interface SessionMessage {
