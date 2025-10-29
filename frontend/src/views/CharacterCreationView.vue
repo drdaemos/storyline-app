@@ -461,16 +461,16 @@
               color="neutral"
               variant="outline"
               :disabled="!isCharacterValid || saving"
-              :loading="saving && savingAsPersona"
-              @click="saveAsPersona"
+              :loading="saving"
+              @click="() => saveCharacter(true)"
             >
               Save as Persona
             </UButton>
             <UButton
               color="primary"
               :disabled="!isCharacterValid || saving"
-              :loading="saving && !savingAsPersona"
-              @click="saveCharacter"
+              :loading="saving"
+              @click="() => saveCharacter(false)"
             >
               Create Character
             </UButton>
@@ -496,7 +496,6 @@ const messages = ref<ChatMessage[]>([])
 const isThinking = ref(false)
 const error = ref('')
 const saving = ref(false)
-const savingAsPersona = ref(false)
 const chatEndRef = ref<HTMLElement | null>(null)
 
 interface RelationshipItem {
@@ -643,7 +642,6 @@ const saveCharacter = async (isPersona: boolean = false) => {
   if (!isCharacterValid.value) return
 
   saving.value = true
-  savingAsPersona.value = isPersona
   try {
     await createCharacter({
       data: characterData as Character,
@@ -657,12 +655,7 @@ const saveCharacter = async (isPersona: boolean = false) => {
     error.value = (err as any)?.message || 'Failed to create character'
   } finally {
     saving.value = false
-    savingAsPersona.value = false
   }
-}
-
-const saveAsPersona = async () => {
-  await saveCharacter(true)
 }
 
 const addRelationship = () => {
