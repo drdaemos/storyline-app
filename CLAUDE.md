@@ -6,3 +6,4 @@
 - When writing tests, avoid testing for encapsulated, private behaviour: focus on what can be observed in the output due to different inputs.
 - If a test requires some side-effect to be exposed - raise that with the user and ask how they want to do this.
 - Avoid putting extra logic into the interfacing classes (e.g API / CLI handler) - separate it from handling the comms by putting dataclasses / models into /src/models and creating separate logic classes in /src
+- In general, avoid having one thing doing too much - aggressively separate logic into smaller pieces that can be tested and reused.

@@ -1,7 +1,27 @@
 <template>
   <!-- Header -->
-  <div class="flex mb-8 gap-4 items-center">
+  <div class="flex mb-8 gap-4 items-center justify-between">
     <h2 class="text-3xl font-bold font-serif">Create New Character</h2>
+    <div class="flex items-center gap-3">
+      <!-- Auto-save indicator -->
+      <div v-if="autoSaveStatus !== 'idle'" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <UIcon
+          :name="autoSaveStatus === 'saving' ? 'i-lucide-loader-circle' : 'i-lucide-check-circle'"
+          :class="['w-4 h-4', autoSaveStatus === 'saving' && 'animate-spin']"
+        />
+        <span>{{ autoSaveStatus === 'saving' ? 'Saving...' : 'Saved' }}</span>
+      </div>
+      <!-- Reset button -->
+      <UButton
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-refresh-cw"
+        @click="resetCharacterCreation"
+        :disabled="isThinking || saving"
+      >
+        Reset
+      </UButton>
+    </div>
   </div>
 
   <!-- 2 Column Layout -->
@@ -481,15 +501,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, nextTick, watch } from 'vue'
+import { ref, computed, reactive, nextTick, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
+import { useCharacterCreationAutoSave } from '@/composables/useCharacterCreationAutoSave'
+import { usePersonas } from '@/composables/usePersonas'
 import type { Character, ChatMessage, CharacterCreationRequest } from '@/types'
 
 const router = useRouter()
 const { streamCharacterCreation, createCharacter } = useApi()
 const { settings } = useLocalSettings()
+const { fetchPersonas } = usePersonas()
 
 const userInput = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -519,6 +542,50 @@ const characterData = reactive<Partial<Character>>({
 })
 
 const relationshipsList = ref<RelationshipItem[]>([])
+
+// Auto-save functionality
+const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } =
+  useCharacterCreationAutoSave(characterData, messages)
+
+// Load saved state on mount
+onMounted(() => {
+  loadFromLocalStorage()
+})
+
+// Reset functionality
+const resetCharacterCreation = () => {
+  // Confirm before resetting
+  if (!confirm('Are you sure you want to reset? All progress will be lost.')) {
+    return
+  }
+
+  // Clear character data
+  Object.assign(characterData, {
+    name: '',
+    tagline: '',
+    backstory: '',
+    personality: '',
+    appearance: '',
+    relationships: {},
+    key_locations: [],
+    setting_description: '',
+    interests: [],
+    dislikes: [],
+    desires: [],
+    kinks: [],
+  })
+
+  // Clear messages
+  messages.value = []
+
+  // Clear localStorage
+  clearLocalStorage()
+
+  // Reset other state
+  error.value = ''
+  userInput.value = ''
+  relationshipsList.value = []
+}
 
 // Watch for relationships changes and sync with characterData
 watch(relationshipsList, (newList) => {
@@ -622,6 +689,8 @@ const sendMessage = async () => {
           messages.value.splice(aiMessageIndex, 1)
         }
         isThinking.value = false
+        // Auto-save after AI interaction completes
+        saveToLocalStorage()
       },
       // onError callback
       (errorMessage: string) => {
@@ -648,6 +717,14 @@ const saveCharacter = async (isPersona: boolean = false) => {
       is_yaml_text: false,
       is_persona: isPersona,
     })
+
+    // If saved as persona, refetch personas to update the list
+    if (isPersona) {
+      await fetchPersonas()
+    }
+
+    // Clear localStorage after successful save
+    clearLocalStorage()
 
     // Navigate back with success
     router.push('/')

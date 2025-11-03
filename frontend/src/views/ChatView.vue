@@ -61,7 +61,7 @@
         :variant="message.isUser ? 'outline' : 'soft'"
       >
         <template #content>
-          <div v-html="highlight(message.content)"></div>
+          <div v-html="message.content"></div>
         </template>
       </UChatMessage>
     </UChatMessages>
@@ -198,7 +198,7 @@ const sendInteractRequest = async (userMessage: string) => {
       session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
-      persona_id: settings.value.selectedPersonaId || null,
+      persona_id: settings.value.selectedPersonaId && settings.value.selectedPersonaId !== 'none' ? settings.value.selectedPersonaId : null,
     }
 
     // Store payload for potential regeneration

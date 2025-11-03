@@ -315,6 +315,12 @@ async def generate_scenarios(request: GenerateScenariosRequest, user_id: UserIdD
         if not character:
             raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
 
+        # Load the persona if provided
+        persona = None
+        if request.persona_id:
+            persona = character_loader.load_character(request.persona_id, user_id)
+            # Don't fail if persona not found, just proceed without it
+
         # Get the appropriate prompt processor
         dependencies = CharacterResponderDependencies.create_default(
             character_name="temp",  # Temp name for processor creation
@@ -326,7 +332,7 @@ async def generate_scenarios(request: GenerateScenariosRequest, user_id: UserIdD
         scenario_generator = ScenarioGenerator(processors=[dependencies.primary_processor, dependencies.backup_processor], logger=dependencies.chat_logger)
 
         # Generate scenarios
-        scenarios = scenario_generator.generate_scenarios(character, count=request.count, mood=request.mood)
+        scenarios = scenario_generator.generate_scenarios(character, count=request.count, mood=request.mood, persona=persona)
 
         return GenerateScenariosResponse(character_name=character.name, scenarios=scenarios)
 
@@ -439,11 +445,11 @@ async def start_session_with_scenario(request: StartSessionRequest, user_id: Use
     Start a new session with a scenario intro message.
 
     This endpoint creates a new session and initializes it with the provided scenario intro message.
-    User context (name and description) is appended as hidden_context tags for the character's awareness.
+    Optionally, a persona can be specified to provide user context as hidden_context tags.
     """
     try:
         session_id = session_starter.start_session_with_scenario(
-            character_name=request.character_name, intro_message=request.intro_message, user_name=request.user_name, user_description=request.user_description, user_id=user_id
+            character_name=request.character_name, intro_message=request.intro_message, persona_id=request.persona_id, user_id=user_id
         )
 
         return StartSessionResponse(session_id=session_id)

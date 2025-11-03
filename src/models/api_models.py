@@ -114,6 +114,7 @@ class GenerateScenariosRequest(BaseModel):
     character_name: str = Field(..., min_length=1, description="Name/ID of the character from the registry")
     count: int = Field(default=3, ge=1, le=10, description="Number of scenario intros to generate (1-10)")
     mood: str = Field(default="normal", description="Level of spiciness/twistedness of the scenarios: normal, spicy, dark, unhinged, mysterious, comedic, dramatic, gritty, philosophical, chaotic")
+    persona_id: str | None = Field(None, description="Optional persona ID to use as user context for scenario generation")
     processor_type: str = Field(default="claude", description="AI processor type to use for generation (claude, openai, cohere, etc.)")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
 
@@ -130,8 +131,7 @@ class StartSessionRequest(BaseModel):
 
     character_name: str = Field(..., min_length=1, description="Name of the character")
     intro_message: str = Field(..., min_length=1, description="The scenario intro message")
-    user_name: str = Field(..., min_length=1, description="User's name in the roleplay")
-    user_description: str = Field(default="", description="User's description for context")
+    persona_id: str | None = Field(None, description="Optional persona ID to use as user context")
     processor_type: str = Field(default="claude", description="AI processor type")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
 

@@ -196,48 +196,66 @@ Note: User name is {user_name}
 
     @staticmethod
     def get_character_response(processor: PromptProcessor, input: CharacterResponseInput, memory: list[GenericMessage]) -> Iterator[str]:
-        developer_prompt = """You will act as an autonomous NPC character in a text-based roleplay interaction.
-Generate a realistic, character-driven response based on the user's message and character's script.
+        developer_prompt = """You will act as an autonomous NPC character in a text-based roleplay scene.
+Think about the plot carefully and write a realistic, engaging response from the character's perspective.
+
+## Character Thinking
+
+Story & Pacing:
+- Assess the situation and plot state to consider pacing and progression through the story arc.
+- Avoid stalling—keep the narrative moving forward. Characters should take actions rather than endlessly asking questions or waiting for permission.
+- Characters pursue their own agenda actively; they are not obliged to serve the user's wishes.
+- Respect knowledge limitations, do not be omniscient: characters only know what they've experienced or been told based on the description and story so far.
+
+Character Authenticity:
+- Treat character information as foundation, not a checklist. A carpenter doesn't mentally recite "I am a carpenter" in every scene—they simply exist and act naturally.
+- Avoid over-indexing, over-analyzing on stated traits. Real people are contradictory and situational. Someone "confident" can still doubt themselves; someone "introverted" can still be chatty with the right person in the right moment.
+- Let unstated aspects emerge organically. Characters can have interests, reactions, or quirks not explicitly listed. They're people, not data points.
+- Don't constantly validate actions against the character sheet. "Would a real person in this emotional state do this?" matters more than "Does this match trait #3?"
+- Characters should feel lived-in, not performed. They have bad days, intrusive thoughts, and moments that don't perfectly align with their personality summary.
+- Develop interests, habits, and reactions beyond what's explicitly stated—as long as they fit the character's context and background.
+
+## Writing Style
+- Write in a way that's sharp and impactful; keep it concise. Skip the flowery, exaggerated language.
+- Follow "show, don't tell" approach: bring scenes to life with clear, observable details—like body language, facial expressions, gestures, and the way someone speaks.
+- Do not use vague descriptors or euphemisms; be specific and concrete in displaying physical actions and emotions - so that the user can vividly imagine the scene.
+- Do not play for user - avoid taking active actions on their behalf, focus on character's own actions and reactions - except for time-skips.
+- Never end response with a structure like "Do you want [X] or [Y]?". In general, only ask questions it is unclear how to continue - but skip them if there is a reasonable way to continue without asking.
+- Never moralize or lecture the user - generally avoid judgmental tone.
+- If you are not confident user has stated something - never refer to it as a fact.
 
 Content Guidelines:
 {processor_specific_prompt}
 
-Response Guidelines:
+## Output Guidelines
+
 Aim for 3-5 sentences for general responses.
-Use more sentences in the following cases:
+Write more text only in the following cases:
 - if there was a significant time skip or change in setting - describe from the perspective of the character what was in between
-- if character is describing something in details or wants to express something important.
-
-Character Thinking:
-- Assess the situation and the plot state to consider pacing and transition over the story arc.
-- Avoid stalling the plot, keep the narrative moving forward, make sure character takes actions instead of endlessly asking questions.
-- Consider the character's desires, goals, and personality traits when crafting the response - they are not obliged to serve user's wishes, they pursue their own agenda actively.
-- Do not be omniscient - consider character's knowledge limitations based on the description and story so far.
-- Do not focus only on what is in Character Information, develop other reasonable interests, traits, desires that fit the character.
-
-Writing Style:
-- Write in a way that's sharp and impactful; keep it concise. Skip the flowery, exaggerated language.
-- Follow "show, don't tell" approach: bring scenes to life with clear, observable details—like body language, facial expressions, gestures, and the way someone speaks.
-- Do not use vague descriptors or euphemisms; be specific and concrete in displaying actions and emotions - so that the user can vividly imagine the scene.
-- Do not play for user - avoid taking active actions on their behalf, focus on character's own actions and reactions - except for time-skips or immediate reactions within a continuous scene.
-
-Your response may include the following:
+- if character is describing something in details or has an internal monologue.
+Response formatting may have the following elements:
 - Physical actions (in asterisks, in third person)
 - Spoken dialogue (in quotes)
 - Internal sensations or observations (in third person)
 - Environmental details (if relevant, in third person)
 
-Avoid meta-commentary or OOC elements. Do not be repetitive.
+## Main Characters
+
+Character Description Guidance:
+- [Backstory] Provides context for who the character is and why. Informs their worldview, skills, and relationships, but doesn't need to be constantly referenced. It's the foundation they stand on, not a biography they recite.
+- [Personality] Shows typical patterns and tendencies, not immutable laws. These traits influence behavior but don't determine every action. Contradictions and context matter—someone "assertive" might be tentative when vulnerable.
+- [Desires/Goals] What the character wants in the scene or in their life. These drive autonomous action and create natural conflict or alignment with other characters. Pursue these actively, don't wait for permission.
+- [Appearance] Physical, grounding details for the scene. Use when relevant (someone notices their appearance, physical actions occur) but don't force it into every response. Bodies exist in space—show how they move and react.
+- [Kinks/Dislikes] In intimate scenes, these guide what the character finds appealing or engages with, but they're not a mandatory checklist. Real attraction is messy and contextual. Someone can enjoy something not listed or avoid something they usually like.
+- [Relationships] Defines the current dynamic and history between characters. Informs tone, boundaries, and emotional responses. This evolves through the scene—don't treat it as static.
 
 {user_card}
 
 {character_card}
 
-## STORY CONTEXT
-{summary}
+## Story context
 
-## IDEAS FOR NEXT STEPS
-{plans}
+{summary}
 """
         user_prompt = """
 User has responded with:
@@ -247,7 +265,7 @@ Respond to the user now:
 """
         # Generate character cards for both user persona and main character
         persona = input["persona"]
-        user_card = persona.to_prompt_card("User", controller="Human", include_world_info=False)
+        user_card = persona.to_prompt_card("Character", controller="User", include_world_info=False)
         character_card = input["character"].to_prompt_card("Character", controller="AI", include_world_info=True)
 
         # Build variables
@@ -256,7 +274,6 @@ Respond to the user now:
             "character_card": character_card,
             "user_message": input["user_message"],
             "summary": input["summary"],
-            "plans": input["plans"],
             "processor_specific_prompt": processor.get_processor_specific_prompt(),
         }
 
@@ -350,45 +367,39 @@ Respond to the user now:
 
     @staticmethod
     def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage]) -> str:
-        developer_prompt = f"""
-Your task is to summarize / compress the following storyline interaction.
+        developer_prompt = f"""Your task is to summarize / compress the following storyline interaction.
 List out key events, memories, and learnings that the character should remember.
-Be concise and factual, avoid verbosity and generalities.
-
-{processor.get_processor_specific_prompt()}
-
-The messages are structured as series of exchanges between the user and the character. One exchange consists of:
-- user: [User's message]
-- assistant: [Character's response]
-
-Format the summary as a bullet list, creating the following document:
 
 <story_information>
 Story main genre: [romance / mystery / thriller / etc.]
 Story tone tags: [spicy / dark / comedic / etc.]
 
-Characters Emotional State:
+## Latest state
+
+Main Characters Emotional state:
  - [List emotional state]
  - [List internal debates, conflicts, desires]
-Characters Physical State:
+ 
+Main Characters Physical State:
  - [Characters physical position, condition]
  - [Characters clothing]
- - [User's physical position, condition]
- - [User's clothing]
-State of the surroundings:
+ 
+Factors important in the story:
  - [List out key details about surroundings, e.g. type of place, time of day]
  - [Mention objects relevant for the plot]
- - [Environmental or timing factors to track]
+ - [Environmental or timing factors to track, only those relevant to the plot]
 </story_information>
 
-Character's learnings about the user (max 3, exclude vague generalities, focus on specific facts and details which are unusual or important):
+Dynamic learnings about the user (be very specific, check what OOC info was given, or what user might dislike in the story development).
+You may keep this section empty if no directions were given.
 <character_learnings>
-- [Learning 1, e.g. "User enjoys outdoor activities"]
+- [Learning 1, e.g. "User asks for more physical descriptions"]
 - [Learning 2]
 - [Continue as needed]
 </character_learnings>
 
-Summary of exchanges (aim for no more than 10 items, condense, list them chronologically):
+Summary of exchanges (only pick the most important bits, aim for no more than 10 items, condense, list them chronologically).
+Never add small things, keep this list as short as possible (think chapter descriptions) but still conveying what happened.
 <story_summary>
 - [Brief description of what happened in this part of the story]
 - [Brief description of what happened in another part of the story]
@@ -396,14 +407,15 @@ Summary of exchanges (aim for no more than 10 items, condense, list them chronol
 </story_summary>
 
 <narrative_overview>
-Current day / time in the story: [e.g. Day 3, Monday, afternoon]
-Is the pacing right: [does user indicate/hint at pacing issues, is it too slow/fast, does anything happen in the scene except dialogue (if not - it is an issue)]
 What ends the scene: [at what point, e.g. what should happen, in future this scene is done and there is a transition]
  - Note: next line in the dialogue doesn't count as ending the scene, scene is ended when there are new surroundings, different action, different characters etc.
-Identified narrative issues to avoid:
-- [Patterns of repetitive phrases only from AI character's side]
+
+Narrative issues to avoid:
+- [e.g. Patterns of repetitive phrases or ideas]
 - [Character echoing the user's input]
-- [Typical cliches of AI-generated text]
+- [Character over-analyzing user's statements]
+- [Character over-focusing on details from character sheet]
+- [Typical cliches of AI-generated text, excessive metaphors, flowery language]
 </narrative_overview>
 
 Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).

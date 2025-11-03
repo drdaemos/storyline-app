@@ -141,7 +141,9 @@ For romance/drama, imperfection creates chemistry. Perfect characters are forget
 - interests: [list of hobbies, activities, or topics the character enjoys]
 - dislikes: [list of things the character avoids or finds distasteful]
 - desires: [list of goals, ambitions, or things the character wants]
-- kinks: [list of character's preferences or quirks in intimate contexts]
+- kinks: [list of sexual preferences, fetishes, or turn-ons - don't include vanilla stuff here or personality traits]
+
+For `interests`, `dislikes` and `kinks` write concise, generalized categories - allowing for flexibility during role-play.
 
 ## Update Format
 

@@ -51,41 +51,41 @@ class Character(BaseModel):
 
         # Add backstory (required field, always present)
         if self.backstory:
-            lines.append(f"**Background:** {self.backstory}")
+            lines.append(f"[Backstory] {self.backstory}")
 
         # Add optional fields only if they have values
         if self.personality:
-            lines.append(f"**Personality:** {self.personality}")
+            lines.append(f"[Personality] {self.personality}")
 
         if self.appearance:
-            lines.append(f"**Appearance:** {self.appearance}")
+            lines.append(f"[Appearance] {self.appearance}")
+
+        if self.interests:
+            lines.append(f"[Interests] {', '.join(self.interests)}")
+
+        if self.dislikes:
+            lines.append(f"[Dislikes] {', '.join(self.dislikes)}")
+
+        if self.desires:
+            lines.append(f"[Desires] {', '.join(self.desires)}")
+
+        if self.kinks:
+            lines.append(f"[Kinks] {', '.join(self.kinks)}")
 
         if self.relationships:
             lines.append("**Relationships:**")
             for person, relationship in self.relationships.items():
                 lines.append(f"  - {person}: {relationship}")
 
-        if self.interests:
-            lines.append(f"**Interests:** {', '.join(self.interests)}")
-
-        if self.dislikes:
-            lines.append(f"**Dislikes:** {', '.join(self.dislikes)}")
-
-        if self.desires:
-            lines.append(f"**Desires:** {', '.join(self.desires)}")
-
-        if self.kinks:
-            lines.append(f"**Kinks:** {', '.join(self.kinks)}")
-
         # Only include world info if requested (typically for AI character only)
         if include_world_info:
+            if self.setting_description:
+                lines.append(f"**Setting/World description:** {self.setting_description}")
+
             if self.key_locations:
                 lines.append("**Key Locations:**")
                 for location in self.key_locations:
                     lines.append(f"  - {location}")
-
-            if self.setting_description:
-                lines.append(f"**Setting:** {self.setting_description}")
 
         return "\n".join(lines)
 

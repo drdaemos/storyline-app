@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from pathlib import Path
@@ -62,13 +63,11 @@ class ChatLogger:
         Log the conversation message to the log file.
 
         Args:
-            user_message: The user's input message
-            raw_evaluation: Raw evaluation response from the processor
-            raw_response: Raw character response from the processor
-            character_response: Parsed character response
+            role: Role of the message sender ('user' or 'assistant')
+            content: Text of the message
         """
         # Log user message
-        self.logger.info(f"{role.upper()}: {content}")
+        self.logger.info(json.dumps({ "log_type": 'conversation', "role": role.upper(), "content": content }))
 
     def log_exception(self, exc: Exception) -> None:
         """Log an exception message."""
@@ -76,7 +75,7 @@ class ChatLogger:
 
     def log_text(self, text: str) -> None:
         """Log a text message."""
-        self.logger.info(f"DEBUG: {text}")
+        self.logger.info(json.dumps({ "log_type": 'debug', "message": text }))
 
     def close_logger(self) -> None:
         """Close the logger and release file handles."""

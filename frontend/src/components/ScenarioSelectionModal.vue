@@ -25,19 +25,74 @@
         </div>
       </div>
 
-      <!-- Step 2: Mood Selection -->
-      <div v-if="currentStep === 'mood'" class="space-y-6">
-        <p class="text-center">Select the mood for your scenarios</p>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <!-- Step 2: Persona Selection -->
+      <div v-if="currentStep === 'personaSelection'" class="space-y-6">
+        <p class="text-center">Select your persona</p>
+
+        <UFormField label="Persona" description="Choose which character represents you in this conversation">
+          <USelect
+            class="w-full"
+            value-key="id"
+            v-model="selectedPersonaId"
+            :items="personaOptions"
+            :loading="personasLoading"
+          />
+        </UFormField>
+
+        <div class="flex gap-3">
           <UButton
-            v-for="mood in moodOptions"
-            :key="mood"
-            :color="selectedMood === mood ? 'primary' : 'neutral'"
-            :variant="selectedMood === mood ? 'solid' : 'outline'"
+            color="neutral"
+            variant="outline"
             block
-            @click="selectMood(mood)"
+            icon="i-lucide-arrow-left"
+            @click="currentStep = 'choice'"
           >
-            {{ mood }}
+            Back
+          </UButton>
+          <UButton
+            color="primary"
+            block
+            icon="i-lucide-arrow-right"
+            @click="currentStep = 'mood'"
+          >
+            Continue
+          </UButton>
+        </div>
+      </div>
+
+      <!-- Step 3: Mood Selection -->
+      <div v-if="currentStep === 'mood'" class="space-y-6">
+        <div class="space-y-2">
+          <p class="text-center text-lg">Select the mood(s) for your scenarios</p>
+          <p class="text-center text-sm text-gray-600 dark:text-gray-400">Choose one or more tones to mix and match</p>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <UCheckbox
+            v-for="mood in moodOptions"
+            :key="mood.value"
+            v-model="moodSelections[mood.value]"
+            :label="mood.label"
+            variant="card"
+          />
+        </div>
+        <div class="flex gap-3">
+          <UButton
+            color="neutral"
+            variant="outline"
+            block
+            icon="i-lucide-arrow-left"
+            @click="currentStep = 'personaSelection'"
+          >
+            Back
+          </UButton>
+          <UButton
+            color="primary"
+            block
+            icon="i-lucide-sparkles"
+            :disabled="selectedMoodsArray.length === 0"
+            @click="generateScenariosForMood"
+          >
+            Generate Scenarios
           </UButton>
         </div>
       </div>
@@ -58,12 +113,10 @@
           @click="selectScenario(scenario)"
         >
           <div class="space-y-3">
-            <div class="flex items-start justify-between gap-4">
-              <h3 class="text-lg font-semibold flex-1">{{ scenario.summary }}</h3>
-              <UBadge color="primary" variant="subtle">
-                {{ scenario.narrative_category }}
-              </UBadge>
-            </div>
+            <h3 class="text-lg font-semibold">{{ scenario.summary }}</h3>
+            <UBadge color="primary" variant="subtle">
+              {{ scenario.narrative_category }}
+            </UBadge>
             <p
               class="text-sm"
               :class="expandedScenario === index ? '' : 'line-clamp-2'"
@@ -81,69 +134,38 @@
           </div>
         </UCard>
 
-        <UButton
-          color="neutral"
-          variant="outline"
-          block
-          icon="i-lucide-arrow-left"
-          @click="goBackToMood"
-        >
-          Back to Mood Selection
-        </UButton>
-      </div>
-
-      <!-- Step 5: User Info -->
-      <div v-if="currentStep === 'userInfo'" class="space-y-6">
-        <p class="text-center">Tell us about yourself</p>
-
-        <UFormField label="Your Name" required>
-          <UInput
-            v-model="userName"
-            placeholder="Enter your name"
-            size="lg"
-            class="w-full"
-          />
-        </UFormField>
-
-        <UFormField label="Your Description" description="Describe yourself in the roleplay (optional)">
-          <UTextarea
-            v-model="userDescription"
-            placeholder="Describe yourself..."
-            class="w-full"
-            :rows="4"
-          />
-        </UFormField>
-
         <div class="flex gap-3">
           <UButton
             color="neutral"
             variant="outline"
             block
             icon="i-lucide-arrow-left"
-            @click="goBack"
+            @click="currentStep = 'personaSelection'"
           >
-            Back
+            Back to Persona
           </UButton>
           <UButton
-            color="primary"
+            color="neutral"
+            variant="outline"
             block
-            icon="i-lucide-check"
-            :disabled="!userName.trim()"
-            @click="startSession"
+            icon="i-lucide-refresh-cw"
+            @click="goBackToMood"
           >
-            Start Session
+            Regenerate
           </UButton>
         </div>
       </div>
+
     </template>
   </UModal>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
+import { usePersonas } from '@/composables/usePersonas'
 import type { Scenario } from '@/types'
 import { useChatHighlight } from '@/composables/useChatHighlight.ts'
 
@@ -162,30 +184,46 @@ const { highlight } = useChatHighlight()
 const router = useRouter()
 const { generateScenarios, startSessionWithScenario } = useApi()
 const { settings, loadSettings } = useLocalSettings()
+const { personaOptions, personasLoading, fetchPersonas } = usePersonas()
 
-type Step = 'choice' | 'mood' | 'loading' | 'scenario' | 'userInfo'
+type Step = 'choice' | 'personaSelection' | 'mood' | 'loading' | 'scenario'
 
 const currentStep = ref<Step>('choice')
-const selectedMood = ref<string>('')
+const moodSelections = ref<Record<string, boolean>>({
+  normal: false,
+  romantic: false,
+  spicy: false,
+  dark: false,
+  unhinged: false,
+  mysterious: false,
+  comedic: false,
+  dramatic: false,
+  gritty: false,
+  philosophical: false,
+  chaotic: false,
+})
 const scenarios = ref<Scenario[]>([])
 const selectedScenario = ref<Scenario | null>(null)
 const expandedScenario = ref<number | null>(null)
-const userName = ref('')
-const userDescription = ref('')
+const selectedPersonaId = ref<string>('')
 const error = ref<string | null>(null)
 
+const selectedMoodsArray = computed(() => {
+  return Object.keys(moodSelections.value).filter(key => moodSelections.value[key])
+})
+
 const moodOptions = [
-  'Normal',
-  'Romantic',
-  'Spicy',
-  'Dark',
-  'Unhinged',
-  'Mysterious',
-  'Comedic',
-  'Dramatic',
-  'Gritty',
-  'Philosophical',
-  'Chaotic',
+  { label: 'Normal', value: 'normal' },
+  { label: 'Romantic', value: 'romantic' },
+  { label: 'Spicy', value: 'spicy' },
+  { label: 'Dark', value: 'dark' },
+  { label: 'Unhinged', value: 'unhinged' },
+  { label: 'Mysterious', value: 'mysterious' },
+  { label: 'Comedic', value: 'comedic' },
+  { label: 'Dramatic', value: 'dramatic' },
+  { label: 'Gritty', value: 'gritty' },
+  { label: 'Philosophical', value: 'philosophical' },
+  { label: 'Chaotic', value: 'chaotic' },
 ]
 
 const headerTitle = computed(() => {
@@ -198,8 +236,8 @@ const headerTitle = computed(() => {
       return 'Generating Scenarios'
     case 'scenario':
       return 'Choose Scenario'
-    case 'userInfo':
-      return 'Your Information'
+    case 'personaSelection':
+      return 'Select Persona'
     default:
       return 'New Session'
   }
@@ -213,7 +251,7 @@ const isOpen = computed({
 })
 
 const selectGenerateScenario = () => {
-  currentStep.value = 'mood'
+  currentStep.value = 'personaSelection'
 }
 
 const selectSkipToChat = () => {
@@ -227,12 +265,9 @@ const selectSkipToChat = () => {
   })
 }
 
-const selectMood = (mood: string) => {
-  selectedMood.value = mood
-  generateScenariosForMood()
-}
-
 const generateScenariosForMood = async () => {
+  if (selectedMoodsArray.value.length === 0) return
+
   currentStep.value = 'loading'
   error.value = null
 
@@ -240,7 +275,8 @@ const generateScenariosForMood = async () => {
     const response = await generateScenarios({
       character_name: props.characterName,
       count: 3,
-      mood: selectedMood.value.toLowerCase(),
+      mood: selectedMoodsArray.value.join(', '),
+      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })
@@ -252,17 +288,13 @@ const generateScenariosForMood = async () => {
   }
 }
 
-const selectScenario = (scenario: Scenario) => {
+const selectScenario = async (scenario: Scenario) => {
   selectedScenario.value = scenario
-  currentStep.value = 'userInfo'
+  await startSession()
 }
 
 const toggleExpanded = (index: number) => {
   expandedScenario.value = expandedScenario.value === index ? null : index
-}
-
-const goBack = () => {
-  currentStep.value = 'scenario'
 }
 
 const goBackToMood = () => {
@@ -270,18 +302,21 @@ const goBackToMood = () => {
   scenarios.value = []
   selectedScenario.value = null
   expandedScenario.value = null
+  // Reset all mood selections
+  Object.keys(moodSelections.value).forEach(key => {
+    moodSelections.value[key] = false
+  })
   error.value = null
 }
 
 const startSession = async () => {
-  if (!selectedScenario.value || !userName.value.trim()) return
+  if (!selectedScenario.value) return
 
   try {
     const response = await startSessionWithScenario({
       character_name: props.characterName,
       intro_message: selectedScenario.value.intro_message,
-      user_name: userName.value.trim(),
-      user_description: userDescription.value.trim(),
+      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })
@@ -301,12 +336,14 @@ const startSession = async () => {
 
 const resetModal = () => {
   currentStep.value = 'choice'
-  selectedMood.value = ''
+  // Reset all mood selections
+  Object.keys(moodSelections.value).forEach(key => {
+    moodSelections.value[key] = false
+  })
   scenarios.value = []
   selectedScenario.value = null
   expandedScenario.value = null
-  userName.value = ''
-  userDescription.value = ''
+  selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
   error.value = null
 }
 
@@ -315,9 +352,16 @@ watch(
   (newShow) => {
     if (newShow) {
       loadSettings()
+      fetchPersonas()
+      selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
     } else {
       resetModal()
     }
   }
 )
+
+onMounted(() => {
+  fetchPersonas()
+  selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
+})
 </script>

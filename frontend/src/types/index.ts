@@ -105,6 +105,7 @@ export interface GenerateScenariosRequest {
   character_name: string
   count: number
   mood: string
+  persona_id?: string | null
   processor_type?: string
   backup_processor_type?: string
 }
@@ -117,8 +118,7 @@ export interface GenerateScenariosResponse {
 export interface StartSessionRequest {
   character_name: string
   intro_message: string
-  user_name: string
-  user_description: string
+  persona_id?: string | null
   processor_type?: string
   backup_processor_type?: string
 }

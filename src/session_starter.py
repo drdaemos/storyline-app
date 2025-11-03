@@ -18,22 +18,21 @@ class SessionStarter:
         self.character_loader = character_loader
         self.conversation_memory = conversation_memory
 
-    def start_session_with_scenario(self, character_name: str, intro_message: str, user_name: str = "", user_description: str = "", user_id: str = "anonymous") -> str:
+    def start_session_with_scenario(self, character_name: str, intro_message: str, _persona_id: str | None = None, user_id: str = "anonymous") -> str:
         """
         Start a new session with a scenario intro message.
 
         Args:
             character_name: Name of the character
             intro_message: The scenario intro message
-            user_name: User's name in the roleplay (optional)
-            user_description: User's description for context (optional)
+            persona_id: Optional persona character ID to use as user context
             user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             The created session ID
 
         Raises:
-            FileNotFoundError: If character is not found
+            FileNotFoundError: If character or persona is not found
             ValueError: If character_name or intro_message is empty
         """
         if not character_name:
@@ -51,17 +50,6 @@ class SessionStarter:
 
         # Build the intro message with hidden context
         intro_with_context = intro_message
-
-        # Append user context as hidden_context if provided
-        if user_name or user_description:
-            context_parts = []
-            if user_name:
-                context_parts.append(f"User: {user_name}")
-            if user_description:
-                context_parts.append(user_description)
-
-            hidden_context = ". ".join(context_parts)
-            intro_with_context += f"\n\n<hidden_context>{hidden_context}</hidden_context>"
 
         # Add the intro message as an assistant (character) message
         self.conversation_memory.add_message(character_id=character.name, session_id=session_id, role="assistant", content=intro_with_context, message_type="conversation", user_id=user_id)

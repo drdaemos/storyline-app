@@ -47,7 +47,7 @@ export function useLocalSettings() {
         )
       }
 
-      if (settings.value.selectedPersonaId) {
+      if (settings.value.selectedPersonaId && settings.value.selectedPersonaId !== 'none') {
         localStorage.setItem(
           `${STORAGE_PREFIX}selected_persona`,
           settings.value.selectedPersonaId
@@ -97,7 +97,7 @@ if (!initialized) {
         )
       }
 
-      if (settings.value.selectedPersonaId) {
+      if (settings.value.selectedPersonaId && settings.value.selectedPersonaId !== 'none') {
         localStorage.setItem(
           `${STORAGE_PREFIX}selected_persona`,
           settings.value.selectedPersonaId

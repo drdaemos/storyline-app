@@ -1,12 +1,13 @@
 <template>
-  <UModal v-model:open="open" title="Settings">
-    <UButton
-      color="neutral"
-      variant="ghost"
-      icon="i-lucide-settings"
-      class="cursor-pointer"
-    />
+  <UButton
+    color="neutral"
+    variant="ghost"
+    icon="i-lucide-settings"
+    class="cursor-pointer"
+    @click="open = true"
+  />
 
+  <UModal v-model:open="open" title="Settings">
     <template #body>
       <UForm class="space-y-6">
         <UFormField label="AI Processor" description="Choose which AI model to use for new conversations. Changes apply to new sessions only.">
@@ -62,11 +63,12 @@
 import { ref, onMounted } from 'vue'
 import type { SelectItem } from '@nuxt/ui'
 import { useLocalSettings } from '@/composables/useLocalSettings'
-import type { CharacterSummary } from '@/types'
+import { usePersonas } from '@/composables/usePersonas'
 
 const open = ref(false)
 
 const { settings, clearSettings } = useLocalSettings()
+const { personaOptions, personasLoading, fetchPersonas } = usePersonas()
 
 const processorOptions = ref<SelectItem[]>([
   { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
@@ -83,31 +85,6 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
   { label: 'Cohere ($10/M)', id: 'cohere' },
 ])
-
-const personaOptions = ref<SelectItem[]>([])
-const personasLoading = ref(false)
-
-const fetchPersonas = async () => {
-  personasLoading.value = true
-  try {
-    const response = await fetch('/api/personas')
-    if (response.ok) {
-      const personas: CharacterSummary[] = await response.json()
-      personaOptions.value = [
-        { label: 'None', id: '' },
-        ...personas.map(p => ({ label: `${p.name} - ${p.tagline}`, id: p.id }))
-      ]
-    } else {
-      console.error('Failed to fetch personas')
-      personaOptions.value = [{ label: 'None', id: '' }]
-    }
-  } catch (error) {
-    console.error('Error fetching personas:', error)
-    personaOptions.value = [{ label: 'None', id: '' }]
-  } finally {
-    personasLoading.value = false
-  }
-}
 
 onMounted(() => {
   fetchPersonas()
