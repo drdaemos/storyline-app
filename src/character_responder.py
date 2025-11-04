@@ -2,12 +2,13 @@ import re
 from datetime import UTC, datetime
 from typing import Protocol
 
-from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
+from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, GetMemorySummaryInput, PlanGenerationInput
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
 from src.models.persona import create_default_persona
+from src.models.summary import Summary
 
 
 class EventCallback(Protocol):
@@ -180,8 +181,6 @@ class CharacterResponder:
         self.persistent_memory.add_messages(self.character.name, self.session_id, [user_msg, response_msg], user_id=self.user_id)
         # Update current message offset
         self._current_message_offset += self.EPOCH_MESSAGES
-
-        self.chat_logger.log_message("-----", "")
 
         return character_response
 
@@ -357,11 +356,12 @@ class CharacterResponder:
         return response
 
     def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> str:
+        input: GetMemorySummaryInput = {"character": self.character, "persona": self.persona, "summary": self.memory_summary}
         try:
-            summary = CharacterPipeline.get_memory_summary(processor=self.processor, memory=conversation_memory)
+            summary = CharacterPipeline.get_memory_summary(processor=self.processor, memory=conversation_memory, input=input)
         except Exception as err:  # type: ignore
             self.chat_logger.log_exception(err)
-            summary = CharacterPipeline.get_memory_summary(processor=self.backup_processor, memory=conversation_memory)
+            summary = CharacterPipeline.get_memory_summary(processor=self.backup_processor, memory=conversation_memory, input=input)
 
         self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary)
 
@@ -401,7 +401,7 @@ class CharacterResponder:
         # Keep the last EPOCH_MESSAGES, ensuring we have at least one user-assistant pair for /regenerate
         # Filter to keep only conversation messages, excluding any evaluation/summary messages
         conversation_msgs = [msg for msg in self.memory if msg["type"] == "conversation"]
-        self.memory = conversation_msgs[-self.EPOCH_MESSAGES:]
+        self.memory = conversation_msgs[-self.EPOCH_MESSAGES :]
 
     def _should_trigger_summarization(self, user_message: str) -> bool:
         """
@@ -471,7 +471,7 @@ class CharacterResponder:
         self.persistent_memory.delete_session(self.session_id, self.user_id)
         self.summary_memory.delete_session_summaries(self.session_id, self.user_id)
         self.memory = []
-        self.memory_summary = ""
+        self.memory_summary = None
         self._current_message_offset = 0
         return True
 
@@ -486,7 +486,7 @@ class CharacterResponder:
         all_messages = self.persistent_memory.get_session_messages(self.session_id, self.user_id)
         return len(all_messages)
 
-    def _load_existing_summaries(self) -> (str, int):
+    def _load_existing_summaries(self) -> (Summary, int):
         """
         Load existing summaries for the current session and concatenate them.
 
@@ -517,15 +517,11 @@ class CharacterResponder:
             if learnings:
                 summary_learnings.append(learnings)
 
-        summary = f"""Story Information:
-{information}
+        summary = Summary(
+            story_information=information or "",
+            story_summary=summary_events,
+            narrative_overview=narrative_overview or "",
+            character_learnings=summary_learnings,
+        )
 
-What character learned:
-{'\n'.join(summary_learnings)}
-
-Previous events:
-{'\n'.join(summary_events)}
-
-{narrative_overview}
-"""
         return summary, last_summary_offset

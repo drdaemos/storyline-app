@@ -7,6 +7,7 @@ from src.models.character import Character
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
+from src.models.summary import Summary
 
 
 class EvaluationInput(TypedDict):
@@ -23,8 +24,14 @@ class PlanGenerationInput(TypedDict):
     scenario_state: str
 
 
+class GetMemorySummaryInput(TypedDict):
+    character: Character
+    persona: Character
+    summary: Summary | None
+
+
 class CharacterResponseInput(TypedDict):
-    summary: str
+    summary: Summary | None
     plans: str
     previous_response: str
     character: Character
@@ -115,15 +122,11 @@ Respond with the JSON object containing the following fields:
         summary_msg: list[GenericMessage] = [
             {
                 "role": "user",
-                "content": f"""Summary of previous interactions:
-{input["summary"]}
-
-{input["plans"]},
-""",
+                "content": input["summary"].to_string(),
                 "type": "summary",
                 "created_at": datetime.now(UTC).isoformat(),
             }
-        ]
+        ] if input["summary"] else []
 
         # Process the prompt
         evaluation = processor.respond_with_model(
@@ -273,7 +276,7 @@ Respond to the user now:
             "user_card": user_card,
             "character_card": character_card,
             "user_message": input["user_message"],
-            "summary": input["summary"],
+            "summary": input["summary"].to_string() if input["summary"] else "No prior summary available.",
             "processor_specific_prompt": processor.get_processor_specific_prompt(),
         }
 
@@ -366,65 +369,93 @@ Respond to the user now:
             yield buffer
 
     @staticmethod
-    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage]) -> str:
-        developer_prompt = f"""Your task is to summarize / compress the following storyline interaction.
-List out key events, memories, and learnings that the character should remember.
+    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage], input: GetMemorySummaryInput) -> str:
+        developer_prompt = """Your task is to summarize and extract ONLY the essential state and critical story beats from the following exchanges.
+Be ruthlessly selective - if something doesn't change the state or story, discard it. Messages will be removed from memory after summarization, so make sure to capture important facts for the story, otherwise they will be lost.
+
+## Summary Structure
 
 <story_information>
-Story main genre: [romance / mystery / thriller / etc.]
-Story tone tags: [spicy / dark / comedic / etc.]
+[For each character]
+Physical State (ONLY if changed):
+ - Character positions/locations: [where they are NOW]
+ - Clothing status: [what's on/off/changed]
+ - Physical contact: [who's touching whom, how]
+ - Injuries/physical conditions: [only lasting effects]
 
-## Latest state
+Emotional State (ONLY major shifts):
+ - [Character name]: [new emotional state if significantly different]
+ - Key desires/conflicts: [only if newly revealed or resolved]
 
-Main Characters Emotional state:
- - [List emotional state]
- - [List internal debates, conflicts, desires]
- 
-Main Characters Physical State:
- - [Characters physical position, condition]
- - [Characters clothing]
- 
-Factors important in the story:
- - [List out key details about surroundings, e.g. type of place, time of day]
- - [Mention objects relevant for the plot]
- - [Environmental or timing factors to track, only those relevant to the plot]
+Environment:
+ - Location: [if changed]
+ - Time progression: [exactly how much time has passed, deduce from context if not stated explicitly]
+ - Objects introduced: [only if used/important]
 </story_information>
 
-Dynamic learnings about the user (be very specific, check what OOC info was given, or what user might dislike in the story development).
-You may keep this section empty if no directions were given.
-<character_learnings>
-- [Learning 1, e.g. "User asks for more physical descriptions"]
-- [Learning 2]
-- [Continue as needed]
-</character_learnings>
-
-Summary of exchanges (only pick the most important bits, aim for no more than 10 items, condense, list them chronologically).
-Never add small things, keep this list as short as possible (think chapter descriptions) but still conveying what happened.
 <story_summary>
-- [Brief description of what happened in this part of the story]
-- [Brief description of what happened in another part of the story]
-- [Continue as needed, grouping exchanges into story beats (points of change in the narrative)]
+List ONLY events that would matter if the story resumed later. Maximum 5 items.
+Examples of what matters: first kiss, conflict erupted, character left, revealed secret, clothing changed, intimacy completed, injury occurred, unusual information learned
+Examples of what doesn't: character spoke, character smiled, described something, moved slightly
+
+- [Beat 1: What specifically happened that changed something]
+- [Beat 2]
+[Leave blank if nothing major happened]
+
+Also list facts that character has to remember for future interactions (for long-term memory).
+Examples of what matters: specific information received, promises made, facts revealed
+Examples of what to skip: deduced information, small talk, emotions, internal monologue, things already listed in character sheets or stated previously or common knowledge
+- [Important detail 1]
+- [Important detail 2]
+[Leave blank if nothing is too important to be remembered]
 </story_summary>
 
 <narrative_overview>
-What ends the scene: [at what point, e.g. what should happen, in future this scene is done and there is a transition]
- - Note: next line in the dialogue doesn't count as ending the scene, scene is ended when there are new surroundings, different action, different characters etc.
-
-Narrative issues to avoid:
-- [e.g. Patterns of repetitive phrases or ideas]
-- [Character echoing the user's input]
-- [Character over-analyzing user's statements]
-- [Character over-focusing on details from character sheet]
-- [Typical cliches of AI-generated text, excessive metaphors, flowery language]
+Check for these SPECIFIC problems (only list if present):
+- Repetitive phrases: [quote the exact phrase if used 2+ times]
+- Echo/over-analysis: [if character paraphrases user's words back unnecessarily]
+- Purple prose: [if excessive metaphors/flowery language present]
+- Character sheet fixation: [if forcing character traits unnaturally]
+- Physical impossibilities: [if positions/actions don't make spatial sense]
+[Leave blank if responses were clean]
 </narrative_overview>
 
-Be concise, specific (especially about the events and learnings - avoid vague generalities, and quote facts/dialogue parts if relevant).
+<character_learnings>
+OOC commands or corrections from user (be specific):
+- [Direct quote of user's instruction]
+- [What this reveals about user's preferences]
+[Leave blank if none given]
+</character_learnings>
+
+## Instructions
+- If a section has nothing important, write "No changes" or leave blank
+- Default to OMITTING information rather than including it
+- Never describe small talk, transitions, or descriptive narration unless plot-critical
+- Physical state must be precise enough to resume the scene (exact positions matter)
+- Story beats must be CONCRETE FACTS (e.g., "Character X kissed Character Y" not "tension built between them")
+
+## Main characters (don't mention anything from character sheets, just use as reference)
+
+{user_card}
+
+{character_card}
+
+## Prior story history
+
+{summary}
 """
+
+        # Build variables
+        variables: dict[str, str] = {
+            "user_card": input["persona"].to_prompt_card("Character", controller="User", include_world_info=False),
+            "character_card": input["character"].to_prompt_card("Character", controller="AI", include_world_info=False),
+            "summary": input["summary"].to_string() if input["summary"] else "No prior summary available.",
+        }
 
         user_prompt = "\n".join(f"{message['role']}: {message['content']}" for message in memory)
 
         # Process the prompt
-        summary = processor.respond_with_text(prompt=developer_prompt, user_prompt=user_prompt)
+        summary = processor.respond_with_text(prompt=developer_prompt.format(**variables), user_prompt=user_prompt)
 
         return summary
 
