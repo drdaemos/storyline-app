@@ -226,3 +226,111 @@ class TestCharacterRegistry:
         assert updated_char["created_at"] == initial_char["created_at"]
         # updated_at should be different (more recent)
         assert updated_char["updated_at"] != initial_char["updated_at"]
+
+    def test_get_character_includes_anonymous(self):
+        """Test that get_character returns anonymous characters for any user."""
+        character_data = {"name": "Anonymous Character"}
+
+        # Save character as anonymous
+        self.registry.save_character("anon_char", character_data, user_id="anonymous")
+
+        # User should be able to see anonymous character
+        retrieved = self.registry.get_character("anon_char", "user123")
+        assert retrieved is not None
+        assert retrieved["character_data"] == character_data
+
+    def test_get_character_includes_anonymous_persona(self):
+        """Test that get_character returns anonymous personas for any user."""
+        persona_data = {"name": "Anonymous Persona"}
+
+        # Save persona as anonymous
+        self.registry.save_character("anon_persona", persona_data, user_id="anonymous", is_persona=True)
+
+        # User should be able to retrieve anonymous persona by ID
+        retrieved = self.registry.get_character("anon_persona", "user123")
+        assert retrieved is not None
+        assert retrieved["character_data"] == persona_data
+
+    def test_get_character_user_specific(self):
+        """Test that get_character returns user-specific characters."""
+        character_data = {"name": "User Character"}
+
+        # Save character for specific user
+        self.registry.save_character("user_char", character_data, user_id="user123")
+
+        # Same user can retrieve it
+        retrieved = self.registry.get_character("user_char", "user123")
+        assert retrieved is not None
+        assert retrieved["character_data"] == character_data
+
+    def test_get_character_another_users_character(self):
+        """Test that get_character doesn't return other user's characters."""
+        character_data = {"name": "User1 Character"}
+
+        # Save character for user1
+        self.registry.save_character("user1_char", character_data, user_id="user1")
+
+        # user2 cannot retrieve user1's character
+        retrieved = self.registry.get_character("user1_char", "user2")
+        assert retrieved is None
+
+    def test_get_all_characters_includes_anonymous(self):
+        """Test that get_all_characters returns both user and anonymous characters."""
+        # Save anonymous character
+        self.registry.save_character("anon1", {"name": "Anonymous 1"}, user_id="anonymous")
+
+        # Save user-specific character
+        self.registry.save_character("user1", {"name": "User 1"}, user_id="user123")
+
+        # Save another user's character
+        self.registry.save_character("user2", {"name": "User 2"}, user_id="user456")
+
+        # user123 should see their own character + anonymous character
+        chars = self.registry.get_all_characters("user123")
+        assert len(chars) == 2
+        char_ids = {char["id"] for char in chars}
+        assert char_ids == {"anon1", "user1"}
+
+    def test_get_personas_includes_anonymous(self):
+        """Test that get_personas returns both user and anonymous personas."""
+        # Save anonymous persona
+        self.registry.save_character("anon_persona", {"name": "Anonymous Persona"}, user_id="anonymous", is_persona=True)
+
+        # Save user-specific persona
+        self.registry.save_character("user_persona", {"name": "User Persona"}, user_id="user123", is_persona=True)
+
+        # Save another user's persona
+        self.registry.save_character("other_persona", {"name": "Other Persona"}, user_id="user456", is_persona=True)
+
+        # Save non-persona character for user123
+        self.registry.save_character("regular_char", {"name": "Regular Character"}, user_id="user123", is_persona=False)
+
+        # user123 should see their own persona + anonymous persona, but not other user's persona or regular characters
+        personas = self.registry.get_personas("user123")
+        assert len(personas) == 2
+        persona_ids = {p["id"] for p in personas}
+        assert persona_ids == {"anon_persona", "user_persona"}
+
+    def test_is_persona_flag(self):
+        """Test saving and retrieving characters with is_persona flag."""
+        # Save a persona
+        self.registry.save_character("my_persona", {"name": "My Persona"}, user_id="user123", is_persona=True)
+
+        # Save a regular character
+        self.registry.save_character("my_char", {"name": "My Character"}, user_id="user123", is_persona=False)
+
+        # Get all characters (should not include personas by default)
+        chars = self.registry.get_all_characters("user123", include_personas=False)
+        assert len(chars) == 1
+        assert chars[0]["id"] == "my_char"
+
+        # Get all characters including personas
+        all_chars = self.registry.get_all_characters("user123", include_personas=True)
+        assert len(all_chars) == 2
+        char_ids = {char["id"] for char in all_chars}
+        assert char_ids == {"my_persona", "my_char"}
+
+        # Get only personas
+        personas = self.registry.get_personas("user123")
+        assert len(personas) == 1
+        assert personas[0]["id"] == "my_persona"

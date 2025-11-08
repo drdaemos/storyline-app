@@ -209,11 +209,25 @@ class TestClaudePromptProcessor:
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
     def test_respond_with_stream(self, mock_anthropic):
-        # Mock the streaming response
-        mock_stream = Mock()
-        mock_stream.text_stream = iter(["Hello ", "world", "!"])
-        mock_anthropic.return_value.messages.stream.return_value.__enter__ = Mock(return_value=mock_stream)
-        mock_anthropic.return_value.messages.stream.return_value.__exit__ = Mock(return_value=None)
+        # Mock the streaming response chunks
+        mock_chunk1 = Mock()
+        mock_chunk1.type = "text"
+        mock_chunk1.text = "Hello "
+
+        mock_chunk2 = Mock()
+        mock_chunk2.type = "text"
+        mock_chunk2.text = "world"
+
+        mock_chunk3 = Mock()
+        mock_chunk3.type = "text"
+        mock_chunk3.text = "!"
+
+        # Mock stream context manager that returns an iterable of chunks
+        mock_stream = iter([mock_chunk1, mock_chunk2, mock_chunk3])
+        mock_context_manager = Mock()
+        mock_context_manager.__enter__ = Mock(return_value=mock_stream)
+        mock_context_manager.__exit__ = Mock(return_value=None)
+        mock_anthropic.return_value.messages.stream.return_value = mock_context_manager
 
         processor = ClaudePromptProcessor(api_key="test-key")
         result = list(processor.respond_with_stream("Test system prompt", "Test user prompt"))

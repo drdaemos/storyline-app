@@ -11,7 +11,7 @@ from src.models.summary import Summary
 
 
 class EvaluationInput(TypedDict):
-    summary: str
+    summary: Summary | None
     plans: str
     user_message: str
     character: Character
@@ -20,7 +20,7 @@ class EvaluationInput(TypedDict):
 class PlanGenerationInput(TypedDict):
     character: Character
     user_name: str
-    summary: str
+    summary: Summary | None
     scenario_state: str
 
 
@@ -184,7 +184,7 @@ Note: User name is {user_name}
         variables: dict[str, str] = {
             "character_card": character_card,
             "user_name": input["user_name"],
-            "summary": input["summary"],
+            "summary": input["summary"].to_string() if input["summary"] else "No prior summary available.",
             "scenario_state": input["scenario_state"],
             "processor_specific_prompt": processor.get_processor_specific_prompt(),
         }

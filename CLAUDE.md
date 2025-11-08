@@ -3,6 +3,8 @@
 - Avoid using Any type if possible
 - Do not add dependencies directly editing the pyproject.toml, use `uv add <dependencies>` command
 - When writing tests for the files that contain LLM prompts, avoid checking for specific text of the prompt, it gets rephrased often.
+- Always mock prompt processors / LLM SDKs to avoid actual outbound LLM calls
+- Never `import` inside the logic, always put it on top of the file among other imports.
 - When writing tests, avoid testing for encapsulated, private behaviour: focus on what can be observed in the output due to different inputs.
 - If a test requires some side-effect to be exposed - raise that with the user and ask how they want to do this.
 - Avoid putting extra logic into the interfacing classes (e.g API / CLI handler) - separate it from handling the comms by putting dataclasses / models into /src/models and creating separate logic classes in /src

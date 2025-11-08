@@ -29,6 +29,7 @@ from src.models.api_models import (
     GenerateScenariosResponse,
     HealthStatus,
     InteractRequest,
+    ScenarioGenerationStreamEvent,
     SessionDetails,
     SessionInfo,
     SessionMessage,
@@ -342,6 +343,142 @@ async def generate_scenarios(request: GenerateScenariosRequest, user_id: UserIdD
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate scenarios: {str(e)}") from e
+
+
+@app.post("/api/scenarios/generate-stream")
+async def generate_scenarios_stream(request: GenerateScenariosRequest, user_id: UserIdDep) -> StreamingResponse:
+    """
+    Generate scenario intros for a given character with streaming via Server-Sent Events.
+
+    The response will be streamed as Server-Sent Events with the following format:
+    - data: {"type": "chunk", "chunk": "XML text chunk"}
+    - data: {"type": "scenario", "scenario": {...}}
+    - data: {"type": "complete"}
+    - data: {"type": "error", "error": "error_message"}
+    """
+    try:
+        # Load the character from registry
+        character = character_loader.load_character(request.character_name, user_id)
+        if not character:
+            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
+
+        # Load the persona if provided
+        persona = None
+        if request.persona_id:
+            persona = character_loader.load_character(request.persona_id, user_id)
+            # Don't fail if persona not found, just proceed without it
+
+        # Get the appropriate prompt processor
+        dependencies = CharacterResponderDependencies.create_default(
+            character_name="temp",  # Temp name for processor creation
+            processor_type=request.processor_type,
+            backup_processor_type=request.backup_processor_type,
+        )
+
+        # Create scenario generator with the selected processor
+        scenario_generator = ScenarioGenerator(processors=[dependencies.primary_processor, dependencies.backup_processor], logger=dependencies.chat_logger)
+
+        # Create async generator for streaming response
+        async def generate_sse_response() -> AsyncGenerator[str, None]:
+            """Generate Server-Sent Events for streaming scenario generation."""
+            try:
+                # Create queues for streaming chunks and scenario events
+                chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
+                scenario_queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
+                loop = asyncio.get_event_loop()
+
+                def streaming_callback(chunk: str) -> None:
+                    """Called by generator when a chunk is available."""
+                    loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
+
+                def scenario_callback(scenario: object) -> None:
+                    """Called by generator when a complete scenario is parsed."""
+                    from src.models.api_models import Scenario
+
+                    if isinstance(scenario, Scenario):
+                        scenario_data = {"type": "scenario", "scenario": scenario.model_dump()}
+                        loop.call_soon_threadsafe(lambda: asyncio.create_task(scenario_queue.put(scenario_data)))
+
+                # Run the scenario generation in a separate task
+                async def run_generation() -> list[object]:
+                    try:
+                        scenarios = await loop.run_in_executor(
+                            None,
+                            lambda: scenario_generator.generate_scenarios_streaming(
+                                character, count=request.count, mood=request.mood, persona=persona, streaming_callback=streaming_callback, scenario_callback=scenario_callback
+                            ),
+                        )
+                        return scenarios
+                    finally:
+                        # Signal completion
+                        await chunk_queue.put(None)
+                        await scenario_queue.put(None)
+
+                # Start the generation task
+                generation_task = asyncio.create_task(run_generation())
+
+                # Stream chunks and scenarios as they become available
+                chunk_done = False
+                scenario_done = False
+
+                while not (chunk_done and scenario_done):
+                    # Use asyncio.wait to handle both queues concurrently
+                    chunk_task = asyncio.create_task(chunk_queue.get()) if not chunk_done else None
+                    scenario_task = asyncio.create_task(scenario_queue.get()) if not scenario_done else None
+
+                    tasks = [task for task in [chunk_task, scenario_task] if task is not None]
+                    if not tasks:
+                        break
+
+                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+                    # Cancel pending tasks to avoid resource leaks
+                    for task in pending:
+                        task.cancel()
+
+                    for task in done:
+                        if task == chunk_task and chunk_task is not None:
+                            chunk = await chunk_task
+                            if chunk is None:  # Completion signal
+                                chunk_done = True
+                            else:
+                                # Send chunk event
+                                event_data = ScenarioGenerationStreamEvent(type="chunk", chunk=chunk)
+                                yield f"data: {event_data.model_dump_json()}\n\n"
+                        elif task == scenario_task and scenario_task is not None:
+                            scenario_data = await scenario_task
+                            if scenario_data is None:  # Completion signal
+                                scenario_done = True
+                            else:
+                                # Send scenario event
+                                yield f"data: {json.dumps(scenario_data)}\n\n"
+
+                # Wait for generation task to complete
+                await generation_task
+
+                # Send completion marker
+                complete_event = ScenarioGenerationStreamEvent(type="complete")
+                yield f"data: {complete_event.model_dump_json()}\n\n"
+
+            except Exception as e:
+                error_event = ScenarioGenerationStreamEvent(type="error", error=str(e))
+                yield f"data: {error_event.model_dump_json()}\n\n"
+
+        return StreamingResponse(
+            generate_sse_response(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process scenario generation: {str(e)}") from e
 
 
 @app.get("/api/sessions")

@@ -51,6 +51,14 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-0905")
             case "glm":
                 return OpenRouterPromptProcessor(model="z-ai/glm-4.6")
+            case "polaris":
+                return OpenRouterPromptProcessor(model="openrouter/polaris-alpha")
+            case "kimi-thinking":
+                return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-thinking")
+            case "qwen3-max":
+                return OpenRouterPromptProcessor(model="qwen/qwen3-max")
+            case "magistral-thinking":
+                return OpenRouterPromptProcessor(model="mistralai/magistral-medium-2506:thinking")
             case _:
                 raise ValueError(f"Unsupported processor type: {processor_type}")
 
@@ -72,4 +80,4 @@ class PromptProcessorFactory:
         Returns:
             List of supported processor type names
         """
-        return ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chat-v3.1", "google-flash", "google-pro", "hermes", "kimi", "glm"]
+        return ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chat-v3.1", "google-flash", "google-pro", "hermes", "kimi", "glm", "polaris", "kimi-thinking", "qwen3-max", "magistral-thinking"]

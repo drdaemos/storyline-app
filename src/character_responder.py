@@ -486,7 +486,7 @@ class CharacterResponder:
         all_messages = self.persistent_memory.get_session_messages(self.session_id, self.user_id)
         return len(all_messages)
 
-    def _load_existing_summaries(self) -> (Summary, int):
+    def _load_existing_summaries(self) -> tuple[Summary | None, int]:
         """
         Load existing summaries for the current session and concatenate them.
 
@@ -498,7 +498,7 @@ class CharacterResponder:
         # Get all summaries for this session
         summaries = self.summary_memory.get_session_summaries(self.session_id, self.user_id)
         if not summaries:
-            return "", -1  # Return -1 so that offset > -1 includes offset 0
+            return None, -1  # Return -1 so that offset > -1 includes offset 0
 
         # Concatenate all summary texts
         information: str = ""

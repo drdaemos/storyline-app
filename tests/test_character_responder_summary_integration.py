@@ -206,9 +206,10 @@ class TestCharacterResponderSummaryIntegration:
         responder = CharacterResponder(self.character, dependencies)
 
         # Verify summaries were loaded and concatenated
-        assert responder.memory_summary != ""
-        assert "First summary of early conversation" in responder.memory_summary
-        assert "Second summary of middle conversation" in responder.memory_summary
+        assert responder.memory_summary is not None
+        # Check that the Summary model contains the expected content
+        assert "First summary of early conversation" in str(responder.memory_summary.story_summary)
+        assert "Second summary of middle conversation" in str(responder.memory_summary.story_summary)
 
     def test_clear_session_removes_summaries(self):
         """Test that clearing session also removes associated summaries."""
@@ -232,7 +233,7 @@ class TestCharacterResponderSummaryIntegration:
         assert len(summaries_after) == 0
 
         # Verify memory_summary was reset
-        assert responder.memory_summary == ""
+        assert responder.memory_summary is None
 
     def test_offset_tracking_accuracy(self):
         """Test that offset tracking accurately reflects message positions."""
@@ -275,8 +276,8 @@ class TestCharacterResponderSummaryIntegration:
 
         responder = CharacterResponder(self.character, dependencies)
 
-        # Should initialize with empty memory_summary
-        assert responder.memory_summary == ""
+        # Should initialize with empty memory_summary (None when no summaries exist)
+        assert responder.memory_summary is None
 
         # Add messages to trigger compression (with proper message structure including "type")
         from datetime import UTC, datetime

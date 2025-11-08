@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -98,10 +99,19 @@ class TestChatLogger:
                 chat_logger.log_message("test", "Héllo charactér! 🌟")
                 chat_logger.log_message("character", "Héllo wörld! 🎭")
 
-                # Check that Unicode is properly stored
+                # Check that Unicode is properly stored by reading and parsing JSON
                 log_content = chat_logger.log_file_path.read_text(encoding="utf-8")
-                assert "Héllo charactér! 🌟" in log_content
-                assert "Héllo wörld! 🎭" in log_content
+                # Parse each JSON line (skip timestamp prefix)
+                lines = log_content.strip().split('\n')
+                for line in lines:
+                    # Extract JSON part after timestamp (format: "timestamp | {json}")
+                    json_part = line.split(' | ', 1)[1]
+                    parsed = json.loads(json_part)
+                    # Verify Unicode is preserved in parsed JSON
+                    if "charactér" in parsed["content"]:
+                        assert parsed["content"] == "Héllo charactér! 🌟"
+                    elif "wörld" in parsed["content"]:
+                        assert parsed["content"] == "Héllo wörld! 🎭"
             finally:
                 chat_logger.close_logger()
                 # Clean up log file

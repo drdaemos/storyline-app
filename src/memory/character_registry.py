@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from .database_config import DatabaseConfig
 from .db_models import Character
@@ -64,13 +64,14 @@ class CharacterRegistry:
 
         Args:
             character_id: Character ID to retrieve
-            user_id: ID of the user to filter character for
+            user_id: ID of the user to filter character for (also includes anonymous characters)
 
         Returns:
             Character data dictionary or None if not found
         """
         with self.db_config.create_session() as session:
-            character = session.query(Character).filter(Character.id == character_id, Character.user_id == user_id).first()
+            # Query for characters that belong to the user OR are anonymous
+            character = session.query(Character).filter(Character.id == character_id, or_(Character.user_id == user_id, Character.user_id == "anonymous")).first()
 
             if character:
                 return {
@@ -88,7 +89,7 @@ class CharacterRegistry:
         Retrieve all characters for a user, optionally filtered by schema version.
 
         Args:
-            user_id: ID of the user to filter characters for
+            user_id: ID of the user to filter characters for (also includes anonymous characters)
             schema_version: Optional schema version filter
             include_personas: Whether to include persona characters (default: False)
 
@@ -96,7 +97,8 @@ class CharacterRegistry:
             List of character data dictionaries
         """
         with self.db_config.create_session() as session:
-            query = session.query(Character).filter(Character.user_id == user_id)
+            # Query for characters that belong to the user OR are anonymous
+            query = session.query(Character).filter(or_(Character.user_id == user_id, Character.user_id == "anonymous"))
 
             if schema_version is not None:
                 query = query.filter(Character.schema_version == schema_version)
@@ -147,13 +149,14 @@ class CharacterRegistry:
         Retrieve all persona characters for a user.
 
         Args:
-            user_id: ID of the user to filter personas for
+            user_id: ID of the user to filter personas for (also includes anonymous personas)
 
         Returns:
             List of persona character data dictionaries
         """
         with self.db_config.create_session() as session:
-            query = session.query(Character).filter(Character.user_id == user_id, Character.is_persona)
+            # Query for personas that belong to the user OR are anonymous
+            query = session.query(Character).filter(or_(Character.user_id == user_id, Character.user_id == "anonymous"), Character.is_persona)
 
             characters = query.order_by(Character.updated_at.desc()).all()
 
@@ -212,5 +215,5 @@ class CharacterRegistry:
         return self.db_config.health_check()
 
     def close(self) -> None:
-        """Close the database connection (currently no-op as we use context managers)."""
-        pass
+        """Close the database connection and dispose of engine resources."""
+        self.db_config.dispose()

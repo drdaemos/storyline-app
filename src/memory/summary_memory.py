@@ -265,5 +265,5 @@ class SummaryMemory:
         return self.db_config.health_check()
 
     def close(self) -> None:
-        """Close the database connection (currently no-op as we use context managers)."""
-        pass
+        """Close the database connection and dispose of engine resources."""
+        self.db_config.dispose()

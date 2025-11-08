@@ -106,6 +106,10 @@
 
       <!-- Step 4: Scenario Selection -->
       <div v-if="currentStep === 'scenario'" class="space-y-4">
+        <div v-if="isGeneratingScenarios" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
+          <UIcon name="i-lucide-loader-2" class="w-4 h-4 animate-spin" />
+          <span>Generating more scenarios...</span>
+        </div>
         <UCard
           v-for="(scenario, index) in scenarios"
           :key="index"
@@ -182,7 +186,7 @@ const emit = defineEmits<{
 
 const { highlight } = useChatHighlight()
 const router = useRouter()
-const { generateScenarios, startSessionWithScenario } = useApi()
+const { streamGenerateScenarios, startSessionWithScenario } = useApi()
 const { settings, loadSettings } = useLocalSettings()
 const { personaOptions, personasLoading, fetchPersonas } = usePersonas()
 
@@ -207,6 +211,7 @@ const selectedScenario = ref<Scenario | null>(null)
 const expandedScenario = ref<number | null>(null)
 const selectedPersonaId = ref<string>('')
 const error = ref<string | null>(null)
+const isGeneratingScenarios = ref<boolean>(false)
 
 const selectedMoodsArray = computed(() => {
   return Object.keys(moodSelections.value).filter(key => moodSelections.value[key])
@@ -270,20 +275,49 @@ const generateScenariosForMood = async () => {
 
   currentStep.value = 'loading'
   error.value = null
+  scenarios.value = []
+  isGeneratingScenarios.value = true
 
   try {
-    const response = await generateScenarios({
-      character_name: props.characterName,
-      count: 3,
-      mood: selectedMoodsArray.value.join(', '),
-      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
-      processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor,
-    })
-
-    scenarios.value = response.scenarios
-    currentStep.value = 'scenario'
+    await streamGenerateScenarios(
+      {
+        character_name: props.characterName,
+        count: 3,
+        mood: selectedMoodsArray.value.join(', '),
+        persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
+        processor_type: settings.value.aiProcessor,
+        backup_processor_type: settings.value.backupProcessor,
+      },
+      // onChunk - for debugging or showing raw XML
+      (chunk: string) => {
+        // Optional: could show generation progress
+        console.debug('Scenario chunk:', chunk)
+      },
+      // onScenario - add scenario as it's parsed
+      (scenario: any) => {
+        scenarios.value.push(scenario)
+        // Switch to scenario view as soon as we have the first one
+        if (scenarios.value.length === 1) {
+          currentStep.value = 'scenario'
+        }
+      },
+      // onComplete
+      () => {
+        isGeneratingScenarios.value = false
+        if (scenarios.value.length > 0) {
+          currentStep.value = 'scenario'
+        } else {
+          error.value = 'No scenarios were generated'
+        }
+      },
+      // onError
+      (errorMessage: string) => {
+        isGeneratingScenarios.value = false
+        error.value = errorMessage
+      }
+    )
   } catch (err) {
+    isGeneratingScenarios.value = false
     error.value = err instanceof Error ? err.message : 'Failed to generate scenarios'
   }
 }

@@ -5,10 +5,11 @@ from pydantic import BaseModel
 
 from src.character_utils import format_character_description
 from src.chat_logger import ChatLogger
-from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, PlanGenerationInput
+from src.components.character_pipeline import CharacterPipeline, CharacterResponseInput, EvaluationInput, GetMemorySummaryInput, PlanGenerationInput
 from src.models.character import Character
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
+from src.models.summary import Summary
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -79,8 +80,15 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(evaluation_response)
 
+        summary = Summary(
+            story_information="Previous case discussion context",
+            story_summary=["Alice met with user to discuss missing person case"],
+            character_learnings=["User trusts Alice with sensitive information"],
+            narrative_overview="Investigation context with user cooperation",
+        )
+
         input_data: EvaluationInput = {
-            "summary": "Previous case discussion",
+            "summary": summary,
             "plans": "Investigate the missing person case",
             "user_message": "I need your help with something important",
             "character": self.test_character,
@@ -122,7 +130,14 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(plans_response)
 
-        input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": "Missing person case discussion", "scenario_state": "Office meeting, case files on desk"}
+        summary = Summary(
+            story_information="Missing person case discussion",
+            story_summary=["John provided case files to Alice"],
+            character_learnings=[],
+            narrative_overview="Professional case collaboration",
+        )
+
+        input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": summary, "scenario_state": "Office meeting, case files on desk"}
 
         result = CharacterPipeline.get_character_plans(mock_processor, input_data)
 
@@ -149,7 +164,14 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(plans_response)
 
-        input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": "Test summary", "scenario_state": "Test state"}
+        summary = Summary(
+            story_information="Test summary",
+            story_summary=[],
+            character_learnings=[],
+            narrative_overview="Test scenario",
+        )
+
+        input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": summary, "scenario_state": "Test state"}
 
         result = CharacterPipeline.get_character_plans(mock_processor, input_data)
 
@@ -167,8 +189,15 @@ class TestCharacterPipeline:
             backstory="A detective colleague working on cases",
         )
 
+        summary = Summary(
+            story_information="Discussion about missing person case",
+            story_summary=["John provided case files"],
+            character_learnings=[],
+            narrative_overview="Case file review",
+        )
+
         input_data: CharacterResponseInput = {
-            "summary": "Discussion about missing person case",
+            "summary": summary,
             "plans": "Continue investigating the case with the new evidence",
             "previous_response": "I understand you need help",
             "character": self.test_character,
@@ -200,6 +229,19 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(summary_response)
 
+        persona = Character(
+            name="John",
+            tagline="Detective colleague",
+            backstory="A detective colleague working on cases",
+        )
+
+        prior_summary = Summary(
+            story_information="Initial conversation",
+            story_summary=[],
+            character_learnings=[],
+            narrative_overview="First meeting",
+        )
+
         memory: list[GenericMessage] = [
             {"role": "user", "content": "I need help with a case"},
             {"role": "assistant", "content": "I can help you with that"},
@@ -207,7 +249,13 @@ class TestCharacterPipeline:
             {"role": "assistant", "content": "I see some inconsistencies"},
         ]
 
-        result = CharacterPipeline.get_memory_summary(mock_processor, memory)
+        input_data: GetMemorySummaryInput = {
+            "character": self.test_character,
+            "persona": persona,
+            "summary": prior_summary,
+        }
+
+        result = CharacterPipeline.get_memory_summary(mock_processor, memory, input_data)
 
         assert result == summary_response
 

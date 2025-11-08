@@ -180,8 +180,11 @@ class CharacterManager:
         # Validate character data
         self.validate_character_data(character_data)
 
+        # Extract is_persona flag from character data (defaults to False if not present)
+        is_persona = character_data.get("is_persona", False)
+
         # Save to database
-        return self.registry.save_character(character_id, character_data)
+        return self.registry.save_character(character_id, character_data, is_persona=is_persona)
 
     def _calculate_data_hash(self, data: dict[str, Any]) -> str:
         """Calculate a hash of character data for comparison."""
@@ -224,12 +227,15 @@ class CharacterManager:
                 # Validate file data
                 self.validate_character_data(file_data)
 
+                # Extract is_persona flag from file data (defaults to False if not present)
+                is_persona = file_data.get("is_persona", False)
+
                 # Check if character exists in database (use 'anonymous' for sync operations)
                 db_character = self.registry.get_character(character_id, "anonymous")
 
                 if db_character is None:
                     # Character doesn't exist in database - add it
-                    self.registry.save_character(character_id, file_data)
+                    self.registry.save_character(character_id, file_data, is_persona=is_persona)
                     results["added"].append(character_id)
                 else:
                     # Character exists - check if data is different
@@ -239,7 +245,7 @@ class CharacterManager:
 
                     if file_hash != db_hash:
                         # Data is different - update database
-                        self.registry.save_character(character_id, file_data)
+                        self.registry.save_character(character_id, file_data, is_persona=is_persona)
                         results["updated"].append(character_id)
                     else:
                         # Data is the same - skip

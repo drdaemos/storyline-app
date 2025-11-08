@@ -19,6 +19,7 @@ class Character(BaseModel):
     dislikes: list[str] = Field(default_factory=list, description="Things the character dislikes")
     desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
     kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
+    is_persona: bool = Field(default=False, description="Whether this character is a persona (user character)")
 
     @classmethod
     def from_dict(cls, data: dict[str, str | Any]) -> "Character":
@@ -106,3 +107,4 @@ class PartialCharacter(BaseModel):
     dislikes: list[str] = Field(default_factory=list, description="Things the character dislikes")
     desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
     kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
+    is_persona: bool = Field(default=False, description="Whether this character is a persona (user character)")

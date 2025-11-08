@@ -139,17 +139,17 @@ class TestOpenRouterPromptProcessor:
         # Mock the streaming response chunks
         chunk1 = Mock()
         chunk1.choices = [Mock()]
-        chunk1.choices[0].delta = Mock()
+        chunk1.choices[0].delta = Mock(spec=['content'])  # spec prevents hasattr from finding 'reasoning'
         chunk1.choices[0].delta.content = "Hello "
 
         chunk2 = Mock()
         chunk2.choices = [Mock()]
-        chunk2.choices[0].delta = Mock()
+        chunk2.choices[0].delta = Mock(spec=['content'])
         chunk2.choices[0].delta.content = "world"
 
         chunk3 = Mock()
         chunk3.choices = [Mock()]
-        chunk3.choices[0].delta = Mock()
+        chunk3.choices[0].delta = Mock(spec=['content'])
         chunk3.choices[0].delta.content = "!"
 
         mock_openai.return_value.chat.completions.create.return_value = iter([chunk1, chunk2, chunk3])

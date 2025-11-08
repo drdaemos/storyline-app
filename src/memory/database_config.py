@@ -92,3 +92,18 @@ class DatabaseConfig:
             return True
         except Exception:
             return False
+
+    def dispose(self) -> None:
+        """Dispose of the database engine and close all connections."""
+        if self._engine is not None:
+            self._engine.dispose()
+            self._engine = None
+            self._session_factory = None
+
+    def __del__(self) -> None:
+        """Destructor to ensure engine is disposed when object is garbage collected."""
+        try:
+            self.dispose()
+        except Exception:
+            # Ignore errors during cleanup in destructor
+            pass

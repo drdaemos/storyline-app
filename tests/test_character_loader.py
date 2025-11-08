@@ -62,6 +62,10 @@ class TestCharacterLoader:
             assert result.tagline == "Village Blacksmith"
             assert "gruff but kind blacksmith" in result.backstory
 
+            # Clean up
+            registry.close()
+            loader.registry.close()
+
     def test_load_character_file_not_found(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             loader = CharacterLoader(Path(temp_dir))

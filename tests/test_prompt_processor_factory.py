@@ -124,7 +124,7 @@ class TestPromptProcessorFactory:
     def test_get_available_processor_types(self) -> None:
         """Test getting list of available processor types."""
         types = PromptProcessorFactory.get_available_processor_types()
-        expected_types = ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chat-v3.1", "google-flash", "google-pro", "hermes", "kimi", "glm"]
+        expected_types = ["cohere", "claude-sonnet", "claude-haiku", "gpt", "gpt-4.1", "grok", "deepseek", "deepseek-chat-v3.1", "google-flash", "google-pro", "hermes", "kimi", "glm", "polaris", "kimi-thinking", "qwen3-max", "magistral-thinking"]
         assert types == expected_types
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key", "CO_API_KEY": "test_key", "OPENAI_API_KEY": "test_key"})

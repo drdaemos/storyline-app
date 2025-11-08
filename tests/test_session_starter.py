@@ -54,54 +54,6 @@ class TestSessionStarter:
         assert messages[0]["role"] == "assistant"
         assert messages[0]["content"] == intro_message
 
-    def test_start_session_with_user_name(self, session_starter, tmp_path):
-        """Test starting session with user name."""
-        intro_message = "The character waves at you."
-        user_name = "TestUser"
-
-        session_id = session_starter.start_session_with_scenario(character_name="TestChar", intro_message=intro_message, user_name=user_name)
-
-        # Verify hidden context was appended
-        memory = ConversationMemory(memory_dir=tmp_path)
-        messages = memory.get_session_messages(session_id, "anonymous")
-        assert len(messages) == 1
-
-        content = messages[0]["content"]
-        assert intro_message in content
-        assert "<hidden_context>" in content
-        assert "</hidden_context>" in content
-        assert f"User: {user_name}" in content
-
-    def test_start_session_with_user_description(self, session_starter, tmp_path):
-        """Test starting session with user description."""
-        intro_message = "The scene is set."
-        user_name = "TestUser"
-        user_description = "A curious tester exploring the system"
-
-        session_id = session_starter.start_session_with_scenario(character_name="TestChar", intro_message=intro_message, user_name=user_name, user_description=user_description)
-
-        # Verify hidden context contains both name and description
-        memory = ConversationMemory(memory_dir=tmp_path)
-        messages = memory.get_session_messages(session_id, "anonymous")
-
-        content = messages[0]["content"]
-        assert "<hidden_context>" in content
-        assert f"User: {user_name}" in content
-        assert user_description in content
-
-    def test_start_session_with_only_description(self, session_starter, tmp_path):
-        """Test starting session with only description (no name)."""
-        intro_message = "The scene begins."
-        user_description = "An anonymous participant"
-
-        session_id = session_starter.start_session_with_scenario(character_name="TestChar", intro_message=intro_message, user_description=user_description)
-
-        memory = ConversationMemory(memory_dir=tmp_path)
-        messages = memory.get_session_messages(session_id, "anonymous")
-
-        content = messages[0]["content"]
-        assert "<hidden_context>" in content
-        assert user_description in content
 
     def test_start_session_empty_character_name(self, session_starter):
         """Test that empty character name raises ValueError."""

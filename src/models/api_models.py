@@ -167,3 +167,12 @@ class CharacterCreationStreamEvent(BaseModel):
     message: str | None = Field(None, description="AI message chunk to show in chat")
     updates: PartialCharacter | None = Field(None, description="Updated character state with current values")
     error: str | None = Field(None, description="Error message if type is 'error'")
+
+
+class ScenarioGenerationStreamEvent(BaseModel):
+    """Stream event for scenario generation."""
+
+    type: str = Field(..., description="Event type: 'chunk', 'scenario', 'complete', 'error'")
+    chunk: str | None = Field(None, description="Text chunk from the AI generation (raw XML)")
+    scenario: Scenario | None = Field(None, description="Completed scenario object")
+    error: str | None = Field(None, description="Error message if type is 'error'")
