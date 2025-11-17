@@ -8,7 +8,7 @@ from src.models.character_responder_dependencies import CharacterResponderDepend
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
 from src.models.persona import create_default_persona
-from src.models.summary import Summary
+from src.models.summary import PlotTracking, RelationshipState, StorySummary, TimeState
 
 
 class EventCallback(Protocol):
@@ -355,7 +355,7 @@ class CharacterResponder:
 
         return response
 
-    def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> str:
+    def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> StorySummary:
         input: GetMemorySummaryInput = {"character": self.character, "persona": self.persona, "summary": self.memory_summary}
         try:
             summary = CharacterPipeline.get_memory_summary(processor=self.processor, memory=conversation_memory, input=input)
@@ -363,7 +363,7 @@ class CharacterResponder:
             self.chat_logger.log_exception(err)
             summary = CharacterPipeline.get_memory_summary(processor=self.backup_processor, memory=conversation_memory, input=input)
 
-        self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary)
+        self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary.to_string())
 
         return summary
 
@@ -390,7 +390,7 @@ class CharacterResponder:
         self.summary_memory.add_summary(
             character_id=self.character.name,
             session_id=self.session_id,
-            summary=new_summary,
+            summary=new_summary.model_dump_json(),
             start_offset=max(0, start_offset),  # Ensure non-negative
             end_offset=max(0, end_offset),  # Ensure non-negative
             user_id=self.user_id,
@@ -486,7 +486,7 @@ class CharacterResponder:
         all_messages = self.persistent_memory.get_session_messages(self.session_id, self.user_id)
         return len(all_messages)
 
-    def _load_existing_summaries(self) -> tuple[Summary | None, int]:
+    def _load_existing_summaries(self) -> tuple[StorySummary | None, int]:
         """
         Load existing summaries for the current session and concatenate them.
 
@@ -501,27 +501,29 @@ class CharacterResponder:
             return None, -1  # Return -1 so that offset > -1 includes offset 0
 
         # Concatenate all summary texts
-        information: str = ""
-        narrative_overview: str = ""
-        summary_events: list[str] = []
-        summary_learnings: list[str] = []
+        beats = []
+        learnings = []
+        last_summary = None
         last_summary_offset = 0
         for summary in summaries:
-            information = self._parse_xml_tag(summary["summary"], "story_information")
-            narrative_overview = self._parse_xml_tag(summary["summary"], "narrative_overview")
-            events = self._parse_xml_tag(summary["summary"], "story_summary")
-            learnings = self._parse_xml_tag(summary["summary"], "character_learnings")
-            last_summary_offset = summary["end_offset"]
-            if events:
-                summary_events.append(events)
-            if learnings:
-                summary_learnings.append(learnings)
+            try:
+                summary_model = StorySummary.model_validate_json(summary["summary"])
+                beats.extend(summary_model.story_beats)
+                learnings.extend(summary_model.user_learnings)
+                last_summary_offset = summary["end_offset"]
+                last_summary = summary_model
+            except Exception as e:
+                self.chat_logger.log_message("ERROR", f"Failed to parse summary JSON: {e}")
 
-        summary = Summary(
-            story_information=information or "",
-            story_summary=summary_events,
-            narrative_overview=narrative_overview or "",
-            character_learnings=summary_learnings,
+        summary = StorySummary(
+            time=last_summary.time if last_summary else TimeState(current_time="Unknown"),
+            relationship=last_summary.relationship if last_summary else RelationshipState(trust=5, attraction=5, emotional_intimacy=5, conflict=1, power_balance=5, relationship_label=''),
+            plot=last_summary.plot if last_summary else PlotTracking(location="uknown", notable_objects=""),
+            physical_state=last_summary.physical_state if last_summary else [],
+            emotional_state=last_summary.emotional_state if last_summary else [],
+            story_beats=beats,
+            user_learnings=learnings,
+            ai_quality_issues=last_summary.ai_quality_issues if last_summary else [],
         )
 
         return summary, last_summary_offset

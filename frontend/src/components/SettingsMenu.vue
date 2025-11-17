@@ -74,7 +74,7 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
   { label: 'Claude Haiku 4.5 ($5/M)', id: 'claude-haiku' },
   { label: 'o4-mini ($4.40/M)', id: 'gpt' },
-  { label: 'GPT-4.1 ($8/M)', id: 'gpt-4.1' },
+  { label: 'GPT-5.1 ($10/M)', id: 'gpt-5.1' },
   { label: 'Gemini 2.5 Flash ($2.50/M)', id: 'google-flash' },
   { label: 'Gemini 2.5 Pro ($10/M)', id: 'google-pro' },
   { label: 'DeepSeek R1 ($1.75/M)', id: 'deepseek' },
@@ -86,7 +86,7 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'Grok 4 Fast ($0.50/M)', id: 'grok' },
   { label: 'Hermes 4 405B ($1.20/M)', id: 'hermes' },
   { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
-  { label: 'Polaris Alpha (FREE)', id: 'polaris' },
+  { label: 'Sherlock Think Alpha (FREE)', id: 'sherlock-think' },
   { label: 'Cohere ($10/M)', id: 'cohere' },
 ])
 

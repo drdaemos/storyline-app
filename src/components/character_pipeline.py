@@ -7,11 +7,11 @@ from src.models.character import Character
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
-from src.models.summary import Summary
+from src.models.summary import StorySummary
 
 
 class EvaluationInput(TypedDict):
-    summary: Summary | None
+    summary: StorySummary | None
     plans: str
     user_message: str
     character: Character
@@ -20,18 +20,18 @@ class EvaluationInput(TypedDict):
 class PlanGenerationInput(TypedDict):
     character: Character
     user_name: str
-    summary: Summary | None
+    summary: StorySummary | None
     scenario_state: str
 
 
 class GetMemorySummaryInput(TypedDict):
     character: Character
     persona: Character
-    summary: Summary | None
+    summary: StorySummary | None
 
 
 class CharacterResponseInput(TypedDict):
-    summary: Summary | None
+    summary: StorySummary | None
     plans: str
     previous_response: str
     character: Character
@@ -369,70 +369,98 @@ Respond to the user now:
             yield buffer
 
     @staticmethod
-    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage], input: GetMemorySummaryInput) -> str:
-        developer_prompt = """Your task is to summarize and extract ONLY the essential state and critical story beats from the following exchanges.
-Be ruthlessly selective - if something doesn't change the state or story, discard it. Messages will be removed from memory after summarization, so make sure to capture important facts for the story, otherwise they will be lost.
+    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage], input: GetMemorySummaryInput) -> StorySummary:
+        developer_prompt = """You are analyzing a part of the fictional story, co-written by user and ai, to extract essential information and summarize it before messages will be removed from the memory.
+Be ruthlessly selective - if something is no longer relevant for the story's future, omit it entirely.
+You MUST NOT continue the story here - this is purely an analysis and summarization task.
 
-## Summary Structure
+Analyze exchanges and extract ONLY information that meets these criteria:
 
-<story_information>
-[For each character]
-Physical State (ONLY if changed):
- - Character positions/locations: [where they are NOW]
- - Clothing status: [what's on/off/changed]
- - Physical contact: [who's touching whom, how]
- - Injuries/physical conditions: [only lasting effects]
+**TIME TRACKING:**
+Format: Use dateparser-compatible formats (see TimeState schema)
+- Infer how much real time passed during these exchanges
+- If story uses relative days: "Day X, [time]" format
+- If story established absolute dates: "Month Day Year, [time]" format
+- Be as specific as content allows (prefer "2:30 PM" over "afternoon" if clues exist)
 
-Emotional State (ONLY major shifts):
- - [Character name]: [new emotional state if significantly different]
- - Key desires/conflicts: [only if newly revealed or resolved]
+**RELATIONSHIP TRACKING (1-10 scales):**
+Each dimension is a simple integer 1-10. Read field descriptions in schema for scale meanings.
+- Be conservative with extreme scores (1s and 10s) - reserve for truly extreme states
+- Scores should reflect cumulative relationship state, taking previous history into account
 
-Environment:
- - Location: [if changed]
- - Time progression: [exactly how much time has passed, deduce from context if not stated explicitly]
- - Objects introduced: [only if used/important]
-</story_information>
+**PLOT TRACKING:**
+- ongoing_plots: List of active plot threads as brief strings (max 4)
+  * Only include plots that are CURRENTLY active or progressed within this part
+  * Remove plots that concluded
+- resolved_outcomes: Add any plots that concluded this session with their outcomes
+  * Format: "Plot description: outcome" (e.g., "Murder investigation: suspect was victim's business partner")
+- Notable objects: only if in active use or plot-critical right now
 
-<story_summary>
-List ONLY events that would matter if the story resumed later. Maximum 5 items.
-Examples of what matters: first kiss, conflict erupted, character left, revealed secret, clothing changed, intimacy completed, injury occurred, unusual information learned
-Examples of what doesn't: character spoke, character smiled, described something, moved slightly
+**PHYSICAL STATE:**
+Must be precise enough to resume the scene without ambiguity.
+- Exact positions matter (who's where, spatial relationships)
+- Clothing status only if relevant to scene or changed
+- Physical contact: ongoing touch state (not past actions)
+- Conditions: only lasting physical effects, not momentary sensations
 
-- [Beat 1: What specifically happened that changed something]
-- [Beat 2]
-[Leave blank if nothing major happened]
+**EMOTIONAL STATE:**
+ONLY populate fields if emotions significantly shifted from baseline.
+- Leave as None if no major change
+- Be specific ("protective" not "caring", "conflicted" not "complex")
+- emotional_tension: active tension in THIS moment, not cumulative
 
-Also list facts that character has to remember for future interactions (for long-term memory).
-Examples of what matters: specific information received, promises made, facts revealed
-Examples of what to skip: deduced information, small talk, emotions, internal monologue, things already listed in character sheets or stated previously or common knowledge
-- [Important detail 1]
-- [Important detail 2]
-[Leave blank if nothing is too important to be remembered]
-</story_summary>
+**STORY BEATS (max 5):**
+Must be CONCRETE, COMPLETED actions or revelations. Not buildup, not feelings, not descriptions.
 
-<narrative_overview>
-Check for these SPECIFIC problems (only list if present):
-- Repetitive phrases: [quote the exact phrase if used 2+ times]
-- Echo/over-analysis: [if character paraphrases user's words back unnecessarily]
-- Purple prose: [if excessive metaphors/flowery language present]
-- Character sheet fixation: [if forcing character traits unnaturally]
-- Physical impossibilities: [if positions/actions don't make spatial sense]
-[Leave blank if responses were clean]
-</narrative_overview>
+Ask yourself: "If I resumed writing the story tomorrow, would I NEED to know this happened?"
 
-<character_learnings>
-OOC commands or corrections from user (be specific):
-- [Direct quote of user's instruction]
-- [What this reveals about user's preferences]
-[Leave blank if none given]
-</character_learnings>
+Types of events that count:
+- Physical actions completed (kissed, fought, left location)
+- Information revealed (confession, discovery, admission)
+- Decisions made (agreed to help, refused offer)
+- State changes (relationship status changed, alliance formed/broken)
+- Irreversible events (death, destruction, secret exposed)
 
-## Instructions
-- If a section has nothing important, write "No changes" or leave blank
-- Default to OMITTING information rather than including it
-- Never describe small talk, transitions, or descriptive narration unless plot-critical
-- Physical state must be precise enough to resume the scene (exact positions matter)
-- Story beats must be CONCRETE FACTS (e.g., "Character X kissed Character Y" not "tension built between them")
+For intimate/sexual content: Be clinically explicit about what physically occurred.
+
+What does NOT count:
+- Buildup without payoff ("tension increased")
+- Descriptions or conversations that didn't reveal new info
+- Character reactions or internal thoughts
+- Movements that didn't change the state
+
+**USER LEARNINGS:**
+Accumulate insights about user preferences from OOC commands or patterns.
+Format as clear, actionable statements:
+- "User prefers direct action over atmospheric buildup"
+- "User dislikes when character over-explains their emotions"
+- "User wants more physical descriptions during intimate scenes"
+
+Only add NEW learnings from this session.
+
+**AI QUALITY ISSUES:**
+Scan for problems in THIS session only:
+- repetitive_phrase: Same phrase used 2+ times (quote verbatim)
+- echoing_user: Character paraphrasing user input unnecessarily
+- purple_prose: Excessive metaphors/flowery language (provide example)
+- character_sheet_fixation: Forcing traits unnaturally
+- physical_impossibility: Positions that don't make spatial sense
+- over_analysis: Explaining/analyzing instead of acting
+
+Only populate if actual problems exist.
+</instructions>
+
+<critical_rules>
+1. Default to OMITTING information - None/empty list is valid
+2. Physical state must enable seamless scene resumption
+3. Story beats must be FACTUAL actions/revelations, never interpretations
+4. Relationship scores should be thoughtful - don't default to 5
+5. Time must be in dateparser-compatible format
+6. When uncertain if something qualifies: it probably doesn't - omit it
+7. ongoing_plots should only include active threads, not everything ever mentioned
+</critical_rules>
+
+Return your analysis as a structured JSON object matching the StorySummary schema.
 
 ## Main characters (don't mention anything from character sheets, just use as reference)
 
@@ -440,7 +468,7 @@ OOC commands or corrections from user (be specific):
 
 {character_card}
 
-## Prior story history
+## Previous story summary
 
 {summary}
 """
@@ -452,10 +480,10 @@ OOC commands or corrections from user (be specific):
             "summary": input["summary"].to_string() if input["summary"] else "No prior summary available.",
         }
 
-        user_prompt = "\n".join(f"{message['role']}: {message['content']}" for message in memory)
+        user_prompt = "## New part of the story to summarize\n\n" + "\n\n".join(f"{message['role']}: {message['content']}" for message in memory)
 
         # Process the prompt
-        summary = processor.respond_with_text(prompt=developer_prompt.format(**variables), user_prompt=user_prompt)
+        summary = processor.respond_with_model(prompt=developer_prompt.format(**variables), user_prompt=user_prompt, output_type=StorySummary)
 
         return summary
 

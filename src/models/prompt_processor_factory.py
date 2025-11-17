@@ -33,8 +33,8 @@ class PromptProcessorFactory:
                 return ClaudePromptProcessor(model="claude-haiku-4-5")
             case "gpt":
                 return OpenAiPromptProcessor()
-            case "gpt-4.1":
-                return OpenAiPromptProcessor(model="gpt-4.1")
+            case "gpt-5.1":
+                return OpenRouterPromptProcessor(model="openai/gpt-5.1-chat")
             case "grok":
                 return OpenRouterPromptProcessor(model="x-ai/grok-4-fast")
             case "deepseek":
@@ -51,8 +51,8 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-0905")
             case "glm":
                 return OpenRouterPromptProcessor(model="z-ai/glm-4.6")
-            case "polaris":
-                return OpenRouterPromptProcessor(model="openrouter/polaris-alpha")
+            case "sherlock-think":
+                return OpenRouterPromptProcessor(model="openrouter/sherlock-think-alpha")
             case "kimi-thinking":
                 return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-thinking")
             case "qwen3-max":
