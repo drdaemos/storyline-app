@@ -44,7 +44,7 @@ class PromptProcessorFactory:
             case "google" | "google-flash":
                 return OpenRouterPromptProcessor(model="google/gemini-2.5-flash")
             case "google-pro":
-                return OpenRouterPromptProcessor(model="google/gemini-2.5-pro")
+                return OpenRouterPromptProcessor(model="google/gemini-3-pro-preview")
             case "hermes":
                 return OpenRouterPromptProcessor(model="nousresearch/hermes-4-405b")
             case "kimi":

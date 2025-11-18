@@ -76,7 +76,7 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'o4-mini ($4.40/M)', id: 'gpt' },
   { label: 'GPT-5.1 ($10/M)', id: 'gpt-5.1' },
   { label: 'Gemini 2.5 Flash ($2.50/M)', id: 'google-flash' },
-  { label: 'Gemini 2.5 Pro ($10/M)', id: 'google-pro' },
+  { label: 'Gemini 3 Pro Preview ($12/M)', id: 'google-pro' },
   { label: 'DeepSeek R1 ($1.75/M)', id: 'deepseek' },
   { label: 'DeepSeek Chat V3.1 ($1.00/M)', id: 'deepseek-chat-v3.1' },
   { label: 'Kimi K2 ($1.90/M)', id: 'kimi' },

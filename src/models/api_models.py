@@ -104,7 +104,7 @@ class Scenario(BaseModel):
     """Model for a scenario with a description."""
 
     summary: str = Field(..., min_length=1, description="Short engaging, striking name for the scenario (take inspiration from series or book chapter titles)")
-    intro_message: str = Field(..., min_length=1, description="Complete introductory message to set the scene in the role-play chat")
+    intro_message: str = Field(..., min_length=1, description="Complete introductory message to set the scene in the story")
     narrative_category: str = Field(..., min_length=1, description="Short label for both the genre and tone of the scenario + the level of twistedness of the story")
 
 
