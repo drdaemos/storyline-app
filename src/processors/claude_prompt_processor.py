@@ -2,7 +2,7 @@ import os
 from collections.abc import Iterable, Iterator
 from typing import TypeVar
 
-from anthropic import Anthropic
+from anthropic import Anthropic, transform_schema
 from anthropic.types import MessageParam, TextBlockParam
 from pydantic import BaseModel
 
@@ -165,13 +165,16 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         """Process prompt and return structured Pydantic model."""
         max_tokens = max_tokens or 4096
 
-        response = self.client.messages.create(
+        response = self.client.beta.messages.create(
             model=self.model,
             system=system_prompt,
             messages=messages,
             max_tokens=max_tokens,
-            tools=[{"name": "structured_output", "description": "Return structured data according to the schema", "input_schema": output_type.model_json_schema()}],
-            tool_choice={"type": "tool", "name": "structured_output"},
+            betas=["structured-outputs-2025-11-13"],
+            output_format={
+                "type": "json_schema",
+                "schema": transform_schema(output_type),
+            }
         )
 
         if not response.content or len(response.content) == 0:
