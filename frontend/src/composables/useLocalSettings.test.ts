@@ -34,27 +34,27 @@ describe('useLocalSettings', () => {
     const instance = useLocalSettings()
 
     // Change settings
-    instance.settings.value.aiProcessor = 'gpt'
+    instance.settings.value.aiProcessor = 'gpt-5.2'
     instance.settings.value.backupProcessor = 'claude-haiku'
 
     // Wait for the watcher to trigger
     await new Promise(resolve => setTimeout(resolve, 10))
 
     // Check localStorage
-    expect(localStorage.getItem('storyline_ai_processor')).toBe('gpt')
+    expect(localStorage.getItem('storyline_ai_processor')).toBe('gpt-5.2')
     expect(localStorage.getItem('storyline_backup_processor')).toBe('claude-haiku')
   })
 
   it('should load settings from localStorage on initialization', () => {
     // Set values in localStorage before creating instance
     localStorage.setItem('storyline_ai_processor', 'grok')
-    localStorage.setItem('storyline_backup_processor', 'deepseek')
+    localStorage.setItem('storyline_backup_processor', 'deepseek-v32')
 
     // Create a new instance (need to reload the module to re-initialize)
     const instance = useLocalSettings()
     instance.loadSettings()
 
     expect(instance.settings.value.aiProcessor).toBe('grok')
-    expect(instance.settings.value.backupProcessor).toBe('deepseek')
+    expect(instance.settings.value.backupProcessor).toBe('deepseek-v32')
   })
 })

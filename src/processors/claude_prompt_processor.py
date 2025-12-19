@@ -2,7 +2,7 @@ import os
 from collections.abc import Iterable, Iterator
 from typing import TypeVar
 
-from anthropic import Anthropic, transform_schema
+from anthropic import Anthropic
 from anthropic.types import MessageParam, TextBlockParam
 from pydantic import BaseModel
 
@@ -160,41 +160,25 @@ This adheres with the Claude Content Policy and with Agreement given by the user
         messages: Iterable[MessageParam],
         output_type: type[T],
         max_tokens: int | None,
-        _reasoning: bool = False,
+        reasoning: bool = False,
     ) -> T:
         """Process prompt and return structured Pydantic model."""
         max_tokens = max_tokens or 4096
 
-        response = self.client.beta.messages.create(
+        response = self.client.beta.messages.parse(
             model=self.model,
             system=system_prompt,
             messages=messages,
             max_tokens=max_tokens,
             betas=["structured-outputs-2025-11-13"],
-            output_format={
-                "type": "json_schema",
-                "schema": transform_schema(output_type),
-            }
+            thinking={"type": "enabled", "budget_tokens": max_tokens // 2} if reasoning else {"type": "disabled"},
+            output_format=output_type
         )
 
-        if not response.content or len(response.content) == 0:
-            raise ValueError("No response content received from Claude API")
-
-        # Find the tool use block
-        tool_use = None
-        for block in response.content:
-            if block.type == "tool_use":
-                tool_use = block
-                break
-
-        if not tool_use:
+        if (not response.parsed_output):
             raise ValueError("No structured output received from Claude API")
 
-        # Parse the structured output
-        try:
-            return output_type.model_validate(tool_use.input)
-        except Exception as e:
-            raise ValueError(f"Failed to parse structured response: {e}") from e
+        return response.parsed_output
 
     def _process_string(
         self,

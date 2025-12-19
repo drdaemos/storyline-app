@@ -4,8 +4,8 @@ import type { LocalSettings } from '@/types'
 const STORAGE_PREFIX = 'storyline_'
 
 const defaultSettings: LocalSettings = {
-  aiProcessor: 'google',
-  backupProcessor: 'deepseek',
+  aiProcessor: 'google-flash',
+  backupProcessor: 'deepseek-v32',
   lastSelectedCharacter: undefined,
   selectedPersonaId: undefined,
 }

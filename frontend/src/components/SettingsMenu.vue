@@ -71,23 +71,20 @@ const { settings, clearSettings } = useLocalSettings()
 const { personaOptions, personasLoading, fetchPersonas } = usePersonas()
 
 const processorOptions = ref<SelectItem[]>([
-  { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
   { label: 'Claude Haiku 4.5 ($5/M)', id: 'claude-haiku' },
-  { label: 'o4-mini ($4.40/M)', id: 'gpt' },
-  { label: 'GPT-5.1 ($10/M)', id: 'gpt-5.1' },
-  { label: 'Gemini 2.5 Flash ($2.50/M)', id: 'google-flash' },
-  { label: 'Gemini 3 Pro Preview ($12/M)', id: 'google-pro' },
-  { label: 'DeepSeek R1 ($1.75/M)', id: 'deepseek' },
-  { label: 'DeepSeek Chat V3.1 ($1.00/M)', id: 'deepseek-chat-v3.1' },
+  { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
+  { label: 'Claude Opus 4.5 ($25/M)', id: 'claude-opus' },
+  { label: 'GPT-5.2 Chat ($14/M)', id: 'gpt-5.2' },
+  { label: 'Gemini 3 Flash ($3/M)', id: 'google-flash' },
+  { label: 'Gemini 3 Pro ($12/M)', id: 'google-pro' },
+  { label: 'DeepSeek V3.2 ($0.41/M)', id: 'deepseek-v32' },
   { label: 'Kimi K2 ($1.90/M)', id: 'kimi' },
-  { label: 'Kimi K2 Thinking ($2.25/M)', id: 'kimi-thinking' },
-  { label: 'Qwen3 Max ($6/M)', id: 'qwen3-max' },
-  { label: 'Magistral Medium Thinking ($5/M)', id: 'magistral-thinking' },
-  { label: 'Grok 4 Fast ($0.50/M)', id: 'grok' },
-  { label: 'Hermes 4 405B ($1.20/M)', id: 'hermes' },
+  { label: 'Kimi K2 Thinking ($2.35/M)', id: 'kimi-thinking' },
+  { label: 'Mistral Small Creative ($0.30/M)', id: 'mistral' },
+  { label: 'Drummer Cydonia ($0.50/M)', id: 'cydonia' },
+  { label: 'Grok 4.1 Fast ($0.50/M)', id: 'grok' },
   { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
-  { label: 'Sherlock Think Alpha (FREE)', id: 'sherlock-think' },
-  { label: 'Cohere ($10/M)', id: 'cohere' },
+  { label: 'Cohere Command A ($10/M)', id: 'cohere' },
 ])
 
 onMounted(() => {

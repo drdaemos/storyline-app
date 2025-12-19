@@ -26,7 +26,7 @@ class StreamingCallback(Protocol):
 class CharacterResponder:
     """Character responder that uses PromptProcessor to handle character interactions with XML tag parsing."""
 
-    RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 6
+    RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER = 1
     EPOCH_MESSAGES = 2
     PROPAGATED_MEMORY_SIZE = RESPONSES_COUNT_FOR_SUMMARIZATION_TRIGGER * EPOCH_MESSAGES
 
