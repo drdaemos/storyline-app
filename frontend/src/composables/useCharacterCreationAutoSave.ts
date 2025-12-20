@@ -6,14 +6,19 @@ const STORAGE_KEY_MESSAGES = 'character-creation-messages'
 
 export function useCharacterCreationAutoSave(
   characterData: Partial<Character>,
-  messages: Ref<ChatMessage[]>
+  messages: Ref<ChatMessage[]>,
+  storageKeyPrefix?: string
 ) {
+  // Allow custom storage keys for different use cases (e.g., scenario creation)
+  const dataKey = storageKeyPrefix ? `${storageKeyPrefix}-draft` : STORAGE_KEY_CHARACTER
+  const messagesKey = storageKeyPrefix ? `${storageKeyPrefix}-messages` : STORAGE_KEY_MESSAGES
+
   const autoSaveStatus = ref<'saved' | 'idle'>('idle')
 
   const saveToLocalStorage = () => {
     try {
-      localStorage.setItem(STORAGE_KEY_CHARACTER, JSON.stringify(characterData))
-      localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages.value))
+      localStorage.setItem(dataKey, JSON.stringify(characterData))
+      localStorage.setItem(messagesKey, JSON.stringify(messages.value))
       autoSaveStatus.value = 'saved'
     } catch (err) {
       console.error('Failed to save to localStorage:', err)
@@ -22,8 +27,8 @@ export function useCharacterCreationAutoSave(
 
   const loadFromLocalStorage = () => {
     try {
-      const savedCharacter = localStorage.getItem(STORAGE_KEY_CHARACTER)
-      const savedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES)
+      const savedCharacter = localStorage.getItem(dataKey)
+      const savedMessages = localStorage.getItem(messagesKey)
 
       if (savedCharacter) {
         const parsed = JSON.parse(savedCharacter)
@@ -47,8 +52,8 @@ export function useCharacterCreationAutoSave(
 
   const clearLocalStorage = () => {
     try {
-      localStorage.removeItem(STORAGE_KEY_CHARACTER)
-      localStorage.removeItem(STORAGE_KEY_MESSAGES)
+      localStorage.removeItem(dataKey)
+      localStorage.removeItem(messagesKey)
     } catch (err) {
       console.error('Failed to clear localStorage:', err)
     }

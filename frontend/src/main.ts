@@ -37,6 +37,12 @@ const routes = [
     component: CharacterCreationView,
   },
   {
+    path: '/character/:characterId/edit',
+    name: 'edit-character',
+    component: CharacterCreationView,
+    props: true,
+  },
+  {
     path: '/character/:characterId/create-scenario',
     name: 'create-scenario',
     component: ScenarioCreationView,

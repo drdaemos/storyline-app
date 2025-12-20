@@ -189,3 +189,97 @@ backstory: [unclosed bracket
 
         assert filename1 == "test_character_a"
         assert filename2 == "test_character_b"
+
+    def test_update_character_success(self):
+        """Test successful character update."""
+        # Create initial character
+        initial_data = {
+            "name": "Test Character",
+            "tagline": "Initial Role",
+            "backstory": "Initial backstory",
+            "personality": "Initial personality",
+        }
+        character_id = self.character_manager.create_character_file(initial_data)
+
+        # Update character data
+        updated_data = {
+            "name": "Test Character",
+            "tagline": "Updated Role",
+            "backstory": "Updated backstory",
+            "personality": "Updated personality",
+        }
+        result_id = self.character_manager.update_character(character_id, updated_data)
+
+        # Check that character_id remains the same
+        assert result_id == character_id
+
+        # Verify file was updated
+        character_file = Path(self.temp_dir) / f"{character_id}.yaml"
+        assert character_file.exists()
+
+        with open(character_file) as f:
+            saved_data = yaml.safe_load(f)
+
+        assert saved_data["tagline"] == "Updated Role"
+        assert saved_data["backstory"] == "Updated backstory"
+        assert saved_data["personality"] == "Updated personality"
+
+    def test_update_character_with_name_change_raises_error(self):
+        """Test that updating character with name change raises ValueError."""
+        # Create initial character
+        initial_data = {
+            "name": "Original Name",
+            "tagline": "Test Role",
+            "backstory": "Test backstory",
+        }
+        original_id = self.character_manager.create_character_file(initial_data)
+
+        # Try to update with new name - should raise ValueError
+        updated_data = {
+            "name": "New Name",
+            "tagline": "Updated Role",
+            "backstory": "Updated backstory",
+        }
+
+        with pytest.raises(ValueError, match="Character name cannot be changed during update"):
+            self.character_manager.update_character(original_id, updated_data)
+
+        # Original file should still exist unchanged
+        original_file = Path(self.temp_dir) / f"{original_id}.yaml"
+        assert original_file.exists()
+
+        with open(original_file) as f:
+            saved_data = yaml.safe_load(f)
+
+        assert saved_data["name"] == "Original Name"
+
+    def test_update_character_not_found(self):
+        """Test updating non-existent character."""
+        updated_data = {
+            "name": "Test Character",
+            "tagline": "Test Role",
+            "backstory": "Test backstory",
+        }
+
+        with pytest.raises(FileNotFoundError, match="Character 'nonexistent' not found in database"):
+            self.character_manager.update_character("nonexistent", updated_data)
+
+    def test_update_character_invalid_data(self):
+        """Test updating character with invalid data."""
+        # Create initial character
+        initial_data = {
+            "name": "Test Character",
+            "tagline": "Test Role",
+            "backstory": "Test backstory",
+        }
+        character_id = self.character_manager.create_character_file(initial_data)
+
+        # Try to update with invalid data (missing required field)
+        invalid_data = {
+            "name": "Test Character",
+            "tagline": "Updated Role",
+            # Missing backstory
+        }
+
+        with pytest.raises(ValueError, match="Missing required fields"):
+            self.character_manager.update_character(character_id, invalid_data)

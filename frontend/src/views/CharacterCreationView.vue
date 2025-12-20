@@ -1,10 +1,10 @@
 <template>
   <!-- Header -->
   <div class="flex mb-8 gap-4 items-center justify-between">
-    <h2 class="text-3xl font-bold font-serif">Create New Character</h2>
+    <h2 class="text-3xl font-bold font-serif">{{ isEditMode ? 'Edit Character' : 'Create New Character' }}</h2>
     <div class="flex items-center gap-3">
-      <!-- Auto-save indicator -->
-      <div v-if="autoSaveStatus !== 'idle'" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+      <!-- Auto-save indicator (only in create mode) -->
+      <div v-if="!isEditMode && autoSaveStatus !== 'idle'" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
         <UIcon
           :name="autoSaveStatus === 'saving' ? 'i-lucide-loader-circle' : 'i-lucide-check-circle'"
           :class="['w-4 h-4', autoSaveStatus === 'saving' && 'animate-spin']"
@@ -144,6 +144,7 @@
                   size="lg"
                   variant="ghost"
                   class="w-full"
+                  :disabled="isEditMode"
                 />
               </UFormField>
               <UFormField>
@@ -478,6 +479,7 @@
               Cancel
             </UButton>
             <UButton
+              v-if="!isEditMode"
               color="neutral"
               variant="outline"
               :disabled="!isCharacterValid || saving"
@@ -492,7 +494,7 @@
               :loading="saving"
               @click="() => saveCharacter(false)"
             >
-              Create Character
+              {{ isEditMode ? 'Update Character' : 'Create Character' }}
             </UButton>
           </div>
       </div>
@@ -509,10 +511,16 @@ import { useCharacterCreationAutoSave } from '@/composables/useCharacterCreation
 import { usePersonas } from '@/composables/usePersonas'
 import type { Character, ChatMessage, CharacterCreationRequest } from '@/types'
 
+const props = defineProps<{
+  characterId?: string
+}>()
+
 const router = useRouter()
-const { streamCharacterCreation, createCharacter } = useApi()
+const { streamCharacterCreation, createCharacter, updateCharacter, getCharacterInfo } = useApi()
 const { settings } = useLocalSettings()
 const { fetchPersonas } = usePersonas()
+
+const isEditMode = computed(() => !!props.characterId)
 
 const userInput = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -543,48 +551,138 @@ const characterData = reactive<Partial<Character>>({
 
 const relationshipsList = ref<RelationshipItem[]>([])
 
-// Auto-save functionality
-const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } =
-  useCharacterCreationAutoSave(characterData, messages)
+// Auto-save functionality (only for create mode, not edit mode)
+const autoSaveEnabled = !isEditMode.value
+const autoSaveFunctions = autoSaveEnabled
+  ? useCharacterCreationAutoSave(characterData, messages)
+  : {
+      autoSaveStatus: ref<'saved' | 'idle'>('idle'),
+      saveToLocalStorage: () => {},
+      loadFromLocalStorage: () => false,
+      clearLocalStorage: () => {}
+    }
 
-// Load saved state on mount
-onMounted(() => {
-  loadFromLocalStorage()
+const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } = autoSaveFunctions
+
+// Load saved state or character data on mount
+onMounted(async () => {
+  if (isEditMode.value && props.characterId) {
+    // Load existing character data for editing
+    try {
+      const characterInfo = await getCharacterInfo(props.characterId)
+
+      // Populate characterData with all loaded fields
+      Object.assign(characterData, {
+        name: characterInfo.name || '',
+        tagline: characterInfo.tagline || '',
+        backstory: characterInfo.backstory || '',
+        personality: characterInfo.personality || '',
+        appearance: characterInfo.appearance || '',
+        setting_description: characterInfo.setting_description || '',
+        relationships: characterInfo.relationships || {},
+        key_locations: characterInfo.key_locations || [],
+        interests: characterInfo.interests || [],
+        dislikes: characterInfo.dislikes || [],
+        desires: characterInfo.desires || [],
+        kinks: characterInfo.kinks || [],
+      })
+
+      // Populate relationshipsList from relationships object
+      if (characterInfo.relationships) {
+        relationshipsList.value = Object.entries(characterInfo.relationships).map(([name, description]) => ({
+          name,
+          description: description as string,
+        }))
+      }
+    } catch (err) {
+      error.value = (err as any)?.message || 'Failed to load character data'
+    }
+  } else {
+    // Load from localStorage for new character creation
+    loadFromLocalStorage()
+  }
 })
 
 // Reset functionality
-const resetCharacterCreation = () => {
-  // Confirm before resetting
-  if (!confirm('Are you sure you want to reset? All progress will be lost.')) {
-    return
+const resetCharacterCreation = async () => {
+  // Different behavior for edit mode vs create mode
+  if (isEditMode.value && props.characterId) {
+    // In edit mode: reload from server
+    if (!confirm('Are you sure you want to discard your changes? This will reload the character from the server.')) {
+      return
+    }
+
+    try {
+      const characterInfo = await getCharacterInfo(props.characterId)
+
+      // Reload character data
+      Object.assign(characterData, {
+        name: characterInfo.name || '',
+        tagline: characterInfo.tagline || '',
+        backstory: characterInfo.backstory || '',
+        personality: characterInfo.personality || '',
+        appearance: characterInfo.appearance || '',
+        setting_description: characterInfo.setting_description || '',
+        relationships: characterInfo.relationships || {},
+        key_locations: characterInfo.key_locations || [],
+        interests: characterInfo.interests || [],
+        dislikes: characterInfo.dislikes || [],
+        desires: characterInfo.desires || [],
+        kinks: characterInfo.kinks || [],
+      })
+
+      // Reload relationshipsList
+      if (characterInfo.relationships) {
+        relationshipsList.value = Object.entries(characterInfo.relationships).map(([name, description]) => ({
+          name,
+          description: description as string,
+        }))
+      } else {
+        relationshipsList.value = []
+      }
+
+      // Clear messages and other state
+      messages.value = []
+      error.value = ''
+      userInput.value = ''
+    } catch (err) {
+      error.value = (err as any)?.message || 'Failed to reload character data'
+    }
+  } else {
+    // In create mode: clear everything
+    if (!confirm('Are you sure you want to reset? All progress will be lost.')) {
+      return
+    }
+
+    // Clear character data
+    Object.assign(characterData, {
+      name: '',
+      tagline: '',
+      backstory: '',
+      personality: '',
+      appearance: '',
+      relationships: {},
+      key_locations: [],
+      setting_description: '',
+      interests: [],
+      dislikes: [],
+      desires: [],
+      kinks: [],
+    })
+
+    // Clear relationshipsList
+    relationshipsList.value = []
+
+    // Clear messages
+    messages.value = []
+
+    // Clear localStorage
+    clearLocalStorage()
+
+    // Reset other state
+    error.value = ''
+    userInput.value = ''
   }
-
-  // Clear character data
-  Object.assign(characterData, {
-    name: '',
-    tagline: '',
-    backstory: '',
-    personality: '',
-    appearance: '',
-    relationships: {},
-    key_locations: [],
-    setting_description: '',
-    interests: [],
-    dislikes: [],
-    desires: [],
-    kinks: [],
-  })
-
-  // Clear messages
-  messages.value = []
-
-  // Clear localStorage
-  clearLocalStorage()
-
-  // Reset other state
-  error.value = ''
-  userInput.value = ''
-  relationshipsList.value = []
 }
 
 // Watch for relationships changes and sync with characterData
@@ -712,11 +810,21 @@ const saveCharacter = async (isPersona: boolean = false) => {
 
   saving.value = true
   try {
-    await createCharacter({
-      data: characterData as Character,
-      is_yaml_text: false,
-      is_persona: isPersona,
-    })
+    if (isEditMode.value && props.characterId) {
+      // Update existing character
+      await updateCharacter(props.characterId, {
+        data: characterData as Character,
+        is_yaml_text: false,
+        is_persona: isPersona,
+      })
+    } else {
+      // Create new character
+      await createCharacter({
+        data: characterData as Character,
+        is_yaml_text: false,
+        is_persona: isPersona,
+      })
+    }
 
     // If saved as persona, refetch personas to update the list
     if (isPersona) {
@@ -726,10 +834,14 @@ const saveCharacter = async (isPersona: boolean = false) => {
     // Clear localStorage after successful save
     clearLocalStorage()
 
-    // Navigate back with success
-    router.push('/')
+    // Navigate back
+    if (isEditMode.value && props.characterId) {
+      router.push(`/character/${props.characterId}`)
+    } else {
+      router.push('/')
+    }
   } catch (err) {
-    error.value = (err as any)?.message || 'Failed to create character'
+    error.value = (err as any)?.message || `Failed to ${isEditMode.value ? 'update' : 'create'} character`
   } finally {
     saving.value = false
   }

@@ -152,6 +152,56 @@ class CharacterManager:
 
         return self.registry.save_character(character_id, character_data, schema_version, user_id, is_persona)
 
+    def update_character(self, character_id: str, character_data: dict[str, Any], user_id: str = "anonymous") -> str:
+        """
+        Update an existing character's data in both file and database.
+        Character name cannot be changed during update to prevent ID conflicts.
+
+        Args:
+            character_id: Character ID (filename without extension)
+            character_data: Updated character data dictionary
+            user_id: ID of the user (defaults to 'anonymous')
+
+        Returns:
+            The character_id of the updated character (will always be the same as input)
+
+        Raises:
+            FileNotFoundError: If character file or database entry not found
+            ValueError: If character validation fails or name change is attempted
+        """
+        # Get existing character from database first
+        existing_character = self.registry.get_character(character_id, user_id)
+        if existing_character is None:
+            raise FileNotFoundError(f"Character '{character_id}' not found in database")
+
+        # Validate the data
+        self.validate_character_data(character_data)
+
+        # Create Character object to ensure compatibility
+        character = Character.from_dict(character_data)
+
+        # Check if the character name matches the expected name
+        new_filename = self._sanitize_filename(character.name)
+        if new_filename != character_id:
+            existing_name = existing_character.get("character_data", {}).get("name", "")
+            raise ValueError(
+                f"Character name cannot be changed during update. "
+                f"Expected name to resolve to '{character_id}' but got '{new_filename}'. "
+                f"Original name: '{existing_name}'"
+            )
+
+        is_persona = existing_character.get("is_persona", False)
+
+        # Update the YAML file
+        character_file = self.characters_dir / f"{character_id}.yaml"
+        with open(character_file, "w", encoding="utf-8") as file:
+            yaml.dump(character_data, file, default_flow_style=False, allow_unicode=True)
+
+        # Update database
+        self.save_character_to_database(character_id, character_data, user_id=user_id, is_persona=is_persona)
+
+        return character_id
+
     def load_character_from_file_to_database(self, character_id: str) -> bool:
         """
         Load character from file and save to database.

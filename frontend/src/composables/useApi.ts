@@ -114,6 +114,16 @@ export function useApi() {
     })
   }
 
+  const updateCharacter = async (
+    characterId: string,
+    payload: CreateCharacterRequest
+  ): Promise<CreateCharacterResponse> => {
+    return makeRequest<CreateCharacterResponse>(`/api/characters/${characterId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  }
+
   const generateCharacter = async (
     payload: GenerateCharacterRequest
   ): Promise<GenerateCharacterResponse> => {
@@ -521,6 +531,7 @@ export function useApi() {
     getCharacterInfo,
     getSessions,
     createCharacter,
+    updateCharacter,
     generateCharacter,
     deleteSession,
     handleInteraction,

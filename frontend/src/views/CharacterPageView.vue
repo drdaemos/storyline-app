@@ -49,7 +49,16 @@
           </span>
         </template>
       </UAvatar>
-      <h2 class="text-2xl font-bold font-serif">{{ characterInfo?.name }}</h2>
+      <div class="flex items-center justify-center gap-3">
+        <h2 class="text-2xl font-bold font-serif">{{ characterInfo?.name }}</h2>
+        <UButton
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-pencil"
+          size="sm"
+          @click="navigateToEdit"
+        />
+      </div>
       <p v-if="characterInfo?.role" class="text-gray-600 dark:text-gray-400 mt-1">
         {{ characterInfo.role }}
       </p>
@@ -153,6 +162,10 @@ const loadCharacterData = async () => {
 
 const navigateBack = () => {
   router.push({ name: 'start' })
+}
+
+const navigateToEdit = () => {
+  router.push({ name: 'edit-character', params: { characterId: characterId.value } })
 }
 
 const navigateToChat = (sessionId: string) => {

@@ -129,21 +129,15 @@ async def list_personas(user_id: UserIdDep) -> list[CharacterSummary]:
 
 
 @app.get("/api/characters/{character_name}")
-async def get_character_info(character_name: str, user_id: UserIdDep) -> dict[str, str]:
+async def get_character_info(character_name: str, user_id: UserIdDep) -> dict:
     """Get information about a specific character."""
     try:
         character_info = character_loader.get_character_info(character_name, user_id)
         if not character_info:
             raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
 
-        return {
-            "name": character_info.name,
-            "tagline": character_info.tagline,
-            "backstory": character_info.backstory,
-            "personality": character_info.personality,
-            "appearance": character_info.appearance,
-            "setting_description": character_info.setting_description or "Not specified",
-        }
+        # Return full character data as dict
+        return character_info.model_dump()
     except HTTPException:
         raise
     except Exception as e:
@@ -174,6 +168,32 @@ async def create_character(request: CreateCharacterRequest, user_id: UserIdDep) 
         raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}") from e
+
+
+@app.put("/api/characters/{character_id}")
+async def update_character(character_id: str, request: CreateCharacterRequest, user_id: UserIdDep) -> CreateCharacterResponse:
+    """Update an existing character's data."""
+    try:
+        # Delegate to service layer
+        if request.is_yaml_text:
+            if not isinstance(request.data, str):
+                raise HTTPException(status_code=400, detail="When is_yaml_text is true, data must be a string")
+            character_data = character_manager.validate_yaml_text(request.data)
+        else:
+            if not isinstance(request.data, Character):
+                raise HTTPException(status_code=400, detail="When is_yaml_text is false, data must be structured character data")
+            character_data = request.data.model_dump()
+
+        updated_character_id = character_manager.update_character(character_id, character_data, user_id=user_id)
+
+        return CreateCharacterResponse(message=f"Character '{character_data['name']}' updated successfully", character_filename=updated_character_id)
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update character: {str(e)}") from e
 
 
 @app.post("/api/characters/generate")

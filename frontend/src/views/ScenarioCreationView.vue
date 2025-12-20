@@ -14,6 +14,14 @@
       </UBadge>
     </div>
     <div class="flex items-center gap-3">
+      <!-- Auto-save indicator -->
+      <div v-if="autoSaveStatus !== 'idle'" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <UIcon
+          :name="autoSaveStatus === 'saving' ? 'i-lucide-loader-circle' : 'i-lucide-check-circle'"
+          :class="['w-4 h-4', autoSaveStatus === 'saving' && 'animate-spin']"
+        />
+        <span>{{ autoSaveStatus === 'saving' ? 'Saving...' : 'Saved' }}</span>
+      </div>
       <!-- Reset button -->
       <UButton
         color="neutral"
@@ -359,6 +367,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { usePersonas } from '@/composables/usePersonas'
+import { useCharacterCreationAutoSave } from '@/composables/useCharacterCreationAutoSave'
 import type { PartialScenario, ChatMessage, ScenarioCreationRequest, PersonaSummary, Scenario } from '@/types'
 
 const router = useRouter()
@@ -396,6 +405,10 @@ const scenarioData = reactive<PartialScenario>({
   suggested_persona_reason: '',
 })
 
+// Auto-save functionality (using separate localStorage keys for scenarios)
+const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } =
+  useCharacterCreationAutoSave(scenarioData as any, messages, 'scenario-creation')
+
 // Build available personas list for API
 const availablePersonas = computed<PersonaSummary[]>(() => {
   return personas.value.map(p => ({
@@ -408,6 +421,9 @@ const availablePersonas = computed<PersonaSummary[]>(() => {
 
 // Load character info and personas on mount
 onMounted(async () => {
+  // Load from localStorage first
+  loadFromLocalStorage()
+
   if (characterId.value) {
     scenarioData.character_id = characterId.value
     try {
@@ -470,6 +486,9 @@ const resetScenarioCreation = () => {
 
   // Clear messages
   messages.value = []
+
+  // Clear localStorage
+  clearLocalStorage()
 
   // Reset other state
   error.value = ''
@@ -540,6 +559,8 @@ const sendMessage = async () => {
           messages.value.splice(aiMessageIndex, 1)
         }
         isThinking.value = false
+        // Auto-save after AI interaction completes
+        saveToLocalStorage()
       },
       // onError callback
       (errorMessage: string) => {
@@ -581,6 +602,9 @@ const saveAndReturnToCharacter = async () => {
 
     await saveScenario({ scenario: scenarioToSave })
 
+    // Clear localStorage after successful save
+    clearLocalStorage()
+
     // Navigate back to character page
     router.push({ name: 'character', params: { characterId: characterId.value } })
   } catch (err) {
@@ -621,6 +645,9 @@ const startSessionWithCurrentScenario = async () => {
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })
+
+    // Clear localStorage after successful save
+    clearLocalStorage()
 
     // Navigate to chat
     router.push({
