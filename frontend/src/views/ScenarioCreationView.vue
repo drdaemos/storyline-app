@@ -595,6 +595,24 @@ const startSessionWithCurrentScenario = async () => {
 
   saving.value = true
   try {
+    // Save scenario to library first
+    const scenarioToSave: Scenario = {
+      summary: scenarioData.summary || '',
+      intro_message: scenarioData.intro_message || '',
+      narrative_category: scenarioData.narrative_category || '',
+      character_id: characterId.value,
+      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : undefined,
+      location: scenarioData.location,
+      time_context: scenarioData.time_context,
+      atmosphere: scenarioData.atmosphere,
+      plot_hooks: scenarioData.plot_hooks,
+      stakes: scenarioData.stakes,
+      character_goals: scenarioData.character_goals,
+      potential_directions: scenarioData.potential_directions,
+    }
+
+    await saveScenario({ scenario: scenarioToSave })
+
     // Start session with the intro message
     const response = await startSessionWithScenario({
       character_name: characterId.value,

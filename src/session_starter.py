@@ -3,6 +3,8 @@
 from .character_loader import CharacterLoader
 from .memory.conversation_memory import ConversationMemory
 from .memory.scenario_registry import ScenarioRegistry
+from .memory.summary_memory import SummaryMemory
+from .scenario_to_summary import create_initial_summary_from_scenario
 
 
 class SessionStarter:
@@ -13,6 +15,7 @@ class SessionStarter:
         character_loader: CharacterLoader,
         conversation_memory: ConversationMemory,
         scenario_registry: ScenarioRegistry | None = None,
+        summary_memory: SummaryMemory | None = None,
     ) -> None:
         """
         Initialize the SessionStarter.
@@ -21,10 +24,12 @@ class SessionStarter:
             character_loader: The character loader to use for loading characters
             conversation_memory: The conversation memory for session management
             scenario_registry: Optional scenario registry for loading stored scenarios
+            summary_memory: Optional summary memory for storing initial scenario summaries
         """
         self.character_loader = character_loader
         self.conversation_memory = conversation_memory
         self.scenario_registry = scenario_registry
+        self.summary_memory = summary_memory or SummaryMemory()
 
     def start_session_with_scenario_id(
         self,
@@ -77,6 +82,27 @@ class SessionStarter:
 
         # Create new session
         session_id = self.conversation_memory.create_session(character.name)
+
+        # Create initial summary from scenario data (before adding intro message)
+        # This makes the summary immediately available when CharacterResponder initializes
+        persona = self.character_loader.load_character(persona_id, user_id) if persona_id else None
+        persona_name = persona.name if persona else "User"
+
+        initial_summary = create_initial_summary_from_scenario(
+            scenario_data=scenario_data["scenario_data"],
+            character_name=character.name,
+            persona_name=persona_name,
+        )
+
+        # Save the initial summary with offset 0 (before any messages)
+        self.summary_memory.add_summary(
+            character_id=character.name,
+            session_id=session_id,
+            summary=initial_summary.model_dump_json(),
+            start_offset=0,
+            end_offset=0,
+            user_id=user_id,
+        )
 
         # Add the intro message as an assistant (character) message, linking to the scenario
         self.conversation_memory.add_message(

@@ -62,7 +62,7 @@ if static_dir.exists():
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
 scenario_registry = ScenarioRegistry()
-session_starter = SessionStarter(character_loader, ConversationMemory(), scenario_registry)
+session_starter = SessionStarter(character_loader, ConversationMemory(), scenario_registry, SummaryMemory())
 
 
 @app.get("/health")

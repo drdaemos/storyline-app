@@ -177,20 +177,25 @@ class StorySummary(BaseModel):
         default_factory=list,
         description="One entry per character being tracked"
     )
-    
+
     story_beats: List[str] = Field(
         default_factory=list,
         description="Maximum 5 beats - only events that would matter when resuming scene later"
     )
-    
+
     user_learnings: List[str] = Field(
         default_factory=list,
         description="Accumulated learnings about user preferences from OOC commands or behavior patterns"
     )
-    
+
     ai_quality_issues: List[QualityIssue] = Field(
         default_factory=list,
         description="Only populate if problems detected in the conversation"
+    )
+
+    character_goals: dict[str, str] = Field(
+        default_factory=dict,
+        description="Character objectives from scenario (retained for summarizer reference but not directly shown to response AI)"
     )
 
     def to_string(self) -> str:
