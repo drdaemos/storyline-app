@@ -28,16 +28,6 @@
           />
         </UFormField>
 
-        <UFormField label="Selected Persona" description="Choose which persona character represents you in conversations.">
-          <USelect
-            class="w-full"
-            value-key="id"
-            v-model="settings.selectedPersonaId"
-            :items="personaOptions"
-            :loading="personasLoading"
-          />
-        </UFormField>
-
         <UFormField label="Last Selected Character">
           <div>{{ settings.lastSelectedCharacter || 'None' }}</div>
         </UFormField>
@@ -60,15 +50,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import type { SelectItem } from '@nuxt/ui'
 import { useLocalSettings } from '@/composables/useLocalSettings'
-import { usePersonas } from '@/composables/usePersonas'
 
 const open = ref(false)
 
 const { settings, clearSettings } = useLocalSettings()
-const { personaOptions, personasLoading, fetchPersonas } = usePersonas()
 
 const processorOptions = ref<SelectItem[]>([
   { label: 'Claude Haiku 4.5 ($5/M)', id: 'claude-haiku' },
@@ -86,8 +74,4 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
   { label: 'Cohere Command A ($10/M)', id: 'cohere' },
 ])
-
-onMounted(() => {
-  fetchPersonas()
-})
 </script>

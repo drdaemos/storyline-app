@@ -35,23 +35,22 @@ class SessionStarter:
         self,
         character_name: str,
         scenario_id: str,
-        persona_id: str | None = None,
         user_id: str = "anonymous",
     ) -> str:
         """
         Start a new session with a stored scenario.
+        The persona is automatically loaded from the scenario.
 
         Args:
             character_name: Name of the character
             scenario_id: ID of the stored scenario to use
-            persona_id: Optional persona character ID to use as user context
             user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
             The created session ID
 
         Raises:
-            FileNotFoundError: If character or scenario is not found
+            FileNotFoundError: If character, scenario, or persona is not found
             ValueError: If character_name or scenario_id is empty, or if scenario doesn't match character
         """
         if not character_name:
@@ -75,23 +74,29 @@ class SessionStarter:
         if scenario_data["character_id"] != character_name:
             raise ValueError(f"Scenario '{scenario_id}' is for character '{scenario_data['character_id']}', not '{character_name}'")
 
-        # Get intro message from scenario
+        # Get intro message and persona_id from scenario
         intro_message = scenario_data["scenario_data"].get("intro_message", "")
         if not intro_message:
             raise ValueError(f"Scenario '{scenario_id}' has no intro_message")
 
+        persona_id = scenario_data["scenario_data"].get("persona_id")
+        if not persona_id:
+            raise ValueError(f"Scenario '{scenario_id}' has no persona_id")
+
         # Create new session
         session_id = self.conversation_memory.create_session(character.name)
 
+        # Load the persona from the scenario
+        persona = self.character_loader.load_character(persona_id, user_id)
+        if not persona:
+            raise FileNotFoundError(f"Persona '{persona_id}' not found for scenario '{scenario_id}'")
+
         # Create initial summary from scenario data (before adding intro message)
         # This makes the summary immediately available when CharacterResponder initializes
-        persona = self.character_loader.load_character(persona_id, user_id) if persona_id else None
-        persona_name = persona.name if persona else "User"
-
         initial_summary = create_initial_summary_from_scenario(
             scenario_data=scenario_data["scenario_data"],
             character_name=character.name,
-            persona_name=persona_name,
+            persona_name=persona.name,
         )
 
         # Save the initial summary with offset 0 (before any messages)
@@ -121,16 +126,15 @@ class SessionStarter:
         self,
         character_name: str,
         intro_message: str,
-        persona_id: str | None = None,
         user_id: str = "anonymous",
     ) -> str:
         """
         Start a new session with a raw intro message (no scenario link).
+        Note: Sessions started this way will not have an associated persona.
 
         Args:
             character_name: Name of the character
             intro_message: The scenario intro message
-            persona_id: Optional persona character ID to use as user context
             user_id: ID of the user (defaults to 'anonymous')
 
         Returns:
@@ -170,7 +174,6 @@ class SessionStarter:
         self,
         character_name: str,
         intro_message: str,
-        persona_id: str | None = None,
         user_id: str = "anonymous",
     ) -> str:
         """
@@ -178,4 +181,4 @@ class SessionStarter:
 
         Deprecated: Use start_session_with_intro or start_session_with_scenario_id instead.
         """
-        return self.start_session_with_intro(character_name, intro_message, persona_id, user_id)
+        return self.start_session_with_intro(character_name, intro_message, user_id)

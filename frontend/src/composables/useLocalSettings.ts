@@ -7,7 +7,6 @@ const defaultSettings: LocalSettings = {
   aiProcessor: 'google-flash',
   backupProcessor: 'deepseek-v32',
   lastSelectedCharacter: undefined,
-  selectedPersonaId: undefined,
 }
 
 // Create a singleton ref that's shared across all component instances
@@ -20,13 +19,11 @@ export function useLocalSettings() {
       const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
       const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
       const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
-      const selectedPersonaId = localStorage.getItem(`${STORAGE_PREFIX}selected_persona`)
 
       settings.value = {
         aiProcessor: aiProcessor || defaultSettings.aiProcessor,
         backupProcessor: backupProcessor || defaultSettings.backupProcessor,
         lastSelectedCharacter: lastSelectedCharacter || undefined,
-        selectedPersonaId: selectedPersonaId || undefined,
       }
     } catch (error) {
       console.warn('Failed to load settings from localStorage, using defaults:', error)
@@ -45,15 +42,6 @@ export function useLocalSettings() {
           `${STORAGE_PREFIX}last_character`,
           settings.value.lastSelectedCharacter
         )
-      }
-
-      if (settings.value.selectedPersonaId && settings.value.selectedPersonaId !== 'none') {
-        localStorage.setItem(
-          `${STORAGE_PREFIX}selected_persona`,
-          settings.value.selectedPersonaId
-        )
-      } else {
-        localStorage.removeItem(`${STORAGE_PREFIX}selected_persona`)
       }
     } catch (error) {
       console.error('Failed to save settings to localStorage:', error)
@@ -96,15 +84,6 @@ if (!initialized) {
           settings.value.lastSelectedCharacter
         )
       }
-
-      if (settings.value.selectedPersonaId && settings.value.selectedPersonaId !== 'none') {
-        localStorage.setItem(
-          `${STORAGE_PREFIX}selected_persona`,
-          settings.value.selectedPersonaId
-        )
-      } else {
-        localStorage.removeItem(`${STORAGE_PREFIX}selected_persona`)
-      }
     } catch (error) {
       console.error('Failed to save settings to localStorage:', error)
     }
@@ -115,13 +94,11 @@ if (!initialized) {
     const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
     const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
     const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
-    const selectedPersonaId = localStorage.getItem(`${STORAGE_PREFIX}selected_persona`)
 
     settings.value = {
       aiProcessor: aiProcessor || defaultSettings.aiProcessor,
       backupProcessor: backupProcessor || defaultSettings.backupProcessor,
       lastSelectedCharacter: lastSelectedCharacter || undefined,
-      selectedPersonaId: selectedPersonaId || undefined,
     }
   } catch (error) {
     console.warn('Failed to load settings from localStorage, using defaults:', error)

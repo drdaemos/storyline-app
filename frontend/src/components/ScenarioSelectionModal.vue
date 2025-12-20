@@ -375,7 +375,6 @@ const startSession = async () => {
     const response = await startSessionWithScenario({
       character_name: props.characterName,
       intro_message: selectedScenario.value.intro_message,
-      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })
@@ -402,7 +401,7 @@ const resetModal = () => {
   scenarios.value = []
   selectedScenario.value = null
   expandedScenario.value = null
-  selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
+  selectedPersonaId.value = 'none'
   error.value = null
 }
 
@@ -412,7 +411,7 @@ watch(
     if (newShow) {
       loadSettings()
       fetchPersonas()
-      selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
+      selectedPersonaId.value = 'none'
     } else {
       resetModal()
     }
@@ -421,6 +420,6 @@ watch(
 
 onMounted(() => {
   fetchPersonas()
-  selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
+  selectedPersonaId.value = 'none'
 })
 </script>

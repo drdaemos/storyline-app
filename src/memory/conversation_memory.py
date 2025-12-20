@@ -307,6 +307,31 @@ class ConversationMemory:
 
             return None
 
+    def get_session_scenario_id(self, session_id: str, user_id: str) -> str | None:
+        """
+        Get the scenario_id for a session by checking the first message with a scenario_id.
+
+        Args:
+            session_id: Session ID to retrieve scenario for
+            user_id: ID of the user to filter messages for
+
+        Returns:
+            The scenario_id if found, None otherwise
+        """
+        with self.db_config.create_session() as session:
+            # Get the first message with a scenario_id for this session
+            message = (
+                session.query(Message)
+                .filter(Message.session_id == session_id, Message.user_id == user_id, Message.scenario_id.isnot(None))
+                .order_by(Message.offset)
+                .first()
+            )
+
+            if message:
+                return message.scenario_id
+
+            return None
+
     def health_check(self) -> bool:
         """Check if the database is accessible and healthy."""
         return self.db_config.health_check()

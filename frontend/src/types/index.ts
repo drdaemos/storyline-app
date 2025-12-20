@@ -40,7 +40,6 @@ export interface InteractRequest {
   session_id?: string | null
   processor_type?: string
   backup_processor_type?: string
-  persona_id?: string | null
 }
 
 export interface CreateCharacterRequest {
@@ -78,7 +77,6 @@ export interface LocalSettings {
   aiProcessor: string
   backupProcessor: string
   lastSelectedCharacter?: string
-  selectedPersonaId?: string
 }
 
 export interface SessionMessage {
@@ -199,7 +197,6 @@ export interface StartSessionRequest {
   character_name: string
   intro_message?: string
   scenario_id?: string
-  persona_id?: string | null
   processor_type?: string
   backup_processor_type?: string
 }
@@ -225,4 +222,9 @@ export interface CharacterCreationStreamEvent {
   message?: string // AI message to show in chat
   updates?: Partial<Character> // Character fields to update
   error?: string
+}
+
+export interface SessionPersonaResponse {
+  persona_id: string | null
+  persona_name: string | null
 }

@@ -137,6 +137,87 @@ class TestFastAPIEndpoints:
         response = client.delete("/api/sessions/nonexistent-session")
         assert response.status_code == 404
 
+    def test_get_session_summary_nonexistent(self, client):
+        """Test getting summary for a session that doesn't exist."""
+        response = client.get("/api/sessions/nonexistent-session/summary")
+        assert response.status_code == 404
+
+    @patch("src.fastapi_server.SummaryMemory")
+    @patch("src.fastapi_server.ConversationMemory")
+    def test_get_session_summary_no_summaries(self, mock_conv_memory_class, mock_summary_memory_class, client):
+        """Test getting summary when no summaries exist."""
+        # Mock conversation memory to return valid session
+        mock_conv_memory = Mock()
+        mock_conv_memory.get_session_details.return_value = {
+            "session_id": "test-session",
+            "character_id": "test-char",
+            "message_count": 5,
+            "last_message_time": "2024-01-01T12:00:00",
+        }
+        mock_conv_memory_class.return_value = mock_conv_memory
+
+        # Mock summary memory to return no summaries
+        mock_summary_memory = Mock()
+        mock_summary_memory.get_session_summaries.return_value = []
+        mock_summary_memory_class.return_value = mock_summary_memory
+
+        response = client.get("/api/sessions/test-session/summary")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "test-session"
+        assert data["has_summary"] is False
+        assert "No summary available yet" in data["summary_text"]
+
+    @patch("src.fastapi_server.SummaryMemory")
+    @patch("src.fastapi_server.ConversationMemory")
+    def test_get_session_summary_with_data(self, mock_conv_memory_class, mock_summary_memory_class, client):
+        """Test getting summary when summaries exist."""
+        from src.models.summary import (
+            EmotionalState,
+            PhysicalState,
+            PlotTracking,
+            RelationshipState,
+            StorySummary,
+            TimeState,
+        )
+
+        # Mock conversation memory to return valid session
+        mock_conv_memory = Mock()
+        mock_conv_memory.get_session_details.return_value = {
+            "session_id": "test-session",
+            "character_id": "test-char",
+            "message_count": 20,
+            "last_message_time": "2024-01-01T12:00:00",
+        }
+        mock_conv_memory_class.return_value = mock_conv_memory
+
+        # Create a test summary
+        test_summary = StorySummary(
+            time=TimeState(current_time="Day 1, morning"),
+            relationship=RelationshipState(trust=7, attraction=5, emotional_intimacy=6, conflict=3, power_balance=5, relationship_label="friends"),
+            plot=PlotTracking(ongoing_plots=["Meeting new friend"], resolved_outcomes=[], location="Coffee shop", notable_objects=None),
+            physical_state=[PhysicalState(character_name="TestBot", character_position="sitting at table", clothing_status=None, physical_contact=None, conditions=None)],
+            emotional_state=[EmotionalState(character_name="TestBot", character_emotions="friendly", character_wants="have good conversation")],
+            story_beats=["User and TestBot met at coffee shop", "They started talking about interests"],
+            user_learnings=["User prefers casual conversation"],
+            ai_quality_issues=[],
+            character_goals={},
+        )
+
+        # Mock summary memory to return test summaries
+        mock_summary_memory = Mock()
+        mock_summary_memory.get_session_summaries.return_value = [{"id": 1, "session_id": "test-session", "summary": test_summary.model_dump_json(), "start_offset": 0, "end_offset": 10, "created_at": "2024-01-01T12:00:00"}]
+        mock_summary_memory_class.return_value = mock_summary_memory
+
+        response = client.get("/api/sessions/test-session/summary")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "test-session"
+        assert data["has_summary"] is True
+        assert "Day 1, morning" in data["summary_text"]
+        assert "Coffee shop" in data["summary_text"]
+        assert "friends" in data["summary_text"]
+
 
 class TestInteractEndpoint:
     @patch("src.fastapi_server.character_loader")

@@ -91,5 +91,7 @@ const appearance = {
         {{ globalError }}
       </template>
     </UAlert>
+
+    <UNotifications />
   </UApp>
 </template>

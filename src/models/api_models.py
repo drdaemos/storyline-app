@@ -32,7 +32,6 @@ class InteractRequest(BaseModel):
     session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
     processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
-    persona_id: str | None = Field(None, description="Optional persona character ID to use as the user's representation")
 
 
 class SessionInfo(BaseModel):
@@ -110,7 +109,7 @@ class Scenario(BaseModel):
 
     # Character references (for interactive/stored scenarios)
     character_id: str = Field(default="", description="Main AI character ID this scenario is for")
-    persona_id: str | None = Field(None, description="Optional user persona ID")
+    persona_id: str = Field(..., min_length=1, description="User persona ID - required for all scenarios")
 
     # Location/Setting
     location: str = Field(default="", description="Where the scenario takes place")
@@ -148,7 +147,6 @@ class StartSessionRequest(BaseModel):
     character_name: str = Field(..., min_length=1, description="Name of the character")
     scenario_id: str | None = Field(None, description="ID of a stored scenario to use")
     intro_message: str | None = Field(None, description="The scenario intro message (used if scenario_id not provided)")
-    persona_id: str | None = Field(None, description="Optional persona ID to use as user context")
     processor_type: str = Field(default="claude", description="AI processor type")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
 
@@ -275,3 +273,11 @@ class ListScenariosResponse(BaseModel):
 
     character_name: str = Field(..., description="Name of the character")
     scenarios: list[ScenarioSummary] = Field(..., description="List of scenario summaries")
+
+
+class SessionSummaryResponse(BaseModel):
+    """Response model for session summary."""
+
+    session_id: str = Field(..., description="The session ID")
+    summary_text: str = Field(..., description="Formatted summary text as it would appear in the prompt")
+    has_summary: bool = Field(..., description="Whether the session has any summaries")

@@ -11,8 +11,21 @@
     </UButton>
     <h2 class="text-2xl font-bold font-serif">{{ characterId }}</h2>
     <span class="text-sm text-gray-500 font-mono">Session: {{ displaySessionId }}</span>
+    <UBadge v-if="personaName" color="primary" variant="subtle" class="ml-2">
+      <UIcon name="i-lucide-user" class="mr-1" />
+      {{ personaName }}
+    </UBadge>
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3 ml-auto">
+      <UButton
+        color="neutral"
+        variant="outline"
+        icon="i-lucide-file-text"
+        size="sm"
+        @click="showSummaryModal = true"
+      >
+        View Summary
+      </UButton>
       <UBadge v-if="isConnected" color="success" variant="subtle">
         Connected
       </UBadge>
@@ -67,25 +80,27 @@
     </UChatMessages>
 
     <!-- Error message -->
-    <div v-if="error && !isThinking" class="px-6">
-      <UAlert
-        color="error"
-        variant="soft"
-        icon="i-lucide-alert-triangle"
-        title="Error"
-        :description="error"
-      >
-        <template #actions>
-          <UButton
-            color="error"
-            variant="solid"
-            size="xs"
-            icon="i-lucide-refresh-cw"
-            label="Regenerate"
-            @click="regenerateAfterError"
-          />
-        </template>
-      </UAlert>
+    <div v-if="error && !isThinking" class="fixed top-20 left-0 right-0 z-50 flex justify-center px-6">
+      <div class="w-full max-w-2xl">
+        <UAlert
+          color="error"
+          variant="soft"
+          icon="i-lucide-alert-triangle"
+          title="Error"
+          :description="error"
+        >
+          <template #actions>
+            <UButton
+              color="error"
+              variant="solid"
+              size="xs"
+              icon="i-lucide-refresh-cw"
+              label="Regenerate"
+              @click="regenerateAfterError"
+            />
+          </template>
+        </UAlert>
+      </div>
     </div>
 
     <!-- Chat Input -->
@@ -98,6 +113,13 @@
       @regenerate="regenerateAfterError"
     />
   </div>
+
+  <!-- Summary Modal -->
+  <SummaryModal
+    :show="showSummaryModal"
+    :session-id="sessionId"
+    @close="showSummaryModal = false"
+  />
 </template>
 
 <script setup lang="ts">
@@ -107,7 +129,8 @@ import { useEventStream } from '@/composables/useEventStream'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatInput from '@/components/ChatInput.vue'
-import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails } from '@/types'
+import SummaryModal from '@/components/SummaryModal.vue'
+import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails, SessionPersonaResponse } from '@/types'
 import { useChatHighlight } from '@/composables/useChatHighlight.ts'
 
 interface Props {
@@ -136,6 +159,8 @@ const messages = ref<ChatMessageType[]>([])
 const isThinking = ref(false)
 const currentSessionId = ref<string | null>(null)
 const lastInteractPayload = ref<InteractRequest | null>(null)
+const showSummaryModal = ref(false)
+const personaName = ref<string | null>(null)
 
 const navigateBack = () => {
   router.back()
@@ -198,7 +223,6 @@ const sendInteractRequest = async (userMessage: string) => {
       session_id: props.sessionId === 'new' ? null : props.sessionId,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
-      persona_id: settings.value.selectedPersonaId && settings.value.selectedPersonaId !== 'none' ? settings.value.selectedPersonaId : null,
     }
 
     // Store payload for potential regeneration
@@ -355,11 +379,26 @@ const loadSessionHistory = async (sessionId: string, retryAttempt = 0) => {
 
 const handleStop = () => {}
 
+// Fetch persona for the session
+const fetchSessionPersona = async (sessionId: string) => {
+  try {
+    const response = await fetch(`/api/sessions/${sessionId}/persona`)
+    if (response.ok) {
+      const data: SessionPersonaResponse = await response.json()
+      personaName.value = data.persona_name
+    }
+  } catch (err) {
+    // Silently fail - persona is optional
+    console.debug('Failed to fetch session persona:', err)
+  }
+}
+
 // Initialize session
 onMounted(async () => {
   if (props.sessionId !== 'new') {
     currentSessionId.value = props.sessionId
     await loadSessionHistory(props.sessionId)
+    await fetchSessionPersona(props.sessionId)
   }
 })
 

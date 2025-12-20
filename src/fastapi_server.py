@@ -42,6 +42,7 @@ from src.models.api_models import (
     SessionDetails,
     SessionInfo,
     SessionMessage,
+    SessionSummaryResponse,
     StartSessionRequest,
     StartSessionResponse,
 )
@@ -61,8 +62,9 @@ if static_dir.exists():
 
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
+conversation_memory = ConversationMemory()
 scenario_registry = ScenarioRegistry()
-session_starter = SessionStarter(character_loader, ConversationMemory(), scenario_registry, SummaryMemory())
+session_starter = SessionStarter(character_loader, conversation_memory, scenario_registry, SummaryMemory())
 
 
 @app.get("/health")
@@ -817,6 +819,106 @@ async def get_session(session_id: str, user_id: UserIdDep) -> SessionDetails:
         raise HTTPException(status_code=500, detail=f"Failed to get session details: {str(e)}") from e
 
 
+@app.get("/api/sessions/{session_id}/summary")
+async def get_session_summary(session_id: str, user_id: UserIdDep) -> SessionSummaryResponse:
+    """Get the current summary for a session as it would appear in the prompt."""
+    try:
+        from src.models.summary import StorySummary
+
+        summary_memory = SummaryMemory()
+        conversation_memory = ConversationMemory()
+
+        # Validate session exists
+        session_details = conversation_memory.get_session_details(session_id, user_id)
+        if not session_details or session_details.get("message_count", 0) == 0:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        # Get all summaries for this session
+        summaries = summary_memory.get_session_summaries(session_id, user_id)
+
+        if not summaries:
+            return SessionSummaryResponse(session_id=session_id, summary_text="No summary available yet. Summary will be generated after the conversation progresses.", has_summary=False)
+
+        # Concatenate all summary texts into a single StorySummary (same logic as CharacterResponder)
+        beats = []
+        learnings = []
+        last_summary = None
+
+        for summary in summaries:
+            try:
+                summary_model = StorySummary.model_validate_json(summary["summary"])
+                beats.extend(summary_model.story_beats)
+                learnings.extend(summary_model.user_learnings)
+                last_summary = summary_model
+            except Exception as e:
+                # Log but continue processing other summaries
+                print(f"Failed to parse summary JSON: {e}")
+
+        if not last_summary:
+            return SessionSummaryResponse(session_id=session_id, summary_text="Summary data is corrupted or invalid.", has_summary=False)
+
+        # Rebuild the consolidated summary
+        consolidated_summary = StorySummary(
+            time=last_summary.time,
+            relationship=last_summary.relationship,
+            plot=last_summary.plot,
+            physical_state=last_summary.physical_state,
+            emotional_state=last_summary.emotional_state,
+            story_beats=beats,
+            user_learnings=learnings,
+            ai_quality_issues=last_summary.ai_quality_issues,
+            character_goals=last_summary.character_goals,
+        )
+
+        # Convert to the formatted string as it would appear in the prompt
+        summary_text = consolidated_summary.to_string()
+
+        return SessionSummaryResponse(session_id=session_id, summary_text=summary_text, has_summary=True)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get session summary: {str(e)}") from e
+
+
+@app.get("/api/sessions/{session_id}/persona")
+async def get_session_persona(session_id: str, user_id: UserIdDep) -> dict[str, str | None]:
+    """Get the persona information for a session (if the session was started from a scenario)."""
+    try:
+        # Validate session exists
+        session_details = conversation_memory.get_session_details(session_id, user_id)
+        if not session_details or session_details.get("message_count", 0) == 0:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        # Get the scenario_id from the session
+        scenario_id = conversation_memory.get_session_scenario_id(session_id, user_id)
+        if not scenario_id:
+            return {"persona_id": None, "persona_name": None}
+
+        # Load the scenario
+        scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
+        if not scenario_data:
+            return {"persona_id": None, "persona_name": None}
+
+        # Get persona_id from scenario
+        persona_id = scenario_data["scenario_data"].get("persona_id")
+        if not persona_id:
+            return {"persona_id": None, "persona_name": None}
+
+        # Try to load the persona to get its name
+        try:
+            persona = character_loader.load_character(persona_id, user_id)
+            return {"persona_id": persona_id, "persona_name": persona.name}
+        except FileNotFoundError:
+            # Persona exists in scenario but file not found
+            return {"persona_id": persona_id, "persona_name": None}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get session persona: {str(e)}") from e
+
+
 @app.delete("/api/sessions/{session_id}")
 async def clear_session(session_id: str, user_id: UserIdDep) -> dict[str, str]:
     """Clear a specific session."""
@@ -855,7 +957,6 @@ async def start_session_with_scenario(request: StartSessionRequest, user_id: Use
             session_id = session_starter.start_session_with_scenario_id(
                 character_name=request.character_name,
                 scenario_id=request.scenario_id,
-                persona_id=request.persona_id,
                 user_id=user_id,
             )
         else:
@@ -863,7 +964,6 @@ async def start_session_with_scenario(request: StartSessionRequest, user_id: Use
             session_id = session_starter.start_session_with_intro(
                 character_name=request.character_name,
                 intro_message=request.intro_message,  # type: ignore - validated above
-                persona_id=request.persona_id,
                 user_id=user_id,
             )
 
@@ -891,7 +991,7 @@ async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingRes
     """
     try:
         responder = get_character_responder(
-            session_id=request.session_id, character_name=request.character_name, processor_type=request.processor_type, backup_processor_type=request.backup_processor_type, persona_id=request.persona_id, user_id=user_id
+            session_id=request.session_id, character_name=request.character_name, processor_type=request.processor_type, backup_processor_type=request.backup_processor_type, user_id=user_id
         )
 
         # Create async generator for streaming response
@@ -994,21 +1094,30 @@ async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingRes
 
 
 def get_character_responder(
-    session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None, persona_id: str | None = None, user_id: str = "anonymous"
+    session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None, user_id: str = "anonymous"
 ) -> CharacterResponder:
     # Load character if not already loaded
     character = character_loader.load_character(character_name, user_id)
     if not character:
         raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
 
-    # Load persona character or create default
+    # Load persona from scenario if session exists
     persona = create_default_persona()
-    if persona_id:
-        try:
-            persona = character_loader.load_character(persona_id, user_id)
-        except FileNotFoundError:
-            # If persona not found, use default
-            pass
+    if session_id:
+        # Get the scenario_id from the session
+        scenario_id = conversation_memory.get_session_scenario_id(session_id, user_id)
+        if scenario_id:
+            # Load the scenario
+            scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
+            if scenario_data:
+                # Get persona_id from scenario
+                persona_id = scenario_data["scenario_data"].get("persona_id")
+                if persona_id:
+                    try:
+                        persona = character_loader.load_character(persona_id, user_id)
+                    except FileNotFoundError:
+                        # If persona not found, use default
+                        pass
 
     dependencies = CharacterResponderDependencies.create_default(
         character_name=character.name, session_id=session_id, logs_dir=None, processor_type=processor_type, backup_processor_type=backup_processor_type, user_id=user_id
