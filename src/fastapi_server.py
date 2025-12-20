@@ -16,6 +16,7 @@ from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
 from src.character_responder import CharacterResponder
 from src.memory.conversation_memory import ConversationMemory
+from src.memory.scenario_registry import ScenarioRegistry
 from src.memory.summary_memory import SummaryMemory
 from src.models.api_models import (
     CharacterCreationRequest,
@@ -29,7 +30,15 @@ from src.models.api_models import (
     GenerateScenariosResponse,
     HealthStatus,
     InteractRequest,
+    ListScenariosResponse,
+    PartialScenario,
+    SaveScenarioRequest,
+    SaveScenarioResponse,
+    Scenario,
+    ScenarioCreationRequest,
+    ScenarioCreationStreamEvent,
     ScenarioGenerationStreamEvent,
+    ScenarioSummary,
     SessionDetails,
     SessionInfo,
     SessionMessage,
@@ -39,6 +48,7 @@ from src.models.api_models import (
 from src.models.character import Character, PartialCharacter
 from src.models.character_responder_dependencies import CharacterResponderDependencies
 from src.models.persona import create_default_persona
+from src.scenario_creation_assistant import ScenarioCreationAssistant
 from src.scenario_generator import ScenarioGenerator
 from src.session_starter import SessionStarter
 
@@ -51,7 +61,8 @@ if static_dir.exists():
 
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
-session_starter = SessionStarter(character_loader, ConversationMemory())
+scenario_registry = ScenarioRegistry()
+session_starter = SessionStarter(character_loader, ConversationMemory(), scenario_registry)
 
 
 @app.get("/health")
@@ -481,6 +492,232 @@ async def generate_scenarios_stream(request: GenerateScenariosRequest, user_id: 
         raise HTTPException(status_code=500, detail=f"Failed to process scenario generation: {str(e)}") from e
 
 
+@app.post("/api/scenarios/create-stream")
+async def create_scenario_stream(request: ScenarioCreationRequest, user_id: UserIdDep) -> StreamingResponse:
+    """
+    Interactive scenario creation with AI assistant via Server-Sent Events.
+
+    The response will be streamed as Server-Sent Events with the following format:
+    - data: {"type": "message", "message": "AI response text chunk"}
+    - data: {"type": "update", "updates": {"summary": "...", "intro_message": "..."}}
+    - data: {"type": "complete"}
+    - data: {"type": "error", "error": "error_message"}
+    """
+    try:
+        # Load the character from registry
+        character = character_loader.load_character(request.character_name, user_id)
+        if not character:
+            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
+
+        # Load the currently selected persona if provided
+        persona = None
+        if request.persona_id:
+            persona = character_loader.load_character(request.persona_id, user_id)
+            # Don't fail if persona not found, just proceed without it
+
+        # Get the appropriate prompt processor
+        dependencies = CharacterResponderDependencies.create_default(
+            character_name="temp",  # Temp name for processor creation
+            processor_type=request.processor_type,
+            backup_processor_type=request.backup_processor_type,
+        )
+
+        # Create scenario creation assistant with the selected processor
+        assistant = ScenarioCreationAssistant(prompt_processor=dependencies.primary_processor)
+
+        # Ensure character_id is set in current_scenario
+        current_scenario = request.current_scenario
+        if not current_scenario.character_id:
+            current_scenario = current_scenario.model_copy(update={"character_id": request.character_name})
+        if request.persona_id and not current_scenario.persona_id:
+            current_scenario = current_scenario.model_copy(update={"persona_id": request.persona_id})
+
+        # Get available personas for AI suggestions
+        available_personas = request.available_personas
+
+        # Create async generator for streaming response
+        async def generate_sse_response() -> AsyncGenerator[str, None]:
+            """Generate Server-Sent Events for streaming scenario creation."""
+            try:
+                # Create queue for streaming chunks
+                chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
+                ai_response_parts: list[str] = []
+                loop = asyncio.get_event_loop()
+
+                def streaming_callback(chunk: str) -> None:
+                    """Called by assistant when a chunk is available."""
+                    ai_response_parts.append(chunk)
+                    # Use call_soon_threadsafe to safely add to queue from executor thread
+                    loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
+
+                # Run the assistant processing in a separate task
+                async def run_assistant() -> tuple[str, PartialScenario]:
+                    try:
+                        # Process message with streaming
+                        response, updates = await loop.run_in_executor(
+                            None,
+                            lambda: assistant.process_message(
+                                user_message=request.user_message,
+                                current_scenario=current_scenario,
+                                character=character,
+                                persona=persona,
+                                available_personas=available_personas,
+                                conversation_history=request.conversation_history,
+                                streaming_callback=streaming_callback,
+                            ),
+                        )
+                        return response, updates
+                    finally:
+                        # Signal completion
+                        await chunk_queue.put(None)
+
+                # Start the assistant task
+                assistant_task = asyncio.create_task(run_assistant())
+
+                # Stream message chunks as they become available
+                while True:
+                    chunk = await chunk_queue.get()
+                    if chunk is None:  # Completion signal
+                        break
+
+                    # Remove scenario_update tags from chunk but preserve spacing
+                    clean_chunk = re.sub(r"<scenario_update>[\s\S]*?</scenario_update>", "", chunk)
+
+                    if clean_chunk:  # Only send non-empty chunks
+                        event_data = ScenarioCreationStreamEvent(type="message", message=clean_chunk)
+                        yield f"data: {event_data.model_dump_json()}\n\n"
+
+                # Wait for assistant task to complete and get the updates
+                full_response, updated_scenario = await assistant_task
+
+                # Send scenario updates if any
+                if updated_scenario != current_scenario:
+                    update_event = ScenarioCreationStreamEvent(type="update", updates=updated_scenario)
+                    yield f"data: {update_event.model_dump_json()}\n\n"
+
+                # Send completion marker
+                complete_event = ScenarioCreationStreamEvent(type="complete")
+                yield f"data: {complete_event.model_dump_json()}\n\n"
+
+            except Exception as e:
+                error_event = ScenarioCreationStreamEvent(type="error", error=str(e))
+                yield f"data: {error_event.model_dump_json()}\n\n"
+
+        return StreamingResponse(
+            generate_sse_response(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process scenario creation: {str(e)}") from e
+
+
+@app.post("/api/scenarios/save")
+async def save_scenario(request: SaveScenarioRequest, user_id: UserIdDep) -> SaveScenarioResponse:
+    """Save a completed scenario to the database."""
+    try:
+        # Validate the scenario has required fields
+        if not request.scenario.summary or not request.scenario.intro_message:
+            raise HTTPException(status_code=400, detail="Scenario must have summary and intro_message")
+
+        if not request.scenario.character_id:
+            raise HTTPException(status_code=400, detail="Scenario must have character_id")
+
+        # Save the scenario
+        scenario_id = scenario_registry.save_scenario(
+            scenario_data=request.scenario.model_dump(),
+            character_id=request.scenario.character_id,
+            scenario_id=request.scenario_id,
+            user_id=user_id,
+        )
+
+        return SaveScenarioResponse(scenario_id=scenario_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save scenario: {str(e)}") from e
+
+
+@app.get("/api/scenarios/list/{character_name}")
+async def list_scenarios_for_character(character_name: str, user_id: UserIdDep) -> ListScenariosResponse:
+    """List all saved scenarios for a character."""
+    try:
+        # Verify character exists
+        character = character_loader.load_character(character_name, user_id)
+        if not character:
+            raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
+
+        # Get scenarios for this character
+        scenarios = scenario_registry.get_scenarios_for_character(character_name, user_id)
+
+        # Convert to summaries
+        scenario_summaries = [
+            ScenarioSummary(
+                id=s["id"],
+                summary=s["scenario_data"].get("summary", "Untitled"),
+                narrative_category=s["scenario_data"].get("narrative_category", ""),
+                character_id=s["character_id"],
+                created_at=s["created_at"],
+                updated_at=s["updated_at"],
+            )
+            for s in scenarios
+        ]
+
+        return ListScenariosResponse(character_name=character_name, scenarios=scenario_summaries)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list scenarios: {str(e)}") from e
+
+
+@app.get("/api/scenarios/detail/{scenario_id}")
+async def get_scenario_detail(scenario_id: str, user_id: UserIdDep) -> Scenario:
+    """Get a specific scenario by ID."""
+    try:
+        scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
+        if not scenario_data:
+            raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
+
+        # Return the scenario data as a Scenario model
+        return Scenario(**scenario_data["scenario_data"])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get scenario: {str(e)}") from e
+
+
+@app.delete("/api/scenarios/{scenario_id}")
+async def delete_scenario(scenario_id: str, user_id: UserIdDep) -> dict[str, str]:
+    """Delete a scenario by ID."""
+    try:
+        # Verify scenario exists
+        if not scenario_registry.scenario_exists(scenario_id, user_id):
+            raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
+
+        # Delete the scenario
+        deleted = scenario_registry.delete_scenario(scenario_id, user_id)
+        if not deleted:
+            raise HTTPException(status_code=403, detail="Cannot delete scenario - you may not have permission")
+
+        return {"message": f"Scenario '{scenario_id}' deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete scenario: {str(e)}") from e
+
+
 @app.get("/api/sessions")
 async def list_sessions(user_id: UserIdDep) -> list[SessionInfo]:
     """List all sessions from conversation memory."""
@@ -579,15 +816,36 @@ async def clear_session(session_id: str, user_id: UserIdDep) -> dict[str, str]:
 @app.post("/api/sessions/start")
 async def start_session_with_scenario(request: StartSessionRequest, user_id: UserIdDep) -> StartSessionResponse:
     """
-    Start a new session with a scenario intro message.
+    Start a new session with a scenario.
 
-    This endpoint creates a new session and initializes it with the provided scenario intro message.
+    This endpoint creates a new session and initializes it with either:
+    - A stored scenario (by scenario_id)
+    - A raw intro message
+
+    At least one of scenario_id or intro_message must be provided.
     Optionally, a persona can be specified to provide user context as hidden_context tags.
     """
     try:
-        session_id = session_starter.start_session_with_scenario(
-            character_name=request.character_name, intro_message=request.intro_message, persona_id=request.persona_id, user_id=user_id
-        )
+        # Validate that at least one of scenario_id or intro_message is provided
+        if not request.scenario_id and not request.intro_message:
+            raise HTTPException(status_code=400, detail="Either scenario_id or intro_message must be provided")
+
+        if request.scenario_id:
+            # Use stored scenario
+            session_id = session_starter.start_session_with_scenario_id(
+                character_name=request.character_name,
+                scenario_id=request.scenario_id,
+                persona_id=request.persona_id,
+                user_id=user_id,
+            )
+        else:
+            # Use raw intro message
+            session_id = session_starter.start_session_with_intro(
+                character_name=request.character_name,
+                intro_message=request.intro_message,  # type: ignore - validated above
+                persona_id=request.persona_id,
+                user_id=user_id,
+            )
 
         return StartSessionResponse(session_id=session_id)
 

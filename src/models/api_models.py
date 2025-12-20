@@ -101,11 +101,27 @@ class GenerateCharacterResponse(BaseModel):
 
 
 class Scenario(BaseModel):
-    """Model for a scenario with a description."""
+    """Model for a rich scenario with story development information."""
 
+    # Core fields (used in both batch and interactive generation)
     summary: str = Field(..., min_length=1, description="Short engaging, striking name for the scenario (take inspiration from series or book chapter titles)")
     intro_message: str = Field(..., min_length=1, description="Complete introductory message to set the scene in the story")
     narrative_category: str = Field(..., min_length=1, description="Short label for both the genre and tone of the scenario + the level of twistedness of the story")
+
+    # Character references (for interactive/stored scenarios)
+    character_id: str = Field(default="", description="Main AI character ID this scenario is for")
+    persona_id: str | None = Field(None, description="Optional user persona ID")
+
+    # Location/Setting
+    location: str = Field(default="", description="Where the scenario takes place")
+    time_context: str = Field(default="", description="When/what situation (e.g., 'late evening', 'after the argument')")
+    atmosphere: str = Field(default="", description="Detailed mood/atmosphere description")
+
+    # Story structure
+    plot_hooks: list[str] = Field(default_factory=list, description="Key tensions/conflicts to develop (2-4 items)")
+    stakes: str = Field(default="", description="What's at risk in this scenario")
+    character_goals: dict[str, str] = Field(default_factory=dict, description="{character_name: goal} - what each is trying to achieve")
+    potential_directions: list[str] = Field(default_factory=list, description="Where the story could go (2-3 possibilities)")
 
 
 class GenerateScenariosRequest(BaseModel):
@@ -130,7 +146,8 @@ class StartSessionRequest(BaseModel):
     """Request model for starting a session with a scenario."""
 
     character_name: str = Field(..., min_length=1, description="Name of the character")
-    intro_message: str = Field(..., min_length=1, description="The scenario intro message")
+    scenario_id: str | None = Field(None, description="ID of a stored scenario to use")
+    intro_message: str | None = Field(None, description="The scenario intro message (used if scenario_id not provided)")
     persona_id: str | None = Field(None, description="Optional persona ID to use as user context")
     processor_type: str = Field(default="claude", description="AI processor type")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
@@ -176,3 +193,85 @@ class ScenarioGenerationStreamEvent(BaseModel):
     chunk: str | None = Field(None, description="Text chunk from the AI generation (raw XML)")
     scenario: Scenario | None = Field(None, description="Completed scenario object")
     error: str | None = Field(None, description="Error message if type is 'error'")
+
+
+class PersonaSummary(BaseModel):
+    """Summary of a persona for the AI to consider."""
+
+    id: str = Field(..., description="Persona ID")
+    name: str = Field(..., description="Persona name")
+    tagline: str = Field(default="", description="Short persona description")
+    personality: str = Field(default="", description="Personality traits")
+
+
+class PartialScenario(BaseModel):
+    """Partial scenario for incremental updates during interactive creation."""
+
+    summary: str = Field(default="", description="Short engaging name for the scenario")
+    intro_message: str = Field(default="", description="Complete introductory message to set the scene")
+    narrative_category: str = Field(default="", description="Short label for genre and tone")
+    character_id: str = Field(default="", description="Main AI character ID")
+    persona_id: str | None = Field(None, description="Optional user persona ID")
+    suggested_persona_id: str | None = Field(None, description="AI-suggested persona ID based on scenario direction")
+    suggested_persona_reason: str = Field(default="", description="Reason for persona suggestion")
+    location: str = Field(default="", description="Where the scenario takes place")
+    time_context: str = Field(default="", description="When/what situation")
+    atmosphere: str = Field(default="", description="Detailed mood/atmosphere description")
+    plot_hooks: list[str] = Field(default_factory=list, description="Key tensions/conflicts to develop")
+    stakes: str = Field(default="", description="What's at risk in this scenario")
+    character_goals: dict[str, str] = Field(default_factory=dict, description="{character_name: goal}")
+    potential_directions: list[str] = Field(default_factory=list, description="Where the story could go")
+
+
+class ScenarioCreationRequest(BaseModel):
+    """Request model for interactive scenario creation with AI assistant."""
+
+    user_message: str = Field(..., min_length=1, description="User's message about the scenario")
+    current_scenario: PartialScenario = Field(default_factory=PartialScenario, description="Current partial scenario data")
+    character_name: str = Field(..., min_length=1, description="Name/ID of the AI character to build scenario for")
+    persona_id: str | None = Field(None, description="Optional persona ID currently selected by user")
+    available_personas: list[PersonaSummary] = Field(default_factory=list, description="List of available personas for AI to suggest from")
+    conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages for context")
+    processor_type: str = Field(default="claude", description="AI processor type to use")
+    backup_processor_type: str | None = Field(None, description="Optional backup processor type")
+
+
+class ScenarioCreationStreamEvent(BaseModel):
+    """Stream event for interactive scenario creation."""
+
+    type: str = Field(..., description="Event type: 'message', 'update', 'complete', 'error'")
+    message: str | None = Field(None, description="AI message chunk to show in chat")
+    updates: PartialScenario | None = Field(None, description="Updated scenario state with current values")
+    error: str | None = Field(None, description="Error message if type is 'error'")
+
+
+class SaveScenarioRequest(BaseModel):
+    """Request model for saving a completed scenario."""
+
+    scenario: Scenario = Field(..., description="The scenario to save")
+    scenario_id: str | None = Field(None, description="Optional scenario ID (generated if not provided)")
+
+
+class SaveScenarioResponse(BaseModel):
+    """Response model for saving a scenario."""
+
+    scenario_id: str = Field(..., description="The saved scenario's ID")
+    message: str = Field(default="Scenario saved successfully", description="Status message")
+
+
+class ScenarioSummary(BaseModel):
+    """Summary model for scenario listing with minimal data."""
+
+    id: str = Field(..., description="Scenario ID")
+    summary: str = Field(..., description="Scenario title/summary")
+    narrative_category: str = Field(..., description="Genre/tone label")
+    character_id: str = Field(..., description="Associated character ID")
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
+
+
+class ListScenariosResponse(BaseModel):
+    """Response model for listing scenarios."""
+
+    character_name: str = Field(..., description="Name of the character")
+    scenarios: list[ScenarioSummary] = Field(..., description="List of scenario summaries")

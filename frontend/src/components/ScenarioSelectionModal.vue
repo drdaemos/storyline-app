@@ -4,25 +4,40 @@
       <!-- Step 1: Choice -->
       <div v-if="currentStep === 'choice'" class="text-center space-y-6 py-4">
         <p class="text-lg">How would you like to start your conversation?</p>
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <UButton
-            color="primary"
-            size="xl"
-            icon="i-lucide-sparkles"
-            @click="selectGenerateScenario"
-          >
-            Generate Scenario
-          </UButton>
+        <div class="flex flex-col gap-4 justify-center items-center">
+          <div class="flex flex-col sm:flex-row gap-4">
+            <UButton
+              color="primary"
+              size="xl"
+              icon="i-lucide-wand-sparkles"
+              @click="selectAIAssistant"
+            >
+              Create with AI
+            </UButton>
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="xl"
+              icon="i-lucide-sparkles"
+              @click="selectGenerateScenario"
+            >
+              Quick Generate
+            </UButton>
+          </div>
           <UButton
             color="neutral"
-            variant="outline"
-            size="xl"
+            variant="ghost"
+            size="lg"
             icon="i-lucide-message-square"
             @click="selectSkipToChat"
           >
             Skip to Chat
           </UButton>
         </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          <strong>Create with AI</strong> lets you craft a custom scenario through conversation.
+          <strong>Quick Generate</strong> creates scenarios based on mood selection.
+        </p>
       </div>
 
       <!-- Step 2: Persona Selection -->
@@ -257,6 +272,16 @@ const isOpen = computed({
 
 const selectGenerateScenario = () => {
   currentStep.value = 'personaSelection'
+}
+
+const selectAIAssistant = () => {
+  emit('close')
+  router.push({
+    name: 'create-scenario',
+    params: {
+      characterId: props.characterName,
+    },
+  })
 }
 
 const selectSkipToChat = () => {

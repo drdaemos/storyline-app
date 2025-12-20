@@ -1,9 +1,10 @@
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import type { SelectItem } from '@nuxt/ui'
 import type { CharacterSummary } from '@/types'
 
 export function usePersonas() {
   const personaOptions = ref<SelectItem[]>([])
+  const personas = ref<CharacterSummary[]>([])
   const personasLoading = ref(false)
 
   const fetchPersonas = async () => {
@@ -11,17 +12,20 @@ export function usePersonas() {
     try {
       const response = await fetch('/api/personas')
       if (response.ok) {
-        const personas: CharacterSummary[] = await response.json()
+        const personaList: CharacterSummary[] = await response.json()
+        personas.value = personaList
         personaOptions.value = [
           { label: 'None', id: 'none' },
-          ...personas.map(p => ({ label: `${p.name} - ${p.tagline}`, id: p.id }))
+          ...personaList.map(p => ({ label: `${p.name} - ${p.tagline}`, id: p.id }))
         ]
       } else {
         console.error('Failed to fetch personas')
+        personas.value = []
         personaOptions.value = [{ label: 'None', id: 'none' }]
       }
     } catch (error) {
       console.error('Error fetching personas:', error)
+      personas.value = []
       personaOptions.value = [{ label: 'None', id: 'none' }]
     } finally {
       personasLoading.value = false
@@ -30,6 +34,7 @@ export function usePersonas() {
 
   return {
     personaOptions,
+    personas,
     personasLoading,
     fetchPersonas
   }

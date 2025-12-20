@@ -12,6 +12,12 @@ import type {
   StartSessionRequest,
   StartSessionResponse,
   CharacterCreationRequest,
+  ScenarioCreationRequest,
+  PartialScenario,
+  SaveScenarioRequest,
+  SaveScenarioResponse,
+  ListScenariosResponse,
+  Scenario,
 } from '@/types'
 import { useAuth } from './useAuth'
 
@@ -388,6 +394,126 @@ export function useApi() {
     }
   }
 
+  const streamScenarioCreation = async (
+    payload: ScenarioCreationRequest,
+    onMessage: (message: string) => void,
+    onUpdate: (updates: PartialScenario) => void,
+    onComplete: () => void,
+    onError: (errorMessage: string) => void
+  ): Promise<void> => {
+    const token = await getAuthToken()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    try {
+      const response = await fetch('/api/scenarios/create-stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        onError(errorMessage)
+        return
+      }
+
+      if (!response.body) {
+        onError('Response body is null')
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const readStream = async (): Promise<void> => {
+        try {
+          const { done, value } = await reader.read()
+
+          if (done) {
+            return
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          // Keep the last incomplete line in buffer
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const jsonData = line.slice(6).trim()
+                if (jsonData === '[DONE]') {
+                  return
+                }
+
+                const data = JSON.parse(jsonData)
+
+                if (data.type === 'message' && data.message) {
+                  onMessage(data.message)
+                } else if (data.type === 'update' && data.updates) {
+                  onUpdate(data.updates)
+                } else if (data.type === 'complete') {
+                  onComplete()
+                  return
+                } else if (data.type === 'error') {
+                  onError(data.error || 'An error occurred')
+                  return
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError, 'Line:', line)
+              }
+            }
+          }
+
+          // Continue reading
+          await readStream()
+        } catch (readError) {
+          onError(readError instanceof Error ? readError.message : 'Stream read error')
+        }
+      }
+
+      await readStream()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to connect to stream')
+    }
+  }
+
+  const saveScenario = async (payload: SaveScenarioRequest): Promise<SaveScenarioResponse> => {
+    return makeRequest<SaveScenarioResponse>('/api/scenarios/save', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  const listScenariosForCharacter = async (characterName: string): Promise<ListScenariosResponse> => {
+    return makeRequest<ListScenariosResponse>(`/api/scenarios/list/${encodeURIComponent(characterName)}`)
+  }
+
+  const getScenarioDetail = async (scenarioId: string): Promise<Scenario> => {
+    return makeRequest<Scenario>(`/api/scenarios/detail/${encodeURIComponent(scenarioId)}`)
+  }
+
+  const deleteScenario = async (scenarioId: string): Promise<{ message: string }> => {
+    return makeRequest<{ message: string }>(`/api/scenarios/${encodeURIComponent(scenarioId)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  const getPersonas = async (): Promise<CharacterSummary[]> => {
+    return makeRequest<CharacterSummary[]>('/api/personas')
+  }
+
   return {
     loading,
     error,
@@ -402,5 +528,11 @@ export function useApi() {
     streamGenerateScenarios,
     startSessionWithScenario,
     streamCharacterCreation,
+    streamScenarioCreation,
+    saveScenario,
+    listScenariosForCharacter,
+    getScenarioDetail,
+    deleteScenario,
+    getPersonas,
   }
 }

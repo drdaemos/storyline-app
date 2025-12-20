@@ -25,6 +25,7 @@ class Message(Base):
     offset: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     type: Mapped[str] = mapped_column(String, nullable=False, default="conversation")
     user_id: Mapped[str] = mapped_column(String, nullable=False, default="anonymous")
+    scenario_id: Mapped[str | None] = mapped_column(String, nullable=True)  # Optional link to scenario
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
 
     __table_args__ = (
@@ -33,6 +34,7 @@ class Message(Base):
         Index("idx_session_created_at", "session_id", "created_at"),
         Index("idx_session_offset", "session_id", "offset"),
         Index("idx_user_sessions", "user_id", "session_id"),
+        Index("idx_message_scenario", "scenario_id"),
     )
 
 
@@ -71,6 +73,24 @@ class Character(Base):
         Index("idx_character_schema_version", "schema_version"),
         Index("idx_character_updated_at", "updated_at"),
         Index("idx_user_characters", "user_id"),
+    )
+
+
+class Scenario(Base):
+    __tablename__ = "scenarios"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # UUID
+    character_id: Mapped[str] = mapped_column(String, nullable=False)  # AI character this scenario is for
+    scenario_data: Mapped[dict] = mapped_column(JSON, nullable=False)  # Full scenario as JSON
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, default="anonymous")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        Index("idx_scenario_character", "character_id"),
+        Index("idx_scenario_user", "user_id"),
+        Index("idx_scenario_updated_at", "updated_at"),
     )
 
 

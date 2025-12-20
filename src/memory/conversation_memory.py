@@ -43,7 +43,16 @@ class ConversationMemory:
         # Session is created implicitly when first message is added
         return session_id
 
-    def add_message(self, character_id: str, session_id: str, role: str, content: str, message_type: str = "conversation", user_id: str = "anonymous") -> int:
+    def add_message(
+        self,
+        character_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        message_type: str = "conversation",
+        user_id: str = "anonymous",
+        scenario_id: str | None = None,
+    ) -> int:
         """
         Add a message to the conversation memory.
 
@@ -54,6 +63,7 @@ class ConversationMemory:
             content: Content of the message
             message_type: Type of message ('conversation' or 'evaluation')
             user_id: ID of the user (defaults to 'anonymous')
+            scenario_id: Optional scenario ID to link this message to
 
         Returns:
             The ID of the inserted message
@@ -63,7 +73,17 @@ class ConversationMemory:
             max_offset = session.query(func.coalesce(func.max(Message.offset), -1)).filter(Message.session_id == session_id).scalar()
             next_offset = max_offset + 1
 
-            message = Message(character_id=character_id, session_id=session_id, role=role, content=content, offset=next_offset, type=message_type, user_id=user_id, created_at=datetime.now())
+            message = Message(
+                character_id=character_id,
+                session_id=session_id,
+                role=role,
+                content=content,
+                offset=next_offset,
+                type=message_type,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                created_at=datetime.now(),
+            )
 
             session.add(message)
             session.commit()

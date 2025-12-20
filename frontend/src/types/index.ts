@@ -99,6 +99,86 @@ export interface Scenario {
   summary: string
   intro_message: string
   narrative_category: string
+  character_id?: string
+  persona_id?: string
+  location?: string
+  time_context?: string
+  atmosphere?: string
+  plot_hooks?: string[]
+  stakes?: string
+  character_goals?: Record<string, string>
+  potential_directions?: string[]
+  suggested_persona_id?: string
+  suggested_persona_reason?: string
+}
+
+export interface PartialScenario {
+  summary?: string
+  intro_message?: string
+  narrative_category?: string
+  character_id?: string
+  persona_id?: string
+  location?: string
+  time_context?: string
+  atmosphere?: string
+  plot_hooks?: string[]
+  stakes?: string
+  character_goals?: Record<string, string>
+  potential_directions?: string[]
+  suggested_persona_id?: string
+  suggested_persona_reason?: string
+}
+
+export interface PersonaSummary {
+  id: string
+  name: string
+  tagline?: string
+  personality?: string
+}
+
+export interface ScenarioCreationRequest {
+  user_message: string
+  current_scenario: PartialScenario
+  character_name: string
+  persona_id?: string | null
+  available_personas?: PersonaSummary[]
+  conversation_history?: Array<{
+    author: string
+    content: string
+    is_user: boolean
+  }>
+  processor_type?: string
+  backup_processor_type?: string
+}
+
+export interface ScenarioCreationStreamEvent {
+  type: 'message' | 'update' | 'complete' | 'error'
+  message?: string
+  updates?: PartialScenario
+  error?: string
+}
+
+export interface SaveScenarioRequest {
+  scenario: Scenario
+  scenario_id?: string
+}
+
+export interface SaveScenarioResponse {
+  scenario_id: string
+}
+
+export interface ScenarioSummary {
+  id: string
+  summary: string
+  narrative_category: string
+  character_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ListScenariosResponse {
+  character_name: string
+  scenarios: ScenarioSummary[]
 }
 
 export interface GenerateScenariosRequest {
@@ -117,7 +197,8 @@ export interface GenerateScenariosResponse {
 
 export interface StartSessionRequest {
   character_name: string
-  intro_message: string
+  intro_message?: string
+  scenario_id?: string
   persona_id?: string | null
   processor_type?: string
   backup_processor_type?: string
