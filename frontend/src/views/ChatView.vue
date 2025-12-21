@@ -1,35 +1,45 @@
 <template>
   <!-- Header -->
-  <div class="flex mb-8 gap-4 items-center">
-    <UButton
-      color="neutral"
-      variant="ghost"
-      icon="i-lucide-arrow-left"
-      @click="navigateBack"
-    >
-      Back
-    </UButton>
-    <h2 class="text-2xl font-bold font-serif">{{ characterId }}</h2>
-    <span class="text-sm text-gray-500 font-mono">Session: {{ displaySessionId }}</span>
-    <UBadge v-if="personaName" color="primary" variant="subtle" class="ml-2">
-      <UIcon name="i-lucide-user" class="mr-1" />
-      {{ personaName }}
-    </UBadge>
+  <div class="flex flex-col sm:flex-row mb-6 sm:mb-8 gap-3 sm:gap-4 sm:items-center">
+    <!-- Top row on mobile: Back button and character name -->
+    <div class="flex items-center gap-3 sm:gap-4">
+      <UButton
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-arrow-left"
+        @click="navigateBack"
+      >
+        <span class="hidden sm:inline">Back</span>
+      </UButton>
+      <h2 class="text-xl sm:text-2xl font-bold font-serif truncate">{{ characterId }}</h2>
+    </div>
 
-    <div class="flex items-center gap-3 ml-auto">
+    <!-- Second row on mobile: Session info and persona -->
+    <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+      <span class="text-xs sm:text-sm text-gray-500 font-mono hidden sm:inline">Session: {{ displaySessionId }}</span>
+      <UBadge v-if="personaName" color="primary" variant="subtle">
+        <UIcon name="i-lucide-user" class="mr-1" />
+        {{ personaName }}
+      </UBadge>
+    </div>
+
+    <!-- Action buttons - aligned right on desktop, full width on mobile -->
+    <div class="flex items-center gap-2 sm:gap-3 sm:ml-auto">
       <UButton
         color="neutral"
         variant="outline"
         icon="i-lucide-file-text"
         size="sm"
         @click="showSummaryModal = true"
+        class="flex-1 sm:flex-none"
       >
-        View Summary
+        <span class="hidden sm:inline">View Summary</span>
+        <span class="sm:hidden">Summary</span>
       </UButton>
-      <UBadge v-if="isConnected" color="success" variant="subtle">
+      <UBadge v-if="isConnected" color="success" variant="subtle" class="hidden sm:flex">
         Connected
       </UBadge>
-      <UBadge v-else-if="error" color="error" variant="subtle">
+      <UBadge v-else-if="error" color="error" variant="subtle" class="hidden sm:flex">
         Error
       </UBadge>
     </div>

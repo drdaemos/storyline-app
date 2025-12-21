@@ -160,7 +160,6 @@ class TestSessionStarterWithScenario:
         session_id = session_starter.start_session_with_scenario_id(
             character_name="testchar",
             scenario_id=scenario_id,
-            persona_id=None,
             user_id="test-user",
         )
 
@@ -205,7 +204,6 @@ class TestSessionStarterWithScenario:
         session_id = session_starter.start_session_with_scenario_id(
             character_name="testchar",
             scenario_id=scenario_id,
-            persona_id=None,
             user_id="test-user",
         )
 

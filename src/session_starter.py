@@ -39,7 +39,7 @@ class SessionStarter:
     ) -> str:
         """
         Start a new session with a stored scenario.
-        The persona is automatically loaded from the scenario.
+        The persona is automatically loaded from the scenario if specified.
 
         Args:
             character_name: Name of the character
@@ -50,7 +50,7 @@ class SessionStarter:
             The created session ID
 
         Raises:
-            FileNotFoundError: If character, scenario, or persona is not found
+            FileNotFoundError: If character or scenario is not found, or if persona_id is specified but persona not found
             ValueError: If character_name or scenario_id is empty, or if scenario doesn't match character
         """
         if not character_name:
@@ -80,23 +80,24 @@ class SessionStarter:
             raise ValueError(f"Scenario '{scenario_id}' has no intro_message")
 
         persona_id = scenario_data["scenario_data"].get("persona_id")
-        if not persona_id:
-            raise ValueError(f"Scenario '{scenario_id}' has no persona_id")
 
         # Create new session
         session_id = self.conversation_memory.create_session(character.name)
 
-        # Load the persona from the scenario
-        persona = self.character_loader.load_character(persona_id, user_id)
-        if not persona:
-            raise FileNotFoundError(f"Persona '{persona_id}' not found for scenario '{scenario_id}'")
+        # Load the persona from the scenario if specified
+        persona_name = "User"
+        if persona_id:
+            persona = self.character_loader.load_character(persona_id, user_id)
+            if not persona:
+                raise FileNotFoundError(f"Persona '{persona_id}' not found for scenario '{scenario_id}'")
+            persona_name = persona.name
 
         # Create initial summary from scenario data (before adding intro message)
         # This makes the summary immediately available when CharacterResponder initializes
         initial_summary = create_initial_summary_from_scenario(
             scenario_data=scenario_data["scenario_data"],
             character_name=character.name,
-            persona_name=persona.name,
+            persona_name=persona_name,
         )
 
         # Save the initial summary with offset 0 (before any messages)

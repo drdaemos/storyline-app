@@ -635,13 +635,12 @@ const startSessionWithCurrentScenario = async () => {
       potential_directions: scenarioData.potential_directions,
     }
 
-    await saveScenario({ scenario: scenarioToSave })
+    const saveResponse = await saveScenario({ scenario: scenarioToSave })
 
-    // Start session with the intro message
+    // Start session with the saved scenario ID
     const response = await startSessionWithScenario({
       character_name: characterId.value,
-      intro_message: scenarioData.intro_message,
-      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
+      scenario_id: saveResponse.scenario_id,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })
