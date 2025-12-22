@@ -44,12 +44,10 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-thinking")
             case "mistral":
                 return OpenRouterPromptProcessor(model="mistralai/mistral-small-creative")
-            case "cydonia":
-                return OpenRouterPromptProcessor(model="thedrummer/cydonia-24b-v4.1")
             case "grok":
                 return OpenRouterPromptProcessor(model="x-ai/grok-4.1-fast")
             case "glm":
-                return OpenRouterPromptProcessor(model="z-ai/glm-4.6")
+                return OpenRouterPromptProcessor(model="z-ai/glm-4.7")
             case "cohere":
                 return CoherePromptProcessor()
             case _:

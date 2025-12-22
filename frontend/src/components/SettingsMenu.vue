@@ -65,13 +65,12 @@ const processorOptions = ref<SelectItem[]>([
   { label: 'GPT-5.2 Chat ($14/M)', id: 'gpt-5.2' },
   { label: 'Gemini 3 Flash ($3/M)', id: 'google-flash' },
   { label: 'Gemini 3 Pro ($12/M)', id: 'google-pro' },
-  { label: 'DeepSeek V3.2 ($0.41/M)', id: 'deepseek-v32' },
+  { label: 'DeepSeek V3.2 ($1.68/M)', id: 'deepseek-v32' },
   { label: 'Kimi K2 ($1.90/M)', id: 'kimi' },
-  { label: 'Kimi K2 Thinking ($2.35/M)', id: 'kimi-thinking' },
+  { label: 'Kimi K2 Thinking ($2.50/M)', id: 'kimi-thinking' },
   { label: 'Mistral Small Creative ($0.30/M)', id: 'mistral' },
-  { label: 'Drummer Cydonia ($0.50/M)', id: 'cydonia' },
   { label: 'Grok 4.1 Fast ($0.50/M)', id: 'grok' },
-  { label: 'GLM-4.6 ($1.80/M)', id: 'glm' },
+  { label: 'GLM-4.7 ($2.20/M)', id: 'glm' },
   { label: 'Cohere Command A ($10/M)', id: 'cohere' },
 ])
 </script>
