@@ -2,6 +2,8 @@
 
 A CLI interactive LLM-driven roleplaying chat with a configurable NPC character - creating a stage for creative writing for small stories (usually with two main characters).
 
+This branch is locked on the creative writing kind-of architecture for historical reference.
+
 ## Usage
 
 Prerequisites:
