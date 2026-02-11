@@ -74,7 +74,7 @@ class CharacterCreator:
 
     def _identify_missing_fields(self, character_data: dict[str, Any]) -> list[str]:
         """Identify which character fields are missing or empty."""
-        all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description", "interests", "dislikes", "desires", "kinks"]
+        all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "ruleset_id", "ruleset_stats", "interests", "dislikes", "desires", "kinks"]
 
         missing_fields = []
         for field in all_fields:
@@ -116,7 +116,7 @@ Guidelines:
 - Consider how different aspects of the character (backstory, personality, appearance) interconnect
 - Create characters suitable for role-playing interactions
 - If relationships are needed, make them meaningful and specific
-- If locations are needed, make them relevant to the character's story
+- Keep ruleset metadata coherent: `ruleset_id` and `ruleset_stats` should fit the character concept
 - For interests, include hobbies, activities, or topics the character enjoys (provide 2-5 items)
 - For dislikes, include things the character avoids or finds distasteful (provide 2-5 items)
 - For desires, include goals, ambitions, or things the character wants (provide 2-4 items)

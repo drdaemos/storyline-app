@@ -271,6 +271,9 @@ const isOpen = computed({
 })
 
 const selectGenerateScenario = () => {
+  if (selectedPersonaId.value && selectedPersonaId.value !== 'none') {
+    settings.value.selectedPersonaId = selectedPersonaId.value
+  }
   currentStep.value = 'personaSelection'
 }
 
@@ -289,7 +292,7 @@ const selectSkipToChat = () => {
   router.push({
     name: 'chat',
     params: {
-      characterName: props.characterName,
+      characterId: props.characterName,
       sessionId: 'new',
     },
   })
@@ -310,8 +313,8 @@ const generateScenariosForMood = async () => {
         count: 3,
         mood: selectedMoodsArray.value.join(', '),
         persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
-        processor_type: settings.value.aiProcessor,
-        backup_processor_type: settings.value.backupProcessor,
+        processor_type: settings.value.largeModelKey,
+        backup_processor_type: settings.value.smallModelKey,
       },
       // onChunk - for debugging or showing raw XML
       (chunk: string) => {
@@ -375,15 +378,19 @@ const startSession = async () => {
     const response = await startSessionWithScenario({
       character_name: props.characterName,
       intro_message: selectedScenario.value.intro_message,
-      processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor,
+      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
+      ruleset_id: selectedScenario.value.ruleset_id || 'everyday-tension',
+      world_lore_id: selectedScenario.value.world_lore_id || 'default-world',
+      scene_seed: selectedScenario.value.scene_seed || {},
+      small_model_key: settings.value.smallModelKey,
+      large_model_key: settings.value.largeModelKey,
     })
 
     emit('close')
     router.push({
       name: 'chat',
       params: {
-        characterName: props.characterName,
+        characterId: props.characterName,
         sessionId: response.session_id,
       },
     })
@@ -411,15 +418,23 @@ watch(
     if (newShow) {
       loadSettings()
       fetchPersonas()
-      selectedPersonaId.value = 'none'
+      selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
     } else {
       resetModal()
     }
   }
 )
 
+watch(selectedPersonaId, (newId) => {
+  if (newId && newId !== 'none') {
+    settings.value.selectedPersonaId = newId
+  } else {
+    settings.value.selectedPersonaId = undefined
+  }
+})
+
 onMounted(() => {
   fetchPersonas()
-  selectedPersonaId.value = 'none'
+  selectedPersonaId.value = settings.value.selectedPersonaId || 'none'
 })
 </script>

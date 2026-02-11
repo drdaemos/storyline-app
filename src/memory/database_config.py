@@ -21,6 +21,7 @@ class DatabaseConfig:
             memory_dir: Directory for SQLite files (ignored if using PostgreSQL)
         """
         self.memory_dir = memory_dir or Path.cwd() / "memory"
+        self._memory_dir_explicit = memory_dir is not None
         self._engine: Engine | None = None
         self._session_factory: SessionMaker | None = None
 
@@ -40,6 +41,14 @@ class DatabaseConfig:
         Returns:
             Database URL string
         """
+        # If an explicit memory_dir is provided, always use an isolated SQLite DB there.
+        # This avoids cross-test/process data leakage from environment-level DB settings.
+        if self._memory_dir_explicit:
+            db_name = os.getenv("DB_NAME", "conversations.db")
+            self.memory_dir.mkdir(parents=True, exist_ok=True)
+            db_path = self.memory_dir / db_name
+            return f"sqlite:///{db_path}"
+
         # Check for explicit DATABASE_URL first
         database_url = os.getenv("DATABASE_URL")
         if database_url:

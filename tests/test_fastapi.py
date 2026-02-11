@@ -73,7 +73,7 @@ def test_streaming_interaction() -> None:
         print(f"Testing with character: {character_name}")
 
         # Test streaming interaction
-        interaction_data = {"character_name": character_name, "user_message": "Hello! How are you today?", "processor_type": "google"}
+        interaction_data = {"character_name": character_name, "user_message": "Hello! How are you today?", "session_id": "manual-test-session"}
 
         print("\nSending interaction request...")
         print(f"Request data: {json.dumps(interaction_data, indent=2)}")

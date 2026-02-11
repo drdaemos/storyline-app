@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from anthropic.types import TextBlockParam
 
@@ -28,3 +28,4 @@ class GenericMessage(TypedDict):
     content: str
     type: Literal["conversation", "evaluation", "summary"]
     created_at: str
+    meta_text: NotRequired[str | None]

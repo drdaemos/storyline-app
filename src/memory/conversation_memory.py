@@ -49,6 +49,7 @@ class ConversationMemory:
         session_id: str,
         role: str,
         content: str,
+        meta_text: str | None = None,
         message_type: str = "conversation",
         user_id: str = "anonymous",
         scenario_id: str | None = None,
@@ -78,6 +79,7 @@ class ConversationMemory:
                 session_id=session_id,
                 role=role,
                 content=content,
+                meta_text=meta_text,
                 offset=next_offset,
                 type=message_type,
                 user_id=user_id,
@@ -111,7 +113,15 @@ class ConversationMemory:
             for i, msg in enumerate(messages):
                 message_type = msg.get("type", "conversation")
                 message_obj = Message(
-                    character_id=character_id, session_id=session_id, role=msg["role"], content=msg["content"], offset=max_offset + 1 + i, type=message_type, user_id=user_id, created_at=datetime.now()
+                    character_id=character_id,
+                    session_id=session_id,
+                    role=msg["role"],
+                    content=msg["content"],
+                    meta_text=msg.get("meta_text"),
+                    offset=max_offset + 1 + i,
+                    type=message_type,
+                    user_id=user_id,
+                    created_at=datetime.now(),
                 )
                 message_objects.append(message_obj)
 
@@ -139,7 +149,7 @@ class ConversationMemory:
 
             messages = query.all()
 
-            return [{"role": msg.role, "content": msg.content, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]
+            return [{"role": msg.role, "content": msg.content, "meta_text": msg.meta_text, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]
 
     def get_character_sessions(self, character_id: str, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
         """
@@ -224,7 +234,7 @@ class ConversationMemory:
             # Query the subquery ordered by offset ascending (chronological order)
             messages = session.query(subquery).order_by(subquery.c.offset).all()
 
-            return [{"role": msg.role, "content": msg.content, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]
+            return [{"role": msg.role, "content": msg.content, "meta_text": msg.meta_text, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]
 
     def delete_messages_from_offset(self, session_id: str, user_id: str, from_offset: int) -> int:
         """

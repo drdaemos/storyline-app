@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import type {
   CharacterSummary,
+  Character,
   SessionInfo,
   InteractRequest,
   CreateCharacterRequest,
@@ -18,6 +19,12 @@ import type {
   SaveScenarioResponse,
   ListScenariosResponse,
   Scenario,
+  WorldLoreAsset,
+  SaveWorldLoreRequest,
+  SaveWorldLoreResponse,
+  WorldLoreCreationRequest,
+  PartialWorldLore,
+  RulesetDefinition,
 } from '@/types'
 import { useAuth } from './useAuth'
 
@@ -97,8 +104,8 @@ export function useApi() {
     return makeRequest<CharacterSummary[]>('/api/characters')
   }
 
-  const getCharacterInfo = async (name: string): Promise<Record<string, string>> => {
-    return makeRequest<Record<string, string>>(`/api/characters/${encodeURIComponent(name)}`)
+  const getCharacterInfo = async (name: string): Promise<Character> => {
+    return makeRequest<Character>(`/api/characters/${encodeURIComponent(name)}`)
   }
 
   const getSessions = async (): Promise<SessionInfo[]> => {
@@ -510,6 +517,10 @@ export function useApi() {
     return makeRequest<ListScenariosResponse>(`/api/scenarios/list/${encodeURIComponent(characterName)}`)
   }
 
+  const listAllScenarios = async (): Promise<ListScenariosResponse> => {
+    return makeRequest<ListScenariosResponse>('/api/scenarios/list')
+  }
+
   const getScenarioDetail = async (scenarioId: string): Promise<Scenario> => {
     return makeRequest<Scenario>(`/api/scenarios/detail/${encodeURIComponent(scenarioId)}`)
   }
@@ -522,6 +533,121 @@ export function useApi() {
 
   const getPersonas = async (): Promise<CharacterSummary[]> => {
     return makeRequest<CharacterSummary[]>('/api/personas')
+  }
+
+  const listRulesets = async (): Promise<RulesetDefinition[]> => {
+    return makeRequest<RulesetDefinition[]>('/api/rulesets')
+  }
+
+  const listWorldLore = async (): Promise<WorldLoreAsset[]> => {
+    return makeRequest<WorldLoreAsset[]>('/api/world-lore')
+  }
+
+  const getWorldLore = async (worldLoreId: string): Promise<WorldLoreAsset> => {
+    return makeRequest<WorldLoreAsset>(`/api/world-lore/${encodeURIComponent(worldLoreId)}`)
+  }
+
+  const saveWorldLore = async (payload: SaveWorldLoreRequest): Promise<SaveWorldLoreResponse> => {
+    return makeRequest<SaveWorldLoreResponse>('/api/world-lore', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  const deleteWorldLore = async (worldLoreId: string): Promise<{ message: string }> => {
+    return makeRequest<{ message: string }>(`/api/world-lore/${encodeURIComponent(worldLoreId)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  const streamWorldLoreCreation = async (
+    payload: WorldLoreCreationRequest,
+    onMessage: (message: string) => void,
+    onUpdate: (updates: PartialWorldLore) => void,
+    onComplete: () => void,
+    onError: (errorMessage: string) => void
+  ): Promise<void> => {
+    const token = await getAuthToken()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    try {
+      const response = await fetch('/api/world-lore/create-stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        onError(errorMessage)
+        return
+      }
+
+      if (!response.body) {
+        onError('Response body is null')
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const readStream = async (): Promise<void> => {
+        try {
+          const { done, value } = await reader.read()
+
+          if (done) {
+            return
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            try {
+              const jsonData = line.slice(6).trim()
+              if (jsonData === '[DONE]') {
+                return
+              }
+
+              const data = JSON.parse(jsonData)
+              if (data.type === 'message' && data.message) {
+                onMessage(data.message)
+              } else if (data.type === 'update' && data.updates) {
+                onUpdate(data.updates)
+              } else if (data.type === 'complete') {
+                onComplete()
+                return
+              } else if (data.type === 'error') {
+                onError(data.error || 'An error occurred')
+                return
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse SSE data:', parseError, 'Line:', line)
+            }
+          }
+
+          await readStream()
+        } catch (readError) {
+          onError(readError instanceof Error ? readError.message : 'Stream read error')
+        }
+      }
+
+      await readStream()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to connect to stream')
+    }
   }
 
   return {
@@ -542,8 +668,15 @@ export function useApi() {
     streamScenarioCreation,
     saveScenario,
     listScenariosForCharacter,
+    listAllScenarios,
     getScenarioDetail,
     deleteScenario,
     getPersonas,
+    listRulesets,
+    listWorldLore,
+    getWorldLore,
+    saveWorldLore,
+    deleteWorldLore,
+    streamWorldLoreCreation,
   }
 }

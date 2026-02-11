@@ -4,8 +4,6 @@ from typing import Any
 
 from sqlalchemy import func
 
-from src.models.summary import StorySummary
-
 from .database_config import DatabaseConfig
 from .db_models import Summary
 

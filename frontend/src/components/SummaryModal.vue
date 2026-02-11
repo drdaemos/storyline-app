@@ -1,5 +1,5 @@
 <template>
-  <UModal v-model:open="isOpen" :ui="{ width: 'max-w-3xl' }">
+  <UModal v-model:open="isOpen">
     <template #content>
       <UCard>
         <template #header>

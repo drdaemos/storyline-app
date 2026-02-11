@@ -129,6 +129,8 @@ Build scenarios with these components:
 - **summary**: A striking, evocative title (like a book chapter or episode name)
 - **intro_message**: The opening scene text that sets everything in motion (max 1000 chars)
 - **narrative_category**: Genre/tone label (e.g., "romantic tension", "dark mystery", "comedic chaos")
+- **ruleset_id**: Which ruleset governs this scenario's mechanics
+- **scene_seed**: Ruleset-specific scene state overrides to initialize runtime
 - **location**: Where this takes place
 - **time_context**: When/what situation led here
 - **atmosphere**: The mood and sensory details
@@ -183,6 +185,8 @@ When you create or modify scenario elements, output them in this format:
   "summary": "The title",
   "intro_message": "The opening scene...",
   "narrative_category": "genre/tone",
+  "ruleset_id": "everyday-tension",
+  "scene_seed": {"location": "Back alley behind the club", "pressure_clock": 1},
   "location": "where it happens",
   "time_context": "when/situation",
   "atmosphere": "mood description",

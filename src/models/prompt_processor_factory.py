@@ -25,7 +25,7 @@ class PromptProcessorFactory:
         """
         match processor_type.lower():
             case "claude-opus":
-                return ClaudePromptProcessor(model="claude-opus-4-5")
+                return ClaudePromptProcessor(model="claude-opus-4-6")
             case "claude-sonnet":
                 return ClaudePromptProcessor(model="claude-sonnet-4-5")
             case "claude" | "claude-haiku":
@@ -38,12 +38,10 @@ class PromptProcessorFactory:
                 return OpenRouterPromptProcessor(model="google/gemini-3-pro-preview")
             case "deepseek-v32":
                 return OpenRouterPromptProcessor(model="deepseek/deepseek-v3.2")
-            case "kimi":
-                return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-0905")
-            case "kimi-thinking":
-                return OpenRouterPromptProcessor(model="moonshotai/kimi-k2-thinking")
-            case "mistral":
-                return OpenRouterPromptProcessor(model="mistralai/mistral-small-creative")
+            case "kimi-k2.5":
+                return OpenRouterPromptProcessor(model="moonshotai/kimi-k2.5")
+            case "minimax-m2-her":
+                return OpenRouterPromptProcessor(model="minimax/minimax-m2-her")
             case "grok":
                 return OpenRouterPromptProcessor(model="x-ai/grok-4.1-fast")
             case "glm":

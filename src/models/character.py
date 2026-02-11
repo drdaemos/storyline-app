@@ -13,12 +13,13 @@ class Character(BaseModel):
     personality: str = Field("", description="Personality traits and characteristics")
     appearance: str = Field("", description="Physical description")
     relationships: dict[str, str] = Field(default_factory=dict, description="Relationships with other characters")
-    key_locations: list[str] = Field(default_factory=list, description="Important locations for the character")
-    setting_description: str = Field("", description="Description of the world/setting the character exists in")
+    ruleset_id: str = Field(default="everyday-tension", description="Ruleset this character is authored for")
+    ruleset_stats: dict[str, int | float | str | bool] = Field(default_factory=dict, description="Ruleset-specific stat values")
     interests: list[str] = Field(default_factory=list, description="Character's interests and hobbies")
     dislikes: list[str] = Field(default_factory=list, description="Things the character dislikes")
     desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
     kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
+    tags: list[str] = Field(default_factory=list, description="Character tags used for filtering and grouping")
     is_persona: bool = Field(default=False, description="Whether this character is a persona (user character)")
 
     @classmethod
@@ -35,7 +36,7 @@ class Character(BaseModel):
         Args:
             role: The role label for this character (e.g., "Character", "User", "Persona")
             controller: Who controls this character ("AI" or "Human"). If provided, adds a clear indicator.
-            include_world_info: Whether to include world information (key_locations, setting_description)
+            include_world_info: Kept for backwards compatibility; ignored.
 
         Returns:
             A formatted string with character information
@@ -73,20 +74,15 @@ class Character(BaseModel):
         if self.kinks:
             lines.append(f"[Kinks] {', '.join(self.kinks)}")
 
+        if self.ruleset_id:
+            lines.append(f"[Ruleset] {self.ruleset_id}")
+        if self.ruleset_stats:
+            lines.append(f"[Ruleset Stats] {self.ruleset_stats}")
+
         if self.relationships:
             lines.append("**Relationships:**")
             for person, relationship in self.relationships.items():
                 lines.append(f"  - {person}: {relationship}")
-
-        # Only include world info if requested (typically for AI character only)
-        if include_world_info:
-            if self.setting_description:
-                lines.append(f"**Setting/World description:** {self.setting_description}")
-
-            if self.key_locations:
-                lines.append("**Key Locations:**")
-                for location in self.key_locations:
-                    lines.append(f"  - {location}")
 
         return "\n".join(lines)
 
@@ -101,10 +97,11 @@ class PartialCharacter(BaseModel):
     personality: str = Field(default="", description="Personality traits and characteristics")
     appearance: str = Field(default="", description="Physical description")
     relationships: dict[str, str] = Field(default_factory=dict, description="Relationships with other characters")
-    key_locations: list[str] = Field(default_factory=list, description="Important locations for the character")
-    setting_description: str = Field(default="", description="Description of the world/setting the character exists in")
+    ruleset_id: str = Field(default="everyday-tension", description="Ruleset this character is authored for")
+    ruleset_stats: dict[str, int | float | str | bool] = Field(default_factory=dict, description="Ruleset-specific stat values")
     interests: list[str] = Field(default_factory=list, description="Character's interests and hobbies")
     dislikes: list[str] = Field(default_factory=list, description="Things the character dislikes")
     desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
     kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
+    tags: list[str] = Field(default_factory=list, description="Character tags used for filtering and grouping")
     is_persona: bool = Field(default=False, description="Whether this character is a persona (user character)")

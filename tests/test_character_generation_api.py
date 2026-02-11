@@ -29,8 +29,8 @@ def mock_complete_character():
         personality="Courageous and honorable",
         appearance="Tall warrior in shining armor",
         relationships={"princess": "sworn protector", "king": "loyal servant"},
-        key_locations=["Royal Castle", "Training Grounds"],
-        setting_description="Medieval fantasy kingdom",
+        ruleset_id="everyday-tension",
+        ruleset_stats={"warmth": 6, "logic": 7},
     )
 
 
@@ -72,7 +72,7 @@ class TestCharacterGenerationAPI:
 
         # Verify all fields were generated
         generated_fields = data["generated_fields"]
-        expected_fields = {"name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"}
+        expected_fields = {"name", "tagline", "backstory", "personality", "appearance", "relationships", "ruleset_id", "ruleset_stats"}
         assert set(generated_fields) == expected_fields
 
         # Verify CharacterCreator was called correctly
@@ -104,7 +104,7 @@ class TestCharacterGenerationAPI:
 
         # Verify only missing fields were marked as generated
         generated_fields = data["generated_fields"]
-        expected_generated = {"backstory", "personality", "appearance", "relationships", "key_locations", "setting_description"}
+        expected_generated = {"backstory", "personality", "appearance", "relationships", "ruleset_id", "ruleset_stats"}
         assert set(generated_fields) == expected_generated
 
         # Verify CharacterCreator was called with partial data
@@ -112,13 +112,13 @@ class TestCharacterGenerationAPI:
 
     @patch("src.fastapi_server.CharacterResponderDependencies")
     @patch("src.fastapi_server.CharacterCreator")
-    def test_generate_character_with_relationships_and_locations(self, mock_creator_class, mock_deps_class, client, mock_complete_character):
+    def test_generate_character_with_relationships_and_ruleset(self, mock_creator_class, mock_deps_class, client, mock_complete_character):
         """Test character generation with complex fields provided."""
         # Setup mocks
         mock_creator_instance = _setup_mocks(mock_creator_class, mock_deps_class)
         mock_creator_instance.generate.return_value = mock_complete_character
 
-        partial_input = {"name": "Generated Hero", "relationships": {"friend": "loyal companion"}, "key_locations": ["Home Village"]}
+        partial_input = {"name": "Generated Hero", "relationships": {"friend": "loyal companion"}, "ruleset_id": "everyday-tension"}
 
         # Make request
         response = client.post("/api/characters/generate", json={"partial_character": partial_input, "processor_type": "cohere"})
@@ -129,12 +129,12 @@ class TestCharacterGenerationAPI:
 
         # Verify only missing fields were marked as generated
         generated_fields = data["generated_fields"]
-        expected_generated = {"tagline", "backstory", "personality", "appearance", "setting_description"}
+        expected_generated = {"tagline", "backstory", "personality", "appearance", "ruleset_stats"}
         assert set(generated_fields) == expected_generated
 
-        # Relationships and key_locations should not be in generated fields
+        # Relationships and ruleset_id should not be in generated fields
         assert "relationships" not in generated_fields
-        assert "key_locations" not in generated_fields
+        assert "ruleset_id" not in generated_fields
 
     @patch("src.fastapi_server.CharacterResponderDependencies")
     @patch("src.fastapi_server.CharacterCreator")

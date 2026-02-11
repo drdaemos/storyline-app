@@ -9,6 +9,8 @@ class CharacterSummary(BaseModel):
     id: str = Field(..., description="Character ID")
     name: str = Field(..., description="Character name")
     tagline: str = Field(..., description="Character tagline/description")
+    tags: list[str] = Field(default_factory=list, description="Character tags used for filtering and grouping")
+    is_persona: bool = Field(default=False, description="Whether this summary represents a persona")
 
 
 class CreateCharacterRequest(BaseModel):
@@ -29,9 +31,7 @@ class CreateCharacterResponse(BaseModel):
 class InteractRequest(BaseModel):
     character_name: str = Field(..., min_length=1, description="Name of the character to interact with")
     user_message: str = Field(..., min_length=1, description="User's message to the character")
-    session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
-    processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
-    backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
+    session_id: str = Field(..., min_length=1, description="Session ID for simulation continuity")
 
 
 class SessionInfo(BaseModel):
@@ -46,6 +46,7 @@ class SessionMessage(BaseModel):
     role: str
     content: str
     created_at: str
+    meta_text: str | None = None
 
 
 class SessionDetails(BaseModel):
@@ -54,6 +55,7 @@ class SessionDetails(BaseModel):
     message_count: int
     last_messages: list[SessionMessage]
     last_message_time: str
+    suggested_actions: list[str] = Field(default_factory=list)
 
 
 class HealthStatus(BaseModel):
@@ -82,6 +84,8 @@ class StreamEvent(BaseModel):
     full_response: str | None = None
     message_count: int | None = None
     stage: str | None = None  # For thinking events
+    suggested_actions: list[str] | None = None
+    meta_text: str | None = None
 
 
 class GenerateCharacterRequest(BaseModel):
@@ -109,7 +113,13 @@ class Scenario(BaseModel):
 
     # Character references (for interactive/stored scenarios)
     character_id: str = Field(default="", description="Main AI character ID this scenario is for")
-    persona_id: str = Field(..., min_length=1, description="User persona ID - required for all scenarios")
+    character_ids: list[str] = Field(default_factory=list, description="All character IDs participating in the scenario")
+    character_tags: list[str] = Field(default_factory=list, description="Selected character tags used to resolve cast")
+    ruleset_id: str = Field(default="everyday-tension", description="Ruleset ID controlling mechanics and scene schema")
+    persona_id: str = Field(default="", description="User persona ID")
+    world_lore_id: str | None = Field(default=None, description="Optional world lore asset ID")
+    world_lore_tags: list[str] = Field(default_factory=list, description="Selected world lore tags used to resolve context")
+    scene_seed: dict = Field(default_factory=dict, description="Ruleset-specific initial scene state overrides")
 
     # Location/Setting
     location: str = Field(default="", description="Where the scenario takes place")
@@ -144,17 +154,28 @@ class GenerateScenariosResponse(BaseModel):
 class StartSessionRequest(BaseModel):
     """Request model for starting a session with a scenario."""
 
-    character_name: str = Field(..., min_length=1, description="Name of the character")
+    character_name: str | None = Field(None, min_length=1, description="Name of the character (required when scenario_id is not provided)")
     scenario_id: str | None = Field(None, description="ID of a stored scenario to use")
     intro_message: str | None = Field(None, description="The scenario intro message (used if scenario_id not provided)")
-    processor_type: str = Field(default="claude", description="AI processor type")
-    backup_processor_type: str | None = Field(None, description="Optional backup processor type")
+    persona_id: str | None = Field(None, description="Optional persona id (required when no scenario_id)")
+    ruleset_id: str = Field(default="everyday-tension", description="Ruleset ID (used when scenario_id is not provided)")
+    world_lore_id: str = Field(default="default-world", description="World lore ID (used when scenario_id is not provided)")
+    scene_seed: dict = Field(default_factory=dict, description="Scene state overrides (used when scenario_id is not provided)")
+    small_model_key: str = Field(default="deepseek-v32", description="Small model taxonomy key (ruleset/reflection)")
+    large_model_key: str = Field(default="claude-sonnet", description="Large model taxonomy key (narrator)")
 
 
 class StartSessionResponse(BaseModel):
     """Response model for starting a session."""
 
     session_id: str = Field(..., description="The created session ID")
+
+
+class ConfigureSessionModelsRequest(BaseModel):
+    """Request model for updating per-session model keys."""
+
+    small_model_key: str = Field(..., min_length=1, description="Small model taxonomy key")
+    large_model_key: str = Field(..., min_length=1, description="Large model taxonomy key")
 
 
 class ChatMessageModel(BaseModel):
@@ -209,7 +230,13 @@ class PartialScenario(BaseModel):
     intro_message: str = Field(default="", description="Complete introductory message to set the scene")
     narrative_category: str = Field(default="", description="Short label for genre and tone")
     character_id: str = Field(default="", description="Main AI character ID")
+    character_ids: list[str] = Field(default_factory=list, description="All participating character IDs")
+    character_tags: list[str] = Field(default_factory=list, description="Selected character tags")
+    ruleset_id: str = Field(default="everyday-tension", description="Ruleset ID controlling mechanics and scene schema")
     persona_id: str | None = Field(None, description="Optional user persona ID")
+    world_lore_id: str | None = Field(default=None, description="Optional world lore asset ID")
+    world_lore_tags: list[str] = Field(default_factory=list, description="Selected world lore tags")
+    scene_seed: dict = Field(default_factory=dict, description="Ruleset-specific initial scene state overrides")
     suggested_persona_id: str | None = Field(None, description="AI-suggested persona ID based on scenario direction")
     suggested_persona_reason: str = Field(default="", description="Reason for persona suggestion")
     location: str = Field(default="", description="Where the scenario takes place")
@@ -227,6 +254,7 @@ class ScenarioCreationRequest(BaseModel):
     user_message: str = Field(..., min_length=1, description="User's message about the scenario")
     current_scenario: PartialScenario = Field(default_factory=PartialScenario, description="Current partial scenario data")
     character_name: str = Field(..., min_length=1, description="Name/ID of the AI character to build scenario for")
+    character_names: list[str] = Field(default_factory=list, description="All selected character IDs for multi-character scenarios")
     persona_id: str | None = Field(None, description="Optional persona ID currently selected by user")
     available_personas: list[PersonaSummary] = Field(default_factory=list, description="List of available personas for AI to suggest from")
     conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages for context")
@@ -264,6 +292,11 @@ class ScenarioSummary(BaseModel):
     summary: str = Field(..., description="Scenario title/summary")
     narrative_category: str = Field(..., description="Genre/tone label")
     character_id: str = Field(..., description="Associated character ID")
+    character_ids: list[str] = Field(default_factory=list, description="All scenario characters")
+    character_tags: list[str] = Field(default_factory=list, description="Character tags used for cast selection")
+    ruleset_id: str = Field(default="everyday-tension", description="Ruleset ID used by this scenario")
+    world_lore_id: str | None = Field(default=None, description="Optional world lore ID")
+    world_lore_tags: list[str] = Field(default_factory=list, description="World lore tags used for context selection")
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
 
@@ -275,9 +308,67 @@ class ListScenariosResponse(BaseModel):
     scenarios: list[ScenarioSummary] = Field(..., description="List of scenario summaries")
 
 
+class WorldLoreAsset(BaseModel):
+    id: str = Field(..., description="World lore ID")
+    name: str = Field(..., description="Display name")
+    lore_text: str = Field(..., description="Main world lore text")
+    tags: list[str] = Field(default_factory=list, description="Tags for UI filtering and categorization")
+    keywords: list[str] = Field(default_factory=list, description="Search-oriented keywords for future dynamic retrieval")
+    lore_json: dict | None = Field(default=None, description="Optional structured metadata")
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Update timestamp")
+
+
+class SaveWorldLoreRequest(BaseModel):
+    name: str = Field(..., min_length=1, description="World lore name")
+    lore_text: str = Field(..., min_length=1, description="World lore text content")
+    tags: list[str] = Field(default_factory=list, description="Tags used for filtering and grouping")
+    keywords: list[str] = Field(default_factory=list, description="Keywords used for future search indexing")
+    lore_json: dict | None = Field(default=None, description="Optional structured metadata")
+    world_lore_id: str | None = Field(default=None, description="Optional ID for update")
+
+
+class SaveWorldLoreResponse(BaseModel):
+    world_lore_id: str = Field(..., description="Saved world lore ID")
+    message: str = Field(default="World lore saved successfully", description="Status message")
+
+
+class PartialWorldLore(BaseModel):
+    name: str = Field(default="", description="World lore display name")
+    lore_text: str = Field(default="", description="Main world lore text")
+    tags: list[str] = Field(default_factory=list, description="Tags for filtering and categorization")
+    keywords: list[str] = Field(default_factory=list, description="Keywords for retrieval/indexing")
+
+
+class WorldLoreCreationRequest(BaseModel):
+    user_message: str = Field(..., min_length=1, description="User's message about the world lore")
+    current_world_lore: PartialWorldLore = Field(default_factory=PartialWorldLore, description="Current partial world lore data")
+    conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages for context")
+    processor_type: str = Field(default="claude", description="AI processor type to use")
+    backup_processor_type: str | None = Field(None, description="Optional backup processor type")
+
+
+class WorldLoreCreationStreamEvent(BaseModel):
+    type: str = Field(..., description="Event type: 'message', 'update', 'complete', 'error'")
+    message: str | None = Field(None, description="AI message chunk to show in chat")
+    updates: PartialWorldLore | None = Field(None, description="Updated world lore state")
+    error: str | None = Field(None, description="Error message if type is 'error'")
+
+
 class SessionSummaryResponse(BaseModel):
     """Response model for session summary."""
 
     session_id: str = Field(..., description="The session ID")
     summary_text: str = Field(..., description="Formatted summary text as it would appear in the prompt")
     has_summary: bool = Field(..., description="Whether the session has any summaries")
+
+
+class RulesetDefinition(BaseModel):
+    """Ruleset metadata and schema definition for ruleset-aware forms."""
+
+    id: str = Field(..., description="Ruleset ID")
+    name: str = Field(..., description="Display name")
+    rulebook_text: str = Field(..., description="Ruleset rulebook text")
+    character_stat_schema: dict = Field(default_factory=dict, description="Schema for character stat blocks")
+    scene_state_schema: dict = Field(default_factory=dict, description="Schema for scene state")
+    mechanics_guidance: dict | None = Field(default=None, description="Optional mechanics metadata")

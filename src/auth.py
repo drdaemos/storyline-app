@@ -11,11 +11,22 @@ from typing import Annotated
 from clerk_backend_api import AuthenticateRequestOptions, Clerk
 from fastapi import Depends, HTTPException, Request, status
 
+DEV_BYPASS_USER = {
+    "user_id": "dev-local-user",
+    "email": "dev-local@example.com",
+    "name": "Local Dev User",
+}
+
 
 # Check if authentication is enabled
 def is_auth_enabled() -> bool:
     """Check if authentication is enabled via AUTH_ENABLED environment variable."""
     return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
+
+
+def is_dev_auth_bypass_enabled() -> bool:
+    """Check if local development auth bypass is enabled."""
+    return os.getenv("DEV_AUTH_BYPASS", "false").lower() in ("true", "1", "yes")
 
 
 # Initialize Clerk client
@@ -31,7 +42,8 @@ async def verify_clerk_token(request: Request) -> str:
     """
     Verify the Clerk JWT token from the request.
 
-    If AUTH_ENABLED is false, returns a default user ID without verification.
+    If DEV_AUTH_BYPASS is true, returns a static local user ID without verification.
+    If AUTH_ENABLED is false, returns "anonymous" without verification.
     Otherwise, verifies the token with Clerk and extracts the user ID.
 
     Args:
@@ -43,6 +55,10 @@ async def verify_clerk_token(request: Request) -> str:
     Raises:
         HTTPException: If auth is enabled and the token is invalid or verification fails
     """
+    if is_dev_auth_bypass_enabled():
+        request.state.auth_user = DEV_BYPASS_USER
+        return DEV_BYPASS_USER["user_id"]
+
     # If authentication is disabled, return a default user ID
     if not is_auth_enabled():
         return "anonymous"
@@ -70,6 +86,11 @@ async def verify_clerk_token(request: Request) -> str:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        request.state.auth_user = {
+            "user_id": user_id,
+            "email": request_state.payload.get("email") if request_state.payload else None,
+            "name": request_state.payload.get("name") if request_state.payload else None,
+        }
         return user_id
 
     except HTTPException:

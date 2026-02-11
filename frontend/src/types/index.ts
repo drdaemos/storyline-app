@@ -2,6 +2,8 @@ export interface CharacterSummary {
   id: string
   name: string
   tagline: string
+  tags?: string[]
+  is_persona?: boolean
 }
 
 export interface Character {
@@ -11,12 +13,13 @@ export interface Character {
   personality?: string
   appearance?: string
   relationships?: Record<string, string>
-  key_locations?: string[]
-  setting_description?: string
+  ruleset_id?: string
+  ruleset_stats?: Record<string, number | string | boolean>
   interests?: string[]
   dislikes?: string[]
   desires?: string[]
   kinks?: string[]
+  tags?: string[]
 }
 
 export interface SessionInfo {
@@ -32,14 +35,13 @@ export interface ChatMessage {
   content: string
   isUser: boolean
   timestamp: Date
+  metaText?: string | null
 }
 
 export interface InteractRequest {
   character_name: string
   user_message: string
-  session_id?: string | null
-  processor_type?: string
-  backup_processor_type?: string
+  session_id: string
 }
 
 export interface CreateCharacterRequest {
@@ -65,17 +67,19 @@ export interface GenerateCharacterResponse {
 }
 
 export interface StreamEvent {
-  type: 'chunk' | 'complete' | 'error' | 'session' | 'thinking' | 'command'
+  type: 'chunk' | 'complete' | 'error' | 'session' | 'thinking'
   session_id?: string
   content?: string
   error?: string
   stage?: string // For thinking events: 'summarizing' | 'deliberating' | 'responding'
-  succeeded?: string // For command events: 'true' | 'false'
+  suggested_actions?: string[]
+  meta_text?: string | null
 }
 
 export interface LocalSettings {
-  aiProcessor: string
-  backupProcessor: string
+  largeModelKey: string
+  smallModelKey: string
+  selectedPersonaId?: string
   lastSelectedCharacter?: string
 }
 
@@ -83,6 +87,7 @@ export interface SessionMessage {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+  meta_text?: string | null
 }
 
 export interface SessionDetails {
@@ -91,6 +96,7 @@ export interface SessionDetails {
   message_count: number
   last_messages: SessionMessage[]
   last_message_time: string
+  suggested_actions?: string[]
 }
 
 export interface Scenario {
@@ -98,7 +104,13 @@ export interface Scenario {
   intro_message: string
   narrative_category: string
   character_id?: string
+  character_ids?: string[]
+  character_tags?: string[]
+  ruleset_id?: string
   persona_id?: string
+  world_lore_id?: string | null
+  world_lore_tags?: string[]
+  scene_seed?: Record<string, unknown>
   location?: string
   time_context?: string
   atmosphere?: string
@@ -115,7 +127,13 @@ export interface PartialScenario {
   intro_message?: string
   narrative_category?: string
   character_id?: string
+  character_ids?: string[]
+  character_tags?: string[]
+  ruleset_id?: string
   persona_id?: string
+  world_lore_id?: string | null
+  world_lore_tags?: string[]
+  scene_seed?: Record<string, unknown>
   location?: string
   time_context?: string
   atmosphere?: string
@@ -138,6 +156,7 @@ export interface ScenarioCreationRequest {
   user_message: string
   current_scenario: PartialScenario
   character_name: string
+  character_names?: string[]
   persona_id?: string | null
   available_personas?: PersonaSummary[]
   conversation_history?: Array<{
@@ -170,6 +189,11 @@ export interface ScenarioSummary {
   summary: string
   narrative_category: string
   character_id: string
+  character_ids?: string[]
+  character_tags?: string[]
+  ruleset_id?: string
+  world_lore_id?: string | null
+  world_lore_tags?: string[]
   created_at: string
   updated_at: string
 }
@@ -177,6 +201,57 @@ export interface ScenarioSummary {
 export interface ListScenariosResponse {
   character_name: string
   scenarios: ScenarioSummary[]
+}
+
+export interface WorldLoreAsset {
+  id: string
+  name: string
+  lore_text: string
+  tags: string[]
+  keywords: string[]
+  lore_json?: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SaveWorldLoreRequest {
+  name: string
+  lore_text: string
+  tags?: string[]
+  keywords?: string[]
+  lore_json?: Record<string, unknown> | null
+  world_lore_id?: string
+}
+
+export interface SaveWorldLoreResponse {
+  world_lore_id: string
+  message?: string
+}
+
+export interface PartialWorldLore {
+  name?: string
+  lore_text?: string
+  tags?: string[]
+  keywords?: string[]
+}
+
+export interface WorldLoreCreationRequest {
+  user_message: string
+  current_world_lore: PartialWorldLore
+  conversation_history?: Array<{
+    author: string
+    content: string
+    is_user: boolean
+  }>
+  processor_type?: string
+  backup_processor_type?: string
+}
+
+export interface WorldLoreCreationStreamEvent {
+  type: 'message' | 'update' | 'complete' | 'error'
+  message?: string
+  updates?: PartialWorldLore
+  error?: string
 }
 
 export interface GenerateScenariosRequest {
@@ -194,11 +269,15 @@ export interface GenerateScenariosResponse {
 }
 
 export interface StartSessionRequest {
-  character_name: string
+  character_name?: string
   intro_message?: string
   scenario_id?: string
-  processor_type?: string
-  backup_processor_type?: string
+  persona_id?: string | null
+  ruleset_id?: string
+  world_lore_id?: string
+  scene_seed?: Record<string, unknown>
+  small_model_key: string
+  large_model_key: string
 }
 
 export interface StartSessionResponse {
@@ -227,4 +306,13 @@ export interface CharacterCreationStreamEvent {
 export interface SessionPersonaResponse {
   persona_id: string | null
   persona_name: string | null
+}
+
+export interface RulesetDefinition {
+  id: string
+  name: string
+  rulebook_text: string
+  character_stat_schema: Record<string, unknown>
+  scene_state_schema: Record<string, unknown>
+  mechanics_guidance?: Record<string, unknown> | null
 }

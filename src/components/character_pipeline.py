@@ -3,6 +3,8 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import TypedDict
 
+from pydantic import BaseModel
+
 from src.models.character import Character
 from src.models.evaluation import Evaluation
 from src.models.message import GenericMessage
@@ -215,6 +217,9 @@ Story & Pacing:
 - Assess the situation and plot threads to consider pacing and progression through the story arc.
 - Avoid stalling—keep the narrative moving forward. Characters should take actions rather than endlessly asking questions or waiting for permission.
 - If your previous response only had mostly dialogue without much action or changes to the scene, you MUST drive the story forward either with {character_name}'s actions, new revelations, or by introducing changes to the setting.
+- Every response must include at least one concrete action with an explicit target, object, or location.
+- Avoid vague actions and placeholders such as "make a move", "test the tension", "do something", "someone", or "something".
+- If {character_name} asks a question, make it specific to a named person or a clear topic tied to what just happened.
 - {character_name} pursues their own agenda and wishes or needs actively; they are not obliged to serve the user's wishes, they don't have to align with them.
 - Respect knowledge limitations, do not be omniscient: characters only know what they've experienced or been told based on the description and story so far.
 
@@ -382,7 +387,7 @@ Respond to the user now:
             yield buffer
 
     @staticmethod
-    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage], input: GetMemorySummaryInput) -> StorySummary:
+    def get_memory_summary(processor: PromptProcessor, memory: list[GenericMessage], input: GetMemorySummaryInput) -> StorySummary | str:
         developer_prompt = """You are analyzing a part of the fictional story, co-written by user and ai, to extract essential information and summarize it before messages will be removed from the memory.
 Be ruthlessly selective - if something is no longer relevant for the story's future, omit it entirely.
 You MUST NOT continue the story here - this is purely an analysis and summarization task.
@@ -496,7 +501,11 @@ Return your analysis as a structured JSON object matching the StorySummary schem
         user_prompt = "## New part of the story to summarize\n\n" + "\n\n".join(f"{message['role']}: {message['content']}" for message in memory)
 
         # Process the prompt
-        summary = processor.respond_with_model(prompt=developer_prompt.format(**variables), user_prompt=user_prompt, output_type=StorySummary)
+        legacy_text_mode = hasattr(processor, "response") and not isinstance(processor.response, BaseModel)  # type: ignore[attr-defined]
+        if legacy_text_mode:
+            summary = processor.respond_with_text(prompt=developer_prompt.format(**variables), user_prompt=user_prompt)
+        else:
+            summary = processor.respond_with_model(prompt=developer_prompt.format(**variables), user_prompt=user_prompt, output_type=StorySummary)
 
         return summary
 

@@ -7,9 +7,8 @@ describe('Auto-scroll Functionality', () => {
     // This test verifies that the auto-scroll implementation exists
     // by checking that the watchers are set up correctly
 
-    const mockMessages = ref([])
     const mockStreamingContent = ref('')
-    const mockError = ref(null)
+    const mockError = ref<string | null>(null)
     const mockAutoScroll = ref(true)
     const mockScrollToBottom = vi.fn()
 
@@ -39,7 +38,7 @@ describe('Auto-scroll Functionality', () => {
     })
 
     // Test messages watcher
-    const oldMessages = []
+    const oldMessages: Array<{ id: string; content: string; isUser: boolean; author: string; timestamp: Date }> = []
     const newMessages = [
       { id: '1', content: 'test', isUser: true, author: 'User', timestamp: new Date() },
     ]

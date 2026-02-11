@@ -2,16 +2,19 @@
   <UCard
     v-if="!isCreateNew"
     :class="[
-      'min-h-48 flex items-end-safe cursor-pointer transition-all hover:shadow-md shadow-primary/20',
+      'min-h-40 cursor-pointer story-card-hover story-panel-muted',
       selected && 'ring-2 ring-primary'
     ]"
     @click="handleClick"
   >
+    <template #header>
+      <div class="h-12 rounded-lg bg-gradient-to-br from-cyan-100 to-emerald-50 border border-white/70"></div>
+    </template>
     <template #footer>
       <div class="space-y-1 w-full">
-        <p class="text-md font-semibold">{{ characterSummary?.name }}</p>
-        <p v-if="characterSummary?.role" class="text-sm text-gray-600 dark:text-gray-400">
-          {{ characterSummary.role }}
+        <p class="text-lg story-headline">{{ characterSummary?.name }}</p>
+        <p v-if="characterSummary?.tagline" class="text-sm story-subtext line-clamp-2">
+          {{ characterSummary.tagline }}
         </p>
       </div>
     </template>
@@ -19,13 +22,18 @@
 
   <UCard
     v-else
-    variant="subtle"
-    class="min-h-32 flex items-end-safe cursor-pointer border-dashed hover:shadow-md shadow-indigo-500/20 transition-all"
+    class="min-h-40 cursor-pointer border-dashed story-card-hover story-panel-muted"
     @click="handleClick"
   >
-    <p class="text-md font-semibold">
-      Create New Character
-    </p>
+    <div class="h-full flex flex-col justify-between gap-3">
+      <div class="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
+        <UIcon name="i-lucide-user-round-plus" class="w-5 h-5 text-primary" />
+      </div>
+      <div>
+        <p class="text-lg story-headline">Create New Character</p>
+        <p class="text-sm story-subtext">Open the creation hub and launch a fresh profile.</p>
+      </div>
+    </div>
   </UCard>
 </template>
 

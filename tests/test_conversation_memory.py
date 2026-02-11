@@ -278,6 +278,30 @@ class TestConversationMemory:
         assert len(messages) == 1
         assert messages[0]["content"] == "Persistent message"
 
+    def test_meta_text_persisted_with_message(self):
+        """Test that assistant meta text is persisted and returned with messages."""
+        session_id = self.memory.create_session(self.character_id)
+        self.memory.add_messages(
+            self.character_id,
+            session_id,
+            [
+                {"role": "user", "content": "Try to calm the scene.", "type": "conversation", "created_at": "2026-01-01T00:00:00Z"},
+                {
+                    "role": "assistant",
+                    "content": "The tension softens.",
+                    "meta_text": "Dice rolls:\n - [npc-1/social] 1d20 ([14]) +1 = 15\n\nScene state changes:\n - increment pressure_clock 1",
+                    "type": "conversation",
+                    "created_at": "2026-01-01T00:00:01Z",
+                },
+            ],
+        )
+
+        messages = self.memory.get_session_messages(session_id, "anonymous")
+        assert len(messages) == 2
+        assert messages[0]["meta_text"] is None
+        assert messages[1]["meta_text"] is not None
+        assert "Dice rolls:" in messages[1]["meta_text"]
+
     def test_close_method(self):
         """Test the close method (currently no-op)."""
         # Should not raise an exception

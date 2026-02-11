@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import func, or_
 
 from .database_config import DatabaseConfig
-from .db_models import Scenario
+from .db_models import SimulationScenario, SimulationScenarioCharacter
 
 
 class ScenarioRegistry:
@@ -53,22 +53,65 @@ class ScenarioRegistry:
         if scenario_id is None:
             scenario_id = str(uuid.uuid4())
 
+        character_ids = self._normalize_character_ids(scenario_data)
+        if not character_id:
+            if character_ids:
+                character_id = character_ids[0]
+            else:
+                raise ValueError("Scenario must include at least one character")
+        if character_id not in character_ids:
+            character_ids = [character_id, *character_ids]
+
+        payload = dict(scenario_data)
+        payload["character_id"] = character_id
+        payload["character_ids"] = character_ids
+        ruleset_id = str(payload.get("ruleset_id") or "everyday-tension")
+        world_lore_id = str(payload.get("world_lore_id") or "default-world")
+        summary = str(payload.get("summary") or "Untitled")
+        intro_seed = str(payload.get("intro_message") or "")
+        scene_seed = payload.get("scene_seed")
+        if not isinstance(scene_seed, dict):
+            scene_seed = {}
+        stakes = str(payload.get("stakes") or "")
+        tone = str(payload.get("narrative_category") or "")
+        goals = payload.get("character_goals")
+        if not isinstance(goals, dict):
+            goals = {}
+
         with self.db_config.create_session() as session:
-            existing_scenario = session.query(Scenario).filter(Scenario.id == scenario_id).first()
+            existing_scenario = session.query(SimulationScenario).filter(SimulationScenario.id == scenario_id).first()
 
             if existing_scenario:
                 # Update existing scenario
-                existing_scenario.scenario_data = scenario_data
+                existing_scenario.title = summary
+                existing_scenario.summary = summary
+                existing_scenario.scenario_data = payload
+                existing_scenario.ruleset_id = ruleset_id
+                existing_scenario.world_lore_id = world_lore_id
+                existing_scenario.scene_seed = scene_seed
+                existing_scenario.stakes = stakes
+                existing_scenario.tone = tone
+                existing_scenario.goals = goals
+                existing_scenario.intro_seed = intro_seed
                 existing_scenario.character_id = character_id
                 existing_scenario.schema_version = schema_version
                 existing_scenario.user_id = user_id
                 existing_scenario.updated_at = datetime.now()
             else:
                 # Create new scenario
-                scenario = Scenario(
+                scenario = SimulationScenario(
                     id=scenario_id,
+                    title=summary,
+                    summary=summary,
+                    scenario_data=payload,
+                    ruleset_id=ruleset_id,
+                    world_lore_id=world_lore_id,
+                    scene_seed=scene_seed,
+                    stakes=stakes,
+                    goals=goals,
+                    tone=tone,
+                    intro_seed=intro_seed,
                     character_id=character_id,
-                    scenario_data=scenario_data,
                     schema_version=schema_version,
                     user_id=user_id,
                     created_at=datetime.now(),
@@ -76,6 +119,14 @@ class ScenarioRegistry:
                 )
                 session.add(scenario)
 
+            session.query(SimulationScenarioCharacter).filter(SimulationScenarioCharacter.scenario_id == scenario_id).delete()
+            for member_id in character_ids:
+                session.add(
+                    SimulationScenarioCharacter(
+                        scenario_id=scenario_id,
+                        character_id=member_id,
+                    )
+                )
             session.commit()
             return scenario_id
 
@@ -91,21 +142,21 @@ class ScenarioRegistry:
             Scenario data dictionary or None if not found
         """
         with self.db_config.create_session() as session:
-            # Query for scenarios that belong to the user OR are anonymous
             scenario = (
-                session.query(Scenario)
+                session.query(SimulationScenario)
                 .filter(
-                    Scenario.id == scenario_id,
-                    or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous"),
+                    SimulationScenario.id == scenario_id,
+                    or_(SimulationScenario.user_id == user_id, SimulationScenario.user_id == "anonymous"),
                 )
                 .first()
             )
 
             if scenario:
+                scenario_payload = self._build_payload(session, scenario)
                 return {
                     "id": scenario.id,
                     "character_id": scenario.character_id,
-                    "scenario_data": scenario.scenario_data,
+                    "scenario_data": scenario_payload,
                     "schema_version": scenario.schema_version,
                     "created_at": scenario.created_at.isoformat(),
                     "updated_at": scenario.updated_at.isoformat(),
@@ -131,16 +182,21 @@ class ScenarioRegistry:
             List of scenario data dictionaries
         """
         with self.db_config.create_session() as session:
-            # Query for scenarios that belong to the user OR are anonymous
-            query = session.query(Scenario).filter(
-                Scenario.character_id == character_id,
-                or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous"),
+            query = session.query(SimulationScenario).filter(
+                or_(SimulationScenario.user_id == user_id, SimulationScenario.user_id == "anonymous"),
             )
 
             if schema_version is not None:
-                query = query.filter(Scenario.schema_version == schema_version)
+                query = query.filter(SimulationScenario.schema_version == schema_version)
 
-            scenarios = query.order_by(Scenario.updated_at.desc()).all()
+            raw_scenarios = query.order_by(SimulationScenario.updated_at.desc()).all()
+            scenarios: list[SimulationScenario] = []
+            for scenario in raw_scenarios:
+                members = self._load_scenario_members(session, scenario.id)
+                payload = self._build_payload(session, scenario, members_override=members)
+                if scenario.character_id == character_id or character_id in members:
+                    scenario.scenario_data = payload
+                    scenarios.append(scenario)
 
             return [
                 {
@@ -170,21 +226,20 @@ class ScenarioRegistry:
             List of scenario data dictionaries
         """
         with self.db_config.create_session() as session:
-            # Query for scenarios that belong to the user OR are anonymous
-            query = session.query(Scenario).filter(
-                or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous")
+            query = session.query(SimulationScenario).filter(
+                or_(SimulationScenario.user_id == user_id, SimulationScenario.user_id == "anonymous")
             )
 
             if schema_version is not None:
-                query = query.filter(Scenario.schema_version == schema_version)
+                query = query.filter(SimulationScenario.schema_version == schema_version)
 
-            scenarios = query.order_by(Scenario.updated_at.desc()).all()
+            scenarios = query.order_by(SimulationScenario.updated_at.desc()).all()
 
             return [
                 {
                     "id": s.id,
                     "character_id": s.character_id,
-                    "scenario_data": s.scenario_data,
+                    "scenario_data": self._build_payload(session, s),
                     "schema_version": s.schema_version,
                     "created_at": s.created_at.isoformat(),
                     "updated_at": s.updated_at.isoformat(),
@@ -204,9 +259,10 @@ class ScenarioRegistry:
             True if scenario was deleted, False if not found
         """
         with self.db_config.create_session() as session:
+            session.query(SimulationScenarioCharacter).filter(SimulationScenarioCharacter.scenario_id == scenario_id).delete()
             count = (
-                session.query(Scenario)
-                .filter(Scenario.id == scenario_id, Scenario.user_id == user_id)
+                session.query(SimulationScenario)
+                .filter(SimulationScenario.id == scenario_id, SimulationScenario.user_id == user_id)
                 .delete()
             )
             session.commit()
@@ -225,10 +281,10 @@ class ScenarioRegistry:
         """
         with self.db_config.create_session() as session:
             return (
-                session.query(Scenario)
+                session.query(SimulationScenario)
                 .filter(
-                    Scenario.id == scenario_id,
-                    or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous"),
+                    SimulationScenario.id == scenario_id,
+                    or_(SimulationScenario.user_id == user_id, SimulationScenario.user_id == "anonymous"),
                 )
                 .first()
                 is not None
@@ -246,8 +302,8 @@ class ScenarioRegistry:
         """
         with self.db_config.create_session() as session:
             return (
-                session.query(func.count(Scenario.id))
-                .filter(or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous"))
+                session.query(func.count(SimulationScenario.id))
+                .filter(or_(SimulationScenario.user_id == user_id, SimulationScenario.user_id == "anonymous"))
                 .scalar()
             )
 
@@ -263,11 +319,14 @@ class ScenarioRegistry:
             Scenario count for the character
         """
         with self.db_config.create_session() as session:
+            member_scenarios = {row[0] for row in session.query(SimulationScenarioCharacter.scenario_id).filter(SimulationScenarioCharacter.character_id == character_id).all()}
+            if not member_scenarios:
+                return 0
             return (
-                session.query(func.count(Scenario.id))
+                session.query(func.count(SimulationScenario.id))
                 .filter(
-                    Scenario.character_id == character_id,
-                    or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous"),
+                    SimulationScenario.id.in_(member_scenarios),
+                    or_(SimulationScenario.user_id == user_id, SimulationScenario.user_id == "anonymous"),
                 )
                 .scalar()
             )
@@ -279,3 +338,38 @@ class ScenarioRegistry:
     def close(self) -> None:
         """Close the database connection and dispose of engine resources."""
         self.db_config.dispose()
+
+    def _normalize_character_ids(self, scenario_data: dict[str, Any]) -> list[str]:
+        ids = scenario_data.get("character_ids")
+        if not isinstance(ids, list):
+            return []
+        ordered: list[str] = []
+        for item in ids:
+            value = str(item).strip()
+            if value and value not in ordered:
+                ordered.append(value)
+        return ordered
+
+    def _load_scenario_members(self, session: Any, scenario_id: str) -> list[str]:
+        rows = (
+            session.query(SimulationScenarioCharacter)
+            .filter(SimulationScenarioCharacter.scenario_id == scenario_id)
+            .order_by(SimulationScenarioCharacter.created_at.asc(), SimulationScenarioCharacter.character_id.asc())
+            .all()
+        )
+        return [row.character_id for row in rows]
+
+    def _build_payload(self, session: Any, scenario: SimulationScenario, members_override: list[str] | None = None) -> dict[str, Any]:
+        payload = dict(scenario.scenario_data or {})
+        character_ids = members_override if members_override is not None else self._load_scenario_members(session, scenario.id)
+        payload.setdefault("summary", scenario.summary)
+        payload.setdefault("intro_message", scenario.intro_seed)
+        payload.setdefault("narrative_category", scenario.tone)
+        payload.setdefault("character_id", scenario.character_id)
+        payload["character_ids"] = character_ids
+        payload.setdefault("ruleset_id", scenario.ruleset_id)
+        payload.setdefault("world_lore_id", scenario.world_lore_id)
+        payload.setdefault("scene_seed", scenario.scene_seed or {})
+        payload.setdefault("stakes", scenario.stakes)
+        payload.setdefault("character_goals", scenario.goals or {})
+        return payload

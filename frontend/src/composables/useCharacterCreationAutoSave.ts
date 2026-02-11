@@ -1,11 +1,11 @@
 import { ref, watch, type Ref } from 'vue'
-import type { Character, ChatMessage } from '@/types'
+import type { ChatMessage } from '@/types'
 
 const STORAGE_KEY_CHARACTER = 'character-creation-draft'
 const STORAGE_KEY_MESSAGES = 'character-creation-messages'
 
 export function useCharacterCreationAutoSave(
-  characterData: Partial<Character>,
+  characterData: Record<string, unknown>,
   messages: Ref<ChatMessage[]>,
   storageKeyPrefix?: string
 ) {
@@ -13,10 +13,11 @@ export function useCharacterCreationAutoSave(
   const dataKey = storageKeyPrefix ? `${storageKeyPrefix}-draft` : STORAGE_KEY_CHARACTER
   const messagesKey = storageKeyPrefix ? `${storageKeyPrefix}-messages` : STORAGE_KEY_MESSAGES
 
-  const autoSaveStatus = ref<'saved' | 'idle'>('idle')
+  const autoSaveStatus = ref<'saving' | 'saved' | 'idle'>('idle')
 
   const saveToLocalStorage = () => {
     try {
+      autoSaveStatus.value = 'saving'
       localStorage.setItem(dataKey, JSON.stringify(characterData))
       localStorage.setItem(messagesKey, JSON.stringify(messages.value))
       autoSaveStatus.value = 'saved'
@@ -36,8 +37,8 @@ export function useCharacterCreationAutoSave(
       }
 
       if (savedMessages) {
-        const parsed = JSON.parse(savedMessages)
-        messages.value = parsed.map((msg: any) => ({
+        const parsed = JSON.parse(savedMessages) as Array<Omit<ChatMessage, 'timestamp'> & { timestamp: string }>
+        messages.value = parsed.map((msg) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
         }))

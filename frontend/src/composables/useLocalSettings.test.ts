@@ -21,21 +21,21 @@ describe('useLocalSettings', () => {
     const instance2 = useLocalSettings()
 
     // Change settings in instance1
-    instance1.settings.value.aiProcessor = 'claude-sonnet'
+    instance1.settings.value.largeModelKey = 'claude-sonnet'
 
     // Wait for Vue's reactivity to propagate
     await new Promise(resolve => setTimeout(resolve, 0))
 
     // instance2 should see the change
-    expect(instance2.settings.value.aiProcessor).toBe('claude-sonnet')
+    expect(instance2.settings.value.largeModelKey).toBe('claude-sonnet')
   })
 
   it('should save changes to localStorage', async () => {
     const instance = useLocalSettings()
 
     // Change settings
-    instance.settings.value.aiProcessor = 'gpt-5.2'
-    instance.settings.value.backupProcessor = 'claude-haiku'
+    instance.settings.value.largeModelKey = 'gpt-5.2'
+    instance.settings.value.smallModelKey = 'claude-haiku'
 
     // Wait for the watcher to trigger
     await new Promise(resolve => setTimeout(resolve, 10))
@@ -54,7 +54,7 @@ describe('useLocalSettings', () => {
     const instance = useLocalSettings()
     instance.loadSettings()
 
-    expect(instance.settings.value.aiProcessor).toBe('grok')
-    expect(instance.settings.value.backupProcessor).toBe('deepseek-v32')
+    expect(instance.settings.value.largeModelKey).toBe('grok')
+    expect(instance.settings.value.smallModelKey).toBe('deepseek-v32')
   })
 })

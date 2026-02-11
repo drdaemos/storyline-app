@@ -51,7 +51,7 @@ class CharacterManager:
             raise ValueError("'backstory' must be a non-empty string")
 
         # Validate optional fields if present
-        optional_string_fields = ["personality", "appearance", "setting_description"]
+        optional_string_fields = ["personality", "appearance", "ruleset_id"]
         for field in optional_string_fields:
             if field in data and not isinstance(data[field], str):
                 raise ValueError(f"'{field}' must be a string")
@@ -63,12 +63,9 @@ class CharacterManager:
                 if not isinstance(key, str) or not isinstance(value, str):
                     raise ValueError("All keys and values in 'relationships' must be strings")
 
-        if "key_locations" in data:
-            if not isinstance(data["key_locations"], list):
-                raise ValueError("'key_locations' must be a list")
-            for location in data["key_locations"]:
-                if not isinstance(location, str):
-                    raise ValueError("All items in 'key_locations' must be strings")
+        if "ruleset_stats" in data:
+            if not isinstance(data["ruleset_stats"], dict):
+                raise ValueError("'ruleset_stats' must be a dictionary")
 
     def validate_yaml_text(self, yaml_text: str) -> dict[str, Any]:
         """

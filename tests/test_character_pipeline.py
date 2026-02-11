@@ -347,8 +347,8 @@ class TestCharacterPipeline:
             "character_appearance": "Tall, auburn hair, piercing green eyes",
             "character_personality": "Sharp, analytical, slightly cynical but caring",
             "relationships": "- user: professional acquaintance",
-            "key_locations": "- downtown office\n- crime scenes\n- local diner",
-            "setting_description": "Urban detective story setting",
+            "ruleset_id": "everyday-tension",
+            "ruleset_stats": "{}",
             "character_interests": "",
             "character_dislikes": "",
             "character_desires": "",
@@ -375,7 +375,7 @@ class TestCharacterPipeline:
         assert result["relationships"] == ""
 
     def test_format_character_description_empty_locations(self):
-        """Test character formatting with empty key locations."""
+        """Test character formatting with default ruleset fields."""
         character = Character(
             name="Bob",
             tagline="Engineer",
@@ -389,4 +389,4 @@ class TestCharacterPipeline:
 
         result = format_character_description(character)
 
-        assert result["key_locations"] == ""
+        assert result["ruleset_id"] == "everyday-tension"

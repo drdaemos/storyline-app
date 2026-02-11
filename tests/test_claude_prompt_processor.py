@@ -67,6 +67,45 @@ class TestClaudePromptProcessor:
         mock_anthropic.return_value.messages.create.assert_called_once()
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
+    def test_respond_with_model_uses_beta_parsed_output(self, mock_anthropic):
+        mock_beta_response = Mock()
+        mock_beta_response.parsed_output = {"name": "John", "age": 30, "description": "Test person"}
+        mock_beta_response.content = []
+        mock_anthropic.return_value.beta.messages.parse.return_value = mock_beta_response
+
+        processor = ClaudePromptProcessor(api_key="test-key")
+        result = processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
+
+        assert isinstance(result, MockResponse)
+        assert result.name == "John"
+        assert result.age == 30
+        mock_anthropic.return_value.messages.create.assert_not_called()
+
+    @patch("src.processors.claude_prompt_processor.Anthropic")
+    def test_respond_with_model_parses_json_text_when_no_tool_use(self, mock_anthropic):
+        mock_anthropic.return_value.beta.messages.parse.side_effect = RuntimeError("beta parse failed")
+
+        mock_text_block = Mock()
+        mock_text_block.type = "text"
+        mock_text_block.text = (
+            "```json\n"
+            '{"name":"John","age":30,"description":"Test person"}\n'
+            "```"
+        )
+
+        mock_response = Mock()
+        mock_response.content = [mock_text_block]
+        mock_anthropic.return_value.messages.create.return_value = mock_response
+
+        processor = ClaudePromptProcessor(api_key="test-key")
+        result = processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
+
+        assert isinstance(result, MockResponse)
+        assert result.name == "John"
+        assert result.age == 30
+        assert result.description == "Test person"
+
+    @patch("src.processors.claude_prompt_processor.Anthropic")
     def test_respond_with_text_with_substituted_string_output(self, mock_anthropic):
         mock_text_block = Mock()
         mock_text_block.type = "text"

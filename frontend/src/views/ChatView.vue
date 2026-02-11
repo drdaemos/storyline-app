@@ -1,6 +1,7 @@
 <template>
+  <section class="space-y-6">
   <!-- Header -->
-  <div class="flex flex-col sm:flex-row mb-6 sm:mb-8 gap-3 sm:gap-4 sm:items-center">
+  <div class="story-panel p-4 md:p-6 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
     <!-- Top row on mobile: Back button and character name -->
     <div class="flex items-center gap-3 sm:gap-4">
       <UButton
@@ -11,12 +12,12 @@
       >
         <span class="hidden sm:inline">Back</span>
       </UButton>
-      <h2 class="text-xl sm:text-2xl font-bold font-serif truncate">{{ characterId }}</h2>
+      <h2 class="text-xl sm:text-2xl story-headline truncate">{{ characterId }}</h2>
     </div>
 
     <!-- Second row on mobile: Session info and persona -->
     <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
-      <span class="text-xs sm:text-sm text-gray-500 font-mono hidden sm:inline">Session: {{ displaySessionId }}</span>
+      <span class="text-xs sm:text-sm story-subtext font-mono hidden sm:inline">Session: {{ displaySessionId }}</span>
       <UBadge v-if="personaName" color="primary" variant="subtle">
         <UIcon name="i-lucide-user" class="mr-1" />
         {{ personaName }}
@@ -46,7 +47,7 @@
   </div>
 
   <!-- Chat Container -->
-  <div class="pb-12 flex-1 justify-items-center">
+  <div class="pb-12 flex-1 justify-items-center story-panel p-4 md:p-6">
     <!-- Empty state -->
     <div v-if="messages.length === 0 && !isThinking" class="flex-1 flex items-center justify-center text-center p-8">
       <div class="space-y-4">
@@ -54,7 +55,7 @@
           <UIcon name="i-lucide-message-square" class="w-8 h-8 text-gray-400" />
         </div>
         <h3 class="text-xl font-semibold">Start a conversation with {{ characterId }}</h3>
-        <p class="text-gray-500">Type a message below to begin chatting.</p>
+        <p class="story-subtext">Type a message below to begin chatting.</p>
       </div>
     </div>
 
@@ -85,6 +86,12 @@
       >
         <template #content>
           <div v-html="message.content"></div>
+          <div
+            v-if="!message.isUser && message.metaText"
+            class="mt-3 border border-gray-200 dark:border-gray-700 rounded-md p-3 text-xs leading-5 whitespace-pre-wrap font-mono text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/40"
+          >
+            {{ message.metaText }}
+          </div>
         </template>
       </UChatMessage>
     </UChatMessages>
@@ -117,6 +124,7 @@
     <ChatInput
       :chat-status="chatStatus"
       :disabled="isThinking"
+      :suggested-actions="suggestedActions"
       :character-name="characterId"
       @send="handleChatInput"
       @stop="handleStop"
@@ -130,18 +138,19 @@
     :session-id="sessionId"
     @close="showSummaryModal = false"
   />
+  </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
+import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatInput from '@/components/ChatInput.vue'
 import SummaryModal from '@/components/SummaryModal.vue'
 import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails, SessionPersonaResponse } from '@/types'
-import { useChatHighlight } from '@/composables/useChatHighlight.ts'
 
 interface Props {
   characterId: string
@@ -151,7 +160,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const router = useRouter()
-const { highlight } = useChatHighlight()
+const { startSessionWithScenario } = useApi()
 const { settings } = useLocalSettings()
 const {
   isConnected,
@@ -159,6 +168,8 @@ const {
   streamingContent,
   sessionId,
   thinkingStage,
+  suggestedActions,
+  metaText,
   connect,
   disconnect,
   clearStreamContent,
@@ -169,8 +180,20 @@ const messages = ref<ChatMessageType[]>([])
 const isThinking = ref(false)
 const currentSessionId = ref<string | null>(null)
 const lastInteractPayload = ref<InteractRequest | null>(null)
+const lastUserMessageForRetry = ref<string | null>(null)
 const showSummaryModal = ref(false)
 const personaName = ref<string | null>(null)
+
+const bootstrapSuggestedActionsFromIntro = () => {
+  if (messages.value.length === 0) return
+  const hasUserTurn = messages.value.some(msg => msg.isUser)
+  if (hasUserTurn) return
+  suggestedActions.value = [
+    'I pause and read the room before acting.',
+    'I speak directly to the closest character.',
+    'I make a cautious move to test the tension.',
+  ]
+}
 
 const navigateBack = () => {
   router.back()
@@ -205,20 +228,32 @@ const chatStatus = computed(() => {
 })
 
 const handleChatInput = async (text: string) => {
-  const trimmedText = text.trim()
+  await sendMessage(text)
+}
 
-  // Handle commands
-  switch (trimmedText) {
-    case '/regenerate':
-      await regenerateLastMessage()
-      break
-    case '/rewind':
-      await rewindLastExchange()
-      break
-    default:
-      await sendMessage(text)
-      break
+const ensureSessionForMessage = async (): Promise<string> => {
+  if (props.sessionId !== 'new') {
+    return props.sessionId
   }
+  if (!settings.value.selectedPersonaId) {
+    throw new Error('Select a persona before starting a new chat session.')
+  }
+  const response = await startSessionWithScenario({
+    character_name: props.characterId,
+    persona_id: settings.value.selectedPersonaId,
+    intro_message: 'The scene begins. Continue naturally from here.',
+    small_model_key: settings.value.smallModelKey,
+    large_model_key: settings.value.largeModelKey,
+  })
+  currentSessionId.value = response.session_id
+  router.replace({
+    name: 'chat',
+    params: {
+      characterId: props.characterId,
+      sessionId: response.session_id,
+    },
+  })
+  return response.session_id
 }
 
 const sendInteractRequest = async (userMessage: string) => {
@@ -227,12 +262,11 @@ const sendInteractRequest = async (userMessage: string) => {
   clearStreamContent()
 
   try {
+    const activeSessionId = await ensureSessionForMessage()
     const payload: InteractRequest = {
       character_name: props.characterId,
       user_message: userMessage,
-      session_id: props.sessionId === 'new' ? null : props.sessionId,
-      processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor,
+      session_id: activeSessionId,
     }
 
     // Store payload for potential regeneration
@@ -248,6 +282,7 @@ const sendInteractRequest = async (userMessage: string) => {
         const characterMessage: ChatMessageType = {
           author: props.characterId,
           content: streamingContent.value,
+          metaText: metaText.value,
           isUser: false,
           timestamp: new Date(),
         }
@@ -262,7 +297,7 @@ const sendInteractRequest = async (userMessage: string) => {
           router.replace({
             name: 'chat',
             params: {
-              characterName: props.characterId,
+              characterId: props.characterId,
               sessionId: sessionId?.value,
             },
           })
@@ -291,6 +326,7 @@ const sendInteractRequest = async (userMessage: string) => {
 
 const sendMessage = async (text: string) => {
   if (!text.trim() || isThinking.value) return
+  lastUserMessageForRetry.value = text.trim()
 
   // Add user message
   const userMessage: ChatMessageType = {
@@ -306,48 +342,15 @@ const sendMessage = async (text: string) => {
   await sendInteractRequest(text.trim())
 }
 
-const regenerateLastMessage = async () => {
-  if (isThinking.value || messages.value.length === 0) return
-
-  const lastMessage = messages.value[messages.value.length - 1]
-  if (lastMessage.isUser) return
-
-  // Remove last character message visually
-  messages.value.pop()
-
-  // Send regenerate command to backend
-  await sendInteractRequest('/regenerate')
-}
-
-const rewindLastExchange = async () => {
-  if (messages.value.length === 0) return
-
-  const lastMessage = messages.value[messages.value.length - 1]
-  const secondLastMessage = messages.value[messages.value.length - 2]
-
-  if (lastMessage.isUser) {
-    // Last message is from user, remove only that
-    messages.value.pop()
-  } else if (secondLastMessage?.isUser) {
-    // Remove both user and character messages
-    messages.value.splice(-2, 2)
-  } else {
-    // Only remove character message
-    messages.value.pop()
-  }
-
-  // Send rewind command to backend
-  await sendInteractRequest('/rewind')
-}
-
 const regenerateAfterError = async () => {
-  if (!lastInteractPayload.value || isThinking.value) return
+  if (isThinking.value) return
 
   // Clear the error and reattempt the last interact request
   clearError()
 
-  // Use the stored payload to retry the request
-  await sendInteractRequest(lastInteractPayload.value.user_message)
+  const retryMessage = lastUserMessageForRetry.value ?? lastInteractPayload.value?.user_message
+  if (!retryMessage) return
+  await sendInteractRequest(retryMessage)
 }
 
 const loadSessionHistory = async (sessionId: string, retryAttempt = 0) => {
@@ -378,9 +381,14 @@ const loadSessionHistory = async (sessionId: string, retryAttempt = 0) => {
     messages.value = sessionDetails.last_messages.map((msg) => ({
       author: msg.role === 'user' ? 'User' : props.characterId,
       content: msg.content,
+      metaText: msg.meta_text || null,
       isUser: msg.role === 'user',
       timestamp: new Date(msg.created_at),
     }))
+    suggestedActions.value = sessionDetails.suggested_actions || []
+    if (suggestedActions.value.length === 0) {
+      bootstrapSuggestedActionsFromIntro()
+    }
   } catch (err) {
     console.error('Failed to load session history:', err)
     // Don't show error to user for session loading failures, just start fresh

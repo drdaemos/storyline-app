@@ -355,7 +355,7 @@ class CharacterResponder:
 
         return response
 
-    def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> StorySummary:
+    def get_memory_summary(self, conversation_memory: list[GenericMessage]) -> StorySummary | str:
         input: GetMemorySummaryInput = {"character": self.character, "persona": self.persona, "summary": self.memory_summary}
         try:
             summary = CharacterPipeline.get_memory_summary(processor=self.processor, memory=conversation_memory, input=input)
@@ -363,9 +363,14 @@ class CharacterResponder:
             self.chat_logger.log_exception(err)
             summary = CharacterPipeline.get_memory_summary(processor=self.backup_processor, memory=conversation_memory, input=input)
 
-        self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary.to_string())
+        if isinstance(summary, StorySummary):
+            self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary.to_string())
+            return summary
 
-        return summary
+        summary_text = str(summary)
+        self.chat_logger.log_message(f"SUMMARY ({len(conversation_memory)} messages)", summary_text)
+
+        return summary_text
 
     def compress_memory(self) -> None:
         """Compress the current memory using the summarization mechanism."""
@@ -385,12 +390,13 @@ class CharacterResponder:
         end_offset = self._current_message_offset - 1  # -1 because offset is 0-indexed, but count is 1-indexed
 
         new_summary = self.get_memory_summary(messages_to_summarize)
+        summary_payload = new_summary.model_dump_json() if isinstance(new_summary, StorySummary) else str(new_summary)
 
         # Store the summary with offset range in SummaryMemory
         self.summary_memory.add_summary(
             character_id=self.character.name,
             session_id=self.session_id,
-            summary=new_summary.model_dump_json(),
+            summary=summary_payload,
             start_offset=max(0, start_offset),  # Ensure non-negative
             end_offset=max(0, end_offset),  # Ensure non-negative
             user_id=self.user_id,
@@ -507,7 +513,11 @@ class CharacterResponder:
         last_summary_offset = 0
         for summary in summaries:
             try:
-                summary_model = StorySummary.model_validate_json(summary["summary"])
+                summary_text = summary["summary"]
+                try:
+                    summary_model = StorySummary.model_validate_json(summary_text)
+                except Exception:
+                    summary_model = StorySummary.from_legacy_text(summary_text)
                 beats.extend(summary_model.story_beats)
                 learnings.extend(summary_model.user_learnings)
                 last_summary_offset = summary["end_offset"]

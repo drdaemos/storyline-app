@@ -2,8 +2,8 @@
   <div class="max-w-4xl mx-auto space-y-6">
     <div v-if="filteredSessions.length > 0" class="flex items-center justify-between">
       <div>
-        <h3 class="text-xl font-semibold">Chat Sessions</h3>
-        <p class="text-sm text-gray-500 mt-1">Continue your conversations with {{ characterName }}</p>
+        <h3 class="text-2xl story-headline">Chat Sessions</h3>
+        <p class="text-sm story-subtext mt-1">Continue your conversations with {{ characterName }}</p>
       </div>
       <UButton
         color="primary"
@@ -14,12 +14,12 @@
       </UButton>
     </div>
 
-    <div v-if="filteredSessions.length === 0" class="text-center py-16">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+    <div v-if="filteredSessions.length === 0" class="story-panel-muted text-center py-16 px-6">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-50 dark:bg-gray-800 flex items-center justify-center">
         <span class="i-lucide-message-square w-8 h-8 text-gray-400" />
       </div>
-      <h4 class="text-lg font-medium mb-2">No conversations yet</h4>
-      <p class="text-gray-500 mb-6">Start your first conversation with {{ characterName }}</p>
+      <h4 class="text-xl story-headline mb-2">No conversations yet</h4>
+      <p class="story-subtext mb-6">Start your first conversation with {{ characterName }}</p>
       <UButton
         color="primary"
         icon="i-lucide-plus"
@@ -33,7 +33,7 @@
       <UCard
         v-for="session in filteredSessions"
         :key="session.session_id"
-        class="hover:shadow-md transition-shadow cursor-pointer group"
+        class="cursor-pointer group story-card-hover story-panel-muted"
         @click="emit('select-session', session.session_id)"
       >
         <div class="flex items-start justify-between gap-4">
@@ -42,7 +42,7 @@
               <UBadge color="primary" variant="subtle" size="sm">
                 {{ formatSessionId(session.session_id) }}
               </UBadge>
-              <span class="text-xs text-gray-500">
+              <span class="text-xs story-subtext">
                 {{ formatRelativeTime(session.last_message_time) }}
               </span>
               <UBadge color="neutral" variant="subtle" size="sm">
@@ -50,7 +50,7 @@
               </UBadge>
             </div>
 
-            <p v-if="session.last_character_response" class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+            <p v-if="session.last_character_response" class="text-sm story-subtext line-clamp-2">
               {{ session.last_character_response }}
             </p>
           </div>

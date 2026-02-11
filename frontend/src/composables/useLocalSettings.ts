@@ -4,8 +4,9 @@ import type { LocalSettings } from '@/types'
 const STORAGE_PREFIX = 'storyline_'
 
 const defaultSettings: LocalSettings = {
-  aiProcessor: 'google-flash',
-  backupProcessor: 'deepseek-v32',
+  largeModelKey: 'claude-sonnet',
+  smallModelKey: 'deepseek-v32',
+  selectedPersonaId: undefined,
   lastSelectedCharacter: undefined,
 }
 
@@ -18,33 +19,18 @@ export function useLocalSettings() {
     try {
       const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
       const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
+      const selectedPersonaId = localStorage.getItem(`${STORAGE_PREFIX}selected_persona`)
       const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
 
       settings.value = {
-        aiProcessor: aiProcessor || defaultSettings.aiProcessor,
-        backupProcessor: backupProcessor || defaultSettings.backupProcessor,
+        largeModelKey: aiProcessor || defaultSettings.largeModelKey,
+        smallModelKey: backupProcessor || defaultSettings.smallModelKey,
+        selectedPersonaId: selectedPersonaId || undefined,
         lastSelectedCharacter: lastSelectedCharacter || undefined,
       }
     } catch (error) {
       console.warn('Failed to load settings from localStorage, using defaults:', error)
       settings.value = { ...defaultSettings }
-    }
-  }
-
-  const saveSettings = () => {
-    try {
-      localStorage.removeItem(`{STORAGE_PREFIX}last_character`)
-      localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
-      localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
-
-      if (settings.value.lastSelectedCharacter) {
-        localStorage.setItem(
-          `${STORAGE_PREFIX}last_character`,
-          settings.value.lastSelectedCharacter
-        )
-      }
-    } catch (error) {
-      console.error('Failed to save settings to localStorage:', error)
     }
   }
 
@@ -74,9 +60,14 @@ if (!initialized) {
   // Watch for changes and auto-save
   watch(settings, () => {
     try {
-      localStorage.removeItem(`{STORAGE_PREFIX}last_character`)
-      localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
-      localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
+      localStorage.removeItem(`${STORAGE_PREFIX}last_character`)
+      localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.largeModelKey)
+      localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.smallModelKey)
+      if (settings.value.selectedPersonaId) {
+        localStorage.setItem(`${STORAGE_PREFIX}selected_persona`, settings.value.selectedPersonaId)
+      } else {
+        localStorage.removeItem(`${STORAGE_PREFIX}selected_persona`)
+      }
 
       if (settings.value.lastSelectedCharacter) {
         localStorage.setItem(
@@ -93,11 +84,13 @@ if (!initialized) {
   try {
     const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
     const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
+    const selectedPersonaId = localStorage.getItem(`${STORAGE_PREFIX}selected_persona`)
     const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
 
     settings.value = {
-      aiProcessor: aiProcessor || defaultSettings.aiProcessor,
-      backupProcessor: backupProcessor || defaultSettings.backupProcessor,
+      largeModelKey: aiProcessor || defaultSettings.largeModelKey,
+      smallModelKey: backupProcessor || defaultSettings.smallModelKey,
+      selectedPersonaId: selectedPersonaId || undefined,
       lastSelectedCharacter: lastSelectedCharacter || undefined,
     }
   } catch (error) {

@@ -32,8 +32,8 @@ class TestCharacterCreator:
             "personality": "Courageous and curious",
             "appearance": "Tall with weathered features",
             "relationships": {"mentor": "Old wizard who taught them magic"},
-            "key_locations": ["Ancient Library", "Mountain Peak"],
-            "setting_description": "A fantasy world of magic and mystery",
+            "ruleset_id": "everyday-tension",
+            "ruleset_stats": {"warmth": 6, "logic": 7},
         }
 
         self.mock_prompt_processor = MockPromptProcessor(self.complete_character_data)
@@ -52,8 +52,8 @@ class TestCharacterCreator:
         assert result.personality == "Courageous and curious"
         assert result.appearance == "Tall with weathered features"
         assert len(result.relationships) > 0
-        assert len(result.key_locations) > 0
-        assert result.setting_description == "A fantasy world of magic and mystery"
+        assert result.ruleset_id == "everyday-tension"
+        assert result.ruleset_stats == {"warmth": 6, "logic": 7}
 
     def test_generate_with_partial_input(self):
         """Test generating a character with some fields already provided."""
@@ -79,8 +79,8 @@ class TestCharacterCreator:
             "personality": "Wise and patient",
             "appearance": "Robed figure with a long beard",
             "relationships": {"apprentice": "Young student of magic"},
-            "key_locations": ["Tower of Learning"],
-            "setting_description": "A world where magic is common",
+            "ruleset_id": "everyday-tension",
+            "ruleset_stats": {"warmth": 5},
         }
 
         # Create a processor that would return different data
@@ -98,8 +98,8 @@ class TestCharacterCreator:
         assert result.personality == "Wise and patient"
         assert result.appearance == "Robed figure with a long beard"
         assert result.relationships == {"apprentice": "Young student of magic"}
-        assert result.key_locations == ["Tower of Learning"]
-        assert result.setting_description == "A world where magic is common"
+        assert result.ruleset_id == "everyday-tension"
+        assert result.ruleset_stats == {"warmth": 5}
 
     def test_generate_and_save(self):
         """Test generating and saving a character to file."""
@@ -127,14 +127,14 @@ class TestCharacterCreator:
 
         missing = self.character_creator._identify_missing_fields(partial_data)
 
-        expected_missing = ["backstory", "personality", "appearance", "relationships", "key_locations", "setting_description", "interests", "dislikes", "desires", "kinks"]
+        expected_missing = ["backstory", "personality", "appearance", "relationships", "ruleset_id", "ruleset_stats", "interests", "dislikes", "desires", "kinks"]
         assert set(missing) == set(expected_missing)
 
     def test_identify_missing_fields_empty_input(self):
         """Test identification of missing fields with empty input."""
         missing = self.character_creator._identify_missing_fields({})
 
-        expected_all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description", "interests", "dislikes", "desires", "kinks"]
+        expected_all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "ruleset_id", "ruleset_stats", "interests", "dislikes", "desires", "kinks"]
         assert set(missing) == set(expected_all_fields)
 
     def test_generate_missing_fields(self):

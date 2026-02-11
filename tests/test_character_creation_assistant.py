@@ -146,14 +146,15 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
             "Alice": "Childhood friend",
         }
 
-    def test_extract_character_updates_with_key_locations(self, assistant):
-        """Test extracting updates with key_locations list."""
+    def test_extract_character_updates_with_ruleset_stats(self, assistant):
+        """Test extracting updates with ruleset stats."""
         ai_response = """Your character explores many places!
 
 <character_update>
 {
   "name": "Explorer",
-  "key_locations": ["Ancient Temple", "Hidden Valley", "Crystal Caves"]
+  "ruleset_id": "everyday-tension",
+  "ruleset_stats": {"warmth": 8, "logic": 6}
 }
 </character_update>"""
 
@@ -161,7 +162,8 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 
         assert isinstance(updates, PartialCharacter)
         assert updates.name == "Explorer"
-        assert updates.key_locations == ["Ancient Temple", "Hidden Valley", "Crystal Caves"]
+        assert updates.ruleset_id == "everyday-tension"
+        assert updates.ruleset_stats == {"warmth": 8, "logic": 6}
 
     def test_extract_character_updates_filters_invalid_fields(self, assistant):
         """Test that invalid fields are filtered out from updates."""
@@ -313,7 +315,7 @@ I've created the character for you."""
 {
   "name": "Valid",
   "relationships": {},
-  "key_locations": [],
+  "ruleset_stats": {},
   "personality": "Brave"
 }
 </character_update>"""
@@ -325,4 +327,4 @@ I've created the character for you."""
         assert updates.name == "Valid"
         assert updates.personality == "Brave"
         assert updates.relationships == {}
-        assert updates.key_locations == []
+        assert updates.ruleset_stats == {}

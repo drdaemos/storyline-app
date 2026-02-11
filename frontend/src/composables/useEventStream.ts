@@ -7,6 +7,8 @@ export function useEventStream() {
   const streamingContent = ref('')
   const sessionId = ref('')
   const thinkingStage: Ref<string | null> = ref(null)
+  const suggestedActions = ref<string[]>([])
+  const metaText: Ref<string | null> = ref(null)
 
   let eventSource: EventSource | null = null
   let retryCount = 0
@@ -27,11 +29,48 @@ export function useEventStream() {
     error.value = null
     sessionId.value = ''
     streamingContent.value = ''
+    suggestedActions.value = []
+    metaText.value = null
     if (retryAttempt === 0) {
       retryCount = 0
     }
 
     return new Promise((resolve, reject) => {
+      const processSseLine = (line: string): boolean => {
+        if (!line.startsWith('data: ')) return false
+        try {
+          const jsonData = line.slice(6).trim()
+          if (jsonData === '[DONE]') {
+            cleanup()
+            return true
+          }
+
+          const data = JSON.parse(jsonData) as StreamEvent
+
+          if (data.type === 'chunk' && data.content) {
+            streamingContent.value += data.content
+          } else if (data.type === 'session' && data.session_id) {
+            sessionId.value = data.session_id
+          } else if (data.type === 'thinking' && data.stage) {
+            thinkingStage.value = data.stage
+          } else if (data.type === 'complete') {
+            suggestedActions.value = data.suggested_actions || []
+            metaText.value = data.meta_text || null
+            thinkingStage.value = null
+            cleanup()
+            return true
+          } else if (data.type === 'error') {
+            thinkingStage.value = null
+            error.value = data.error || 'An error occurred during streaming'
+            cleanup()
+            return true
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse SSE data:', parseError, 'Line:', line)
+        }
+        return false
+      }
+
       // Use fetch with streaming response for POST request
       fetch('/api/interact', {
         method: 'POST',
@@ -45,7 +84,7 @@ export function useEventStream() {
         .then(async (response) => {
           if (!response.ok) {
             const errorMessage = `HTTP ${response.status}: ${response.statusText}`
-            const error = new Error(errorMessage) as any
+            const error = new Error(errorMessage) as Error & { status?: number }
             error.status = response.status
             throw error
           }
@@ -62,58 +101,31 @@ export function useEventStream() {
           const readStream = async (): Promise<void> => {
             try {
               const { done, value } = await reader.read()
+              if (!done && value) {
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
 
-              if (done) {
-                cleanup()
-                return
-              }
+                // Keep the last incomplete line in buffer
+                buffer = lines.pop() || ''
 
-              buffer += decoder.decode(value, { stream: true })
-              const lines = buffer.split('\n')
-
-              // Keep the last incomplete line in buffer
-              buffer = lines.pop() || ''
-
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const jsonData = line.slice(6).trim()
-                    if (jsonData === '[DONE]') {
-                      cleanup()
-                      return
-                    }
-
-                    const data = JSON.parse(jsonData) as StreamEvent
-
-                    if (data.type === 'chunk' && data.content) {
-                      streamingContent.value += data.content
-                    } else if (data.type === 'session' && data.session_id) {
-                      sessionId.value = data.session_id
-                    } else if (data.type === 'thinking' && data.stage) {
-                      thinkingStage.value = data.stage
-                    } else if (data.type === 'command' && data.succeeded === 'true') {
-                      // Command completed successfully
-                      thinkingStage.value = null
-                      cleanup()
-                      return
-                    } else if (data.type === 'complete') {
-                      thinkingStage.value = null
-                      cleanup()
-                      return
-                    } else if (data.type === 'error') {
-                      thinkingStage.value = null
-                      error.value = data.error || 'An error occurred during streaming'
-                      cleanup()
-                      return
-                    }
-                  } catch (parseError) {
-                    console.warn('Failed to parse SSE data:', parseError, 'Line:', line)
+                for (const line of lines) {
+                  if (processSseLine(line)) {
+                    return
                   }
                 }
               }
 
+              if (done) {
+                const tail = buffer.trim()
+                if (tail && processSseLine(tail)) {
+                  return
+                }
+                cleanup()
+                return
+              }
+
               // Continue reading
-              readStream()
+              await readStream()
             } catch (readError) {
               error.value = readError instanceof Error ? readError.message : 'Stream read error'
               cleanup()
@@ -128,13 +140,16 @@ export function useEventStream() {
             readyState: 1,
             url: '/api/interact',
             withCredentials: false,
+            CONNECTING: 0,
+            OPEN: 1,
+            CLOSED: 2,
             addEventListener: () => {},
             removeEventListener: () => {},
             dispatchEvent: () => false,
             onopen: null,
             onmessage: null,
             onerror: null,
-          } as EventSource
+          } as unknown as EventSource
 
           resolve(mockEventSource)
         })
@@ -142,7 +157,7 @@ export function useEventStream() {
           // Handle 502 Bad Gateway errors with silent retry
           const is502Error =
             err instanceof Error &&
-            (err.message.includes('502') || ('status' in err && (err as any).status === 502))
+            (err.message.includes('502') || ('status' in err && typeof err.status === 'number' && err.status === 502))
 
           if (is502Error && retryAttempt === 0) {
             // Wait 5 seconds then retry silently
@@ -215,6 +230,8 @@ export function useEventStream() {
     streamingContent,
     sessionId,
     thinkingStage,
+    suggestedActions,
+    metaText,
     connect,
     retry,
     disconnect,

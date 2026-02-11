@@ -1,8 +1,9 @@
 import os
 import shutil
 import tempfile
+from types import SimpleNamespace
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -78,6 +79,17 @@ class TestFastAPIEndpoints:
         assert data["summary_memory"] in ["ok", "error"]
         assert data["status"] in ["healthy", "unhealthy"]
 
+    def test_list_rulesets(self, client):
+        """Test ruleset listing endpoint."""
+        response = client.get("/api/rulesets")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert any(item.get("id") == "everyday-tension" for item in data)
+        first = data[0]
+        assert "character_stat_schema" in first
+        assert "scene_state_schema" in first
+
     @patch("src.fastapi_server.character_loader")
     def test_list_characters(self, mock_loader, client):
         """Test character listing endpoint."""
@@ -87,7 +99,10 @@ class TestFastAPIEndpoints:
 
         response = client.get("/api/characters")
         assert response.status_code == 200
-        assert response.json() == [{"id": "testbot", "name": "TestBot", "tagline": "Test Assistant"}, {"id": "alice", "name": "Alice", "tagline": "Adventurer"}]
+        assert response.json() == [
+            {"id": "testbot", "name": "TestBot", "tagline": "Test Assistant", "tags": [], "is_persona": False},
+            {"id": "alice", "name": "Alice", "tagline": "Adventurer", "tags": [], "is_persona": False},
+        ]
 
     @patch("src.fastapi_server.character_loader")
     def test_list_characters_error(self, mock_loader, client):
@@ -142,24 +157,13 @@ class TestFastAPIEndpoints:
         response = client.get("/api/sessions/nonexistent-session/summary")
         assert response.status_code == 404
 
-    @patch("src.fastapi_server.SummaryMemory")
-    @patch("src.fastapi_server.ConversationMemory")
-    def test_get_session_summary_no_summaries(self, mock_conv_memory_class, mock_summary_memory_class, client):
+    @patch("src.fastapi_server.session_service")
+    def test_get_session_summary_no_summaries(self, mock_session_service, client):
         """Test getting summary when no summaries exist."""
-        # Mock conversation memory to return valid session
-        mock_conv_memory = Mock()
-        mock_conv_memory.get_session_details.return_value = {
-            "session_id": "test-session",
-            "character_id": "test-char",
-            "message_count": 5,
-            "last_message_time": "2024-01-01T12:00:00",
-        }
-        mock_conv_memory_class.return_value = mock_conv_memory
-
-        # Mock summary memory to return no summaries
-        mock_summary_memory = Mock()
-        mock_summary_memory.get_session_summaries.return_value = []
-        mock_summary_memory_class.return_value = mock_summary_memory
+        mock_session_service.get_session_summary.return_value = (
+            "No summary available yet. Summary will be generated after the conversation progresses.",
+            False,
+        )
 
         response = client.get("/api/sessions/test-session/summary")
         assert response.status_code == 200
@@ -168,46 +172,23 @@ class TestFastAPIEndpoints:
         assert data["has_summary"] is False
         assert "No summary available yet" in data["summary_text"]
 
-    @patch("src.fastapi_server.SummaryMemory")
-    @patch("src.fastapi_server.ConversationMemory")
-    def test_get_session_summary_with_data(self, mock_conv_memory_class, mock_summary_memory_class, client):
+    @patch("src.fastapi_server.session_service")
+    def test_get_session_summary_with_data(self, mock_session_service, client):
         """Test getting summary when summaries exist."""
-        from src.models.summary import (
-            EmotionalState,
-            PhysicalState,
-            PlotTracking,
-            RelationshipState,
-            StorySummary,
-            TimeState,
+        mock_session_service.get_session_summary.return_value = (
+            "\n".join(
+                [
+                    "Session: test-session",
+                    "Ruleset: Everyday Tension",
+                    "World lore: Neon Harbor",
+                    "Turns completed: 2",
+                    "",
+                    "Recent narrator beats:",
+                    "1. Day 1, morning. They meet in a coffee shop.",
+                ]
+            ),
+            True,
         )
-
-        # Mock conversation memory to return valid session
-        mock_conv_memory = Mock()
-        mock_conv_memory.get_session_details.return_value = {
-            "session_id": "test-session",
-            "character_id": "test-char",
-            "message_count": 20,
-            "last_message_time": "2024-01-01T12:00:00",
-        }
-        mock_conv_memory_class.return_value = mock_conv_memory
-
-        # Create a test summary
-        test_summary = StorySummary(
-            time=TimeState(current_time="Day 1, morning"),
-            relationship=RelationshipState(trust=7, attraction=5, emotional_intimacy=6, conflict=3, power_balance=5, relationship_label="friends"),
-            plot=PlotTracking(ongoing_plots=["Meeting new friend"], resolved_outcomes=[], location="Coffee shop", notable_objects=None),
-            physical_state=[PhysicalState(character_name="TestBot", character_position="sitting at table", clothing_status=None, physical_contact=None, conditions=None)],
-            emotional_state=[EmotionalState(character_name="TestBot", character_emotions="friendly", character_wants="have good conversation")],
-            story_beats=["User and TestBot met at coffee shop", "They started talking about interests"],
-            user_learnings=["User prefers casual conversation"],
-            ai_quality_issues=[],
-            character_goals={},
-        )
-
-        # Mock summary memory to return test summaries
-        mock_summary_memory = Mock()
-        mock_summary_memory.get_session_summaries.return_value = [{"id": 1, "session_id": "test-session", "summary": test_summary.model_dump_json(), "start_offset": 0, "end_offset": 10, "created_at": "2024-01-01T12:00:00"}]
-        mock_summary_memory_class.return_value = mock_summary_memory
 
         response = client.get("/api/sessions/test-session/summary")
         assert response.status_code == 200
@@ -215,33 +196,22 @@ class TestFastAPIEndpoints:
         assert data["session_id"] == "test-session"
         assert data["has_summary"] is True
         assert "Day 1, morning" in data["summary_text"]
-        assert "Coffee shop" in data["summary_text"]
-        assert "friends" in data["summary_text"]
+        assert "Ruleset: Everyday Tension" in data["summary_text"]
 
 
 class TestInteractEndpoint:
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    @patch("src.fastapi_server.CharacterResponder")
-    def test_interact_success(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
+    @patch("src.fastapi_server.session_service")
+    def test_interact_success(self, mock_session_service, client):
         """Test successful interaction with character."""
-        # Setup mocks
-        mock_loader.load_character.return_value = mock_character
-
-        mock_dependencies = Mock()
-        mock_dependencies.session_id = "test-session-123"
-        mock_deps_class.create_default.return_value = mock_dependencies
-
-        mock_responder = Mock()
-        mock_responder.character = mock_character
-        mock_responder.session_id = "test-session-123"
-        mock_responder.memory = []
-        mock_responder.respond.return_value = "Hello there!"
-        mock_responder.chat_logger = None
-        mock_responder_class.return_value = mock_responder
+        mock_session_service.run_interaction.return_value = SimpleNamespace(
+            narration_text="Hello there!",
+            suggested_actions=[],
+            meta_text=None,
+            message_count=3,
+        )
 
         # Make request
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-123"})
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
@@ -251,15 +221,6 @@ class TestInteractEndpoint:
         assert "data: " in content
         assert '"type": "session"' in content
         assert '"type": "complete"' in content
-
-    @patch("src.fastapi_server.character_loader")
-    def test_interact_character_not_found(self, mock_loader, client):
-        """Test interaction with non-existent character."""
-        mock_loader.load_character.return_value = None
-
-        response = client.post("/api/interact", json={"character_name": "NonExistent", "user_message": "Hello!", "processor_type": "google"})
-
-        assert response.status_code == 404
 
     def test_interact_invalid_request(self, client):
         """Test interaction with invalid request data."""
@@ -273,28 +234,18 @@ class TestInteractEndpoint:
 
         assert response.status_code == 422  # Validation error
 
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    @patch("src.fastapi_server.CharacterResponder")
-    def test_interact_with_session_id(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
+    @patch("src.fastapi_server.session_service")
+    def test_interact_with_session_id(self, mock_session_service, client):
         """Test interaction with specific session ID."""
-        # Setup mocks
-        mock_loader.load_character.return_value = mock_character
-
-        mock_dependencies = Mock()
-        mock_dependencies.session_id = "test-session-123"
-        mock_deps_class.create_default.return_value = mock_dependencies
-
-        mock_responder = Mock()
-        mock_responder.character = mock_character
-        mock_responder.session_id = "test-session-123"
-        mock_responder.memory = []
-        mock_responder.respond.return_value = "Hello there!"
-        mock_responder.chat_logger = None
-        mock_responder_class.return_value = mock_responder
+        mock_session_service.run_interaction.return_value = SimpleNamespace(
+            narration_text="Hello there!",
+            suggested_actions=[],
+            meta_text=None,
+            message_count=2,
+        )
 
         # First request to create session
-        response1 = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-123", "processor_type": "google"})
+        response1 = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-123"})
 
         assert response1.status_code == 200
         content1 = response1.text
@@ -302,24 +253,20 @@ class TestInteractEndpoint:
 
 
 class TestSessionManagement:
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    @patch("src.fastapi_server.CharacterResponder")
-    def test_session_creation_and_listing(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
+    @patch("src.fastapi_server.session_service")
+    def test_session_creation_and_listing(self, mock_session_service, client):
         """Test session creation and listing."""
-        # Setup mocks
-        mock_loader.load_character.return_value = mock_character
-        mock_dependencies = Mock()
-        mock_deps_class.create_default.return_value = mock_dependencies
-
-        mock_responder = Mock()
-        mock_responder.character = mock_character
-        mock_responder.memory = [{"role": "user", "content": "test"}]
-        mock_responder.respond.return_value = "Hello!"
-        mock_responder_class.return_value = mock_responder
+        mock_session_service.run_interaction.return_value = SimpleNamespace(
+            narration_text="Hello!",
+            suggested_actions=[],
+            meta_text=None,
+            message_count=2,
+        )
+        mock_session_service.list_sessions.return_value = []
+        mock_session_service.clear_session.return_value = False
 
         # Create interaction to establish session
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-456", "processor_type": "google"})
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-456"})
 
         assert response.status_code == 200
 
@@ -345,6 +292,7 @@ class TestRequestValidation:
             {"character_name": "TestBot"},  # Missing user_message
             {"character_name": "", "user_message": "Hello!"},  # Empty character_name
             {"character_name": "TestBot", "user_message": ""},  # Empty user_message
+            {"character_name": "TestBot", "user_message": "Hello!"},  # Missing session_id
         ]
 
         for test_data in test_cases:
@@ -353,32 +301,84 @@ class TestRequestValidation:
 
     def test_interact_request_optional_fields(self, client):
         """Test optional fields in interact request."""
-        # Mock the character loader to avoid actual file system access
-        with patch("src.fastapi_server.character_loader") as mock_loader:
-            mock_loader.load_character.return_value = None  # Will cause 404
+        # Character existence is no longer validated by /api/interact;
+        # request schema validity is the key check here.
+        with patch("src.fastapi_server.session_service") as mock_session_service:
+            mock_session_service.run_interaction.side_effect = Exception("Unknown session")
 
-            response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "custom-session", "processor_type": "openai"})
+            response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "custom-session"})
 
-            assert response.status_code == 404  # Character not found, but validation passed
+            assert response.status_code == 200
 
 
 class TestErrorHandling:
-    @patch("src.fastapi_server.character_loader")
-    def test_character_loading_error(self, mock_loader, client):
-        """Test error handling when character loading fails."""
-        mock_loader.load_character.side_effect = Exception("File system error")
+    @patch("src.fastapi_server.session_service")
+    def test_simulation_error_streams_error_event(self, mock_session_service, client):
+        """Test interaction streams error event on simulation failure."""
+        mock_session_service.run_interaction.side_effect = Exception("Simulation error")
 
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
+        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "s1"})
 
-        assert response.status_code == 500
+        assert response.status_code == 200
+        assert '"type": "error"' in response.text
 
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    def test_dependencies_creation_error(self, mock_deps_class, mock_loader, client, mock_character):
-        """Test error handling when dependencies creation fails."""
-        mock_loader.load_character.return_value = mock_character
-        mock_deps_class.create_default.side_effect = Exception("Dependencies error")
 
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
+class TestWorldLoreEndpoints:
+    def test_world_lore_tags_and_keywords_roundtrip(self, client):
+        payload = {
+            "name": "Neon Harbor",
+            "lore_text": "Port city where trade syndicates and private militias share control.",
+            "tags": ["cyberpunk", "urban"],
+            "keywords": ["trade-syndicate", "port-city", "militia-politics"],
+        }
 
-        assert response.status_code == 500
+        create_response = client.post("/api/world-lore", json=payload)
+        assert create_response.status_code == 200
+        world_lore_id = create_response.json()["world_lore_id"]
+
+        detail_response = client.get(f"/api/world-lore/{world_lore_id}")
+        assert detail_response.status_code == 200
+        detail = detail_response.json()
+        assert detail["tags"] == ["cyberpunk", "urban"]
+        assert detail["keywords"] == ["trade-syndicate", "port-city", "militia-politics"]
+
+        list_response = client.get("/api/world-lore")
+        assert list_response.status_code == 200
+        entries = list_response.json()
+        saved_entry = next((item for item in entries if item["id"] == world_lore_id), None)
+        assert saved_entry is not None
+        assert saved_entry["tags"] == ["cyberpunk", "urban"]
+        assert saved_entry["keywords"] == ["trade-syndicate", "port-city", "militia-politics"]
+
+    def test_world_lore_create_stream_route_resolves_post(self, client):
+        response = client.post("/api/world-lore/create-stream", json={})
+        assert response.status_code == 422
+
+
+class TestCreationStreamRoutes:
+    def test_character_create_stream_route_resolves_post(self, client):
+        response = client.post("/api/characters/create-stream", json={})
+        assert response.status_code == 422
+
+
+class TestSessionStartContracts:
+    @patch("src.fastapi_server.session_service")
+    def test_start_session_with_scenario_does_not_require_character_name(
+        self,
+        mock_session_service,
+        client,
+    ):
+        mock_session_service.start_session.return_value = "session-123"
+
+        response = client.post(
+            "/api/sessions/start",
+            json={
+                "scenario_id": "scenario-123",
+                "small_model_key": "deepseek-v32",
+                "large_model_key": "claude-opus",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["session_id"] == "session-123"
+        mock_session_service.start_session.assert_called_once()

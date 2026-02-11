@@ -1,224 +1,198 @@
-from typing import List, Optional
+import re
+
 from pydantic import BaseModel, Field
 
 
 class TimeState(BaseModel):
-    """Tracks temporal progression in the story"""
+    """Tracks temporal progression in the story."""
+
     current_time: str = Field(
-        ..., 
+        ...,
         description=(
             "Current story time in dateparser-compatible format. Use ONE of these patterns:\n"
             "- Relative: 'Day 5, morning' | 'Day 5, 2:30 PM' | 'Day 5, late evening'\n"
-            "- Absolute (if story established dates): 'June 15th 2024, morning' | 'Monday June 15th 2024, 3:00 PM'\n"
-            "Be as specific as story content allows"
-        )
+            "- Absolute: 'June 15th 2024, morning' | 'Monday June 15th 2024, 3:00 PM'"
+        ),
     )
 
 
 class RelationshipState(BaseModel):
-    """Tracks relationship between characters on 1-10 scales"""
-    
-    trust: int = Field(
-        ...,
-        ge=1,
-        le=10,
-        description="1=complete distrust/betrayed, 5=neutral/uncertain, 10=absolute trust"
-    )
-    
-    attraction: int = Field(
-        ...,
-        ge=1,
-        le=10,
-        description="1=repulsed/none, 5=neutral/uncertain, 10=intense desire. Use 5 if not applicable to genre"
-    )
-    
-    emotional_intimacy: int = Field(
-        ...,
-        ge=1,
-        le=10,
-        description="1=complete strangers/guarded, 5=friendly/surface-level, 10=deeply vulnerable/no barriers"
-    )
-    
-    conflict: int = Field(
-        ...,
-        ge=1,
-        le=10,
-        description="1=harmonious/aligned, 5=minor tension, 10=intense opposition/fighting"
-    )
-    
-    power_balance: int = Field(
-        ...,
-        ge=1,
-        le=10,
-        description="1=user character completely controls dynamic, 5=equal partnership, 10=ai character completely controls dynamic"
-    )
-    
-    relationship_label: str = Field(
-        ..., 
-        description="Current status in plain language (e.g., 'strangers', 'colleagues', 'friends', 'dating', 'enemies', 'it's complicated')"
-    )
+    """Tracks relationship between characters on 1-10 scales."""
+
+    trust: int = Field(..., ge=1, le=10)
+    attraction: int = Field(..., ge=1, le=10)
+    emotional_intimacy: int = Field(..., ge=1, le=10)
+    conflict: int = Field(..., ge=1, le=10)
+    power_balance: int = Field(..., ge=1, le=10)
+    relationship_label: str = Field(...)
 
     def to_string(self) -> str:
-        return f"""
-Relationship Status:
-- Label: {self.relationship_label}
-- Trust (1: complete distrust/betrayed, 5: neutral/uncertain, 10: absolute trust): {self.trust}/10
-- Attraction (1: repulsed/none, 5: neutral/uncertain, 10: intense desire): {self.attraction}/10
-- Emotional Intimacy (1: complete strangers/guarded, 5: friendly/surface-level, 10: deeply vulnerable/no barriers): {self.emotional_intimacy}/10
-- Conflict (1: harmonious/aligned, 5: minor tension, 10: intense opposition/fighting): {self.conflict}/10
-- Power Balance (1: user character completely controls dynamic, 5: equal partnership, 10: ai character completely controls dynamic): {self.power_balance}/10
-"""
+        return (
+            "Relationship Status:\n"
+            f"- Label: {self.relationship_label}\n"
+            f"- Trust: {self.trust}/10\n"
+            f"- Attraction: {self.attraction}/10\n"
+            f"- Emotional Intimacy: {self.emotional_intimacy}/10\n"
+            f"- Conflict: {self.conflict}/10\n"
+            f"- Power Balance: {self.power_balance}/10\n"
+        )
 
 
 class PlotTracking(BaseModel):
-    """Simple plot tracking - ongoing and resolved"""
-    ongoing_plots: List[str] = Field(
-        default_factory=list,
-        description="Active plot threads as brief, factual descriptions (e.g., 'Investigating the murder', 'Completing big work commission', 'Planning the heist'). Max 3 threads."
-    )
-    resolved_outcomes: List[str] = Field(
-        default_factory=list,
-        description="Plot resolutions and their outcomes (e.g., 'Murder solved: victim's partner was the killer', 'Work commission completed successfully')"
-    )
-    location: str = Field(
-        ..., 
-        description="Where characters are right now (e.g., '<character's> workshop', '<character's> apartment bedroom', 'coffee shop'. If they are separate, list both locations with reference to character)"
-    )
-    notable_objects: Optional[str] = Field(
-        None,
-        description="Only objects actively in use or plot-relevant (e.g., 'bloodied knife on table', 'engagement ring in pocket', 'timer counting down N minutes')"
-    )
+    """Simple plot tracking - ongoing and resolved."""
+
+    ongoing_plots: list[str] = Field(default_factory=list)
+    resolved_outcomes: list[str] = Field(default_factory=list)
+    location: str = Field(...)
+    notable_objects: str | None = Field(default=None)
 
     def to_string(self) -> str:
-        return f"""
-Ongoing plot threads:
-{'\n'.join(self.ongoing_plots) if self.ongoing_plots else 'None'}
-Resolved plot outcomes:
-{'\n'.join(self.resolved_outcomes) if self.resolved_outcomes else 'None'}
-
-In-story location: {self.location}
-Plot-relevant objects: {self.notable_objects or 'none'}
-"""
+        ongoing = "\n".join(self.ongoing_plots) if self.ongoing_plots else "None"
+        resolved = "\n".join(self.resolved_outcomes) if self.resolved_outcomes else "None"
+        return (
+            "Ongoing plot threads:\n"
+            f"{ongoing}\n"
+            "Resolved plot outcomes:\n"
+            f"{resolved}\n\n"
+            f"In-story location: {self.location}\n"
+            f"Plot-relevant objects: {self.notable_objects or 'none'}\n"
+        )
 
 
 class PhysicalState(BaseModel):
-    """Physical positioning and state - be precise enough to resume scene"""
-    character_name: str = Field(..., description="Name of the character")
-    character_position: str = Field(
-        ...,
-        description="Exact physical position of the character (e.g., '<character> sitting at desk, <character> standing behind', 'both lying in bed', 'facing each other across table')"
-    )
-    clothing_status: Optional[str] = Field(
-        None, 
-        description="Only if relevant/changed (e.g., 'fully dressed', '<character> shirtless', '<character> in towel')"
-    )
-    physical_contact: Optional[str] = Field(
-        None, 
-        description="Any ongoing touch/contact (e.g., '<character>'s hand on <character>'s shoulder', 'embracing', 'no contact')"
-    )
-    conditions: Optional[str] = Field(
-        None, 
-        description="Physical conditions affecting the character (e.g., 'injured leg, limping', 'exhausted, struggling to stay awake', 'healthy and alert')"
-    )
+    """Physical positioning and state."""
+
+    character_name: str = Field(...)
+    character_position: str = Field(...)
+    clothing_status: str | None = Field(default=None)
+    physical_contact: str | None = Field(default=None)
+    conditions: str | None = Field(default=None)
 
     def to_string(self) -> str:
-        return f"""{self.character_name}: 
-- Physical position: {self.character_position},
-- Clothing: {self.clothing_status or 'unknown'}, 
-- Ongoing touch/contact: {self.physical_contact or 'none'}, 
-- Physical conditions: {self.conditions or 'none'}"
-"""
-    
+        return (
+            f"{self.character_name}:\n"
+            f"- Physical position: {self.character_position}\n"
+            f"- Clothing: {self.clothing_status or 'unknown'}\n"
+            f"- Ongoing touch/contact: {self.physical_contact or 'none'}\n"
+            f"- Physical conditions: {self.conditions or 'none'}\n"
+        )
+
 
 class EmotionalState(BaseModel):
-    character_name: str = Field(..., description="Name of the character")
-    """Character emotional states - ONLY major shifts, leave fields None if unchanged"""
-    character_emotions: Optional[str] = Field(
-        None,
-        description="Character's emotional state"
-    )
-    character_wants: Optional[str] = Field(
-        None,
-        description="What the character currently desires or aims for in story (short-term)"
-    )
+    character_name: str = Field(...)
+    character_emotions: str | None = Field(default=None)
+    character_wants: str | None = Field(default=None)
 
     def to_string(self) -> str:
-        return f"""{self.character_name}: 
-- Emotional state: {self.character_emotions or 'neutral'},
-- Current desires/aims: {self.character_wants or 'unknown'}
-"""
+        return (
+            f"{self.character_name}:\n"
+            f"- Emotional state: {self.character_emotions or 'neutral'}\n"
+            f"- Current desires/aims: {self.character_wants or 'unknown'}\n"
+        )
 
 
 class QualityIssue(BaseModel):
-    """AI quality problems detected"""
-    issue_type: str = Field(
-        ...,
-        description="Specific type: 'repetitive_phrase', 'echoing_user', 'purple_prose', 'character_sheet_fixation', 'physical_impossibility', 'over_analysis'"
-    )
-    example: str = Field(
-        ...,
-        description="Direct quote or specific description of the problem"
-    )
+    """AI quality problems detected."""
+
+    issue_type: str = Field(...)
+    example: str = Field(...)
 
     def to_string(self) -> str:
         return f"- {self.issue_type}: {self.example}"
 
 
 class StorySummary(BaseModel):
-    """Complete story state summary"""
+    """Complete story state summary."""
+
     time: TimeState
     relationship: RelationshipState
     plot: PlotTracking
-    physical_state: List[PhysicalState] = Field(
-        default_factory=list,
-        description="One entry per character being tracked"
-    )
-    emotional_state: List[EmotionalState] = Field(
-        default_factory=list,
-        description="One entry per character being tracked"
-    )
+    physical_state: list[PhysicalState] = Field(default_factory=list)
+    emotional_state: list[EmotionalState] = Field(default_factory=list)
+    story_beats: list[str] = Field(default_factory=list)
+    user_learnings: list[str] = Field(default_factory=list)
+    ai_quality_issues: list[QualityIssue] = Field(default_factory=list)
+    character_goals: dict[str, str] = Field(default_factory=dict)
 
-    story_beats: List[str] = Field(
-        default_factory=list,
-        description="Maximum 5 beats - only events that would matter when resuming scene later"
-    )
+    @property
+    def story_summary(self) -> list[str]:
+        """Legacy compatibility alias."""
+        return self.story_beats
 
-    user_learnings: List[str] = Field(
-        default_factory=list,
-        description="Accumulated learnings about user preferences from OOC commands or behavior patterns"
-    )
+    @property
+    def character_learnings(self) -> list[str]:
+        """Legacy compatibility alias."""
+        return self.user_learnings
 
-    ai_quality_issues: List[QualityIssue] = Field(
-        default_factory=list,
-        description="Only populate if problems detected in the conversation"
-    )
+    @classmethod
+    def from_legacy_text(cls, summary_text: str) -> "StorySummary":
+        """Build a minimal structured summary from legacy/plain-text summary payloads."""
+        beats = re.findall(r"<story_summary>(.*?)</story_summary>", summary_text, flags=re.IGNORECASE | re.DOTALL)
+        learnings = re.findall(r"<character_learnings>(.*?)</character_learnings>", summary_text, flags=re.IGNORECASE | re.DOTALL)
 
-    character_goals: dict[str, str] = Field(
-        default_factory=dict,
-        description="Character objectives from scenario (retained for summarizer reference but not directly shown to response AI)"
-    )
+        cleaned_beats = [item.strip() for item in beats if item.strip()]
+        cleaned_learnings = [item.strip() for item in learnings if item.strip()]
+
+        if not cleaned_beats and summary_text.strip():
+            cleaned_beats = [summary_text.strip()]
+
+        return cls(
+            time=TimeState(current_time="Unknown"),
+            relationship=RelationshipState(
+                trust=5,
+                attraction=5,
+                emotional_intimacy=5,
+                conflict=1,
+                power_balance=5,
+                relationship_label="",
+            ),
+            plot=PlotTracking(location="unknown"),
+            story_beats=cleaned_beats,
+            user_learnings=cleaned_learnings,
+        )
 
     def to_string(self) -> str:
-        """Convert the summary to a prompt string."""
-        return f"""
-Current in-story time: {self.time.current_time}
-{self.plot.to_string()}
+        beats = "\n".join(self.story_beats)
+        learnings = "\n".join(self.user_learnings)
+        issues = "\n".join(issue.to_string() for issue in self.ai_quality_issues) if self.ai_quality_issues else "None"
+        physical = "\n".join(state.to_string() for state in self.physical_state) if self.physical_state else "Unknown"
+        emotional = "\n".join(state.to_string() for state in self.emotional_state) if self.emotional_state else "Unknown"
+        return (
+            f"Current in-story time: {self.time.current_time}\n"
+            f"{self.plot.to_string()}\n"
+            "Previous events:\n"
+            f"{beats}\n\n"
+            "Direct user instructions or corrections:\n"
+            f"{learnings}\n\n"
+            "Story quality issues that must be avoided:\n"
+            f"{issues}\n\n"
+            "Characters physical states:\n"
+            f"{physical}\n\n"
+            "Characters emotional states:\n"
+            f"{emotional}\n\n"
+            "Relationship between characters:\n"
+            f"{self.relationship.to_string()}"
+        ).strip()
 
-Previous events:
-{'\n'.join(self.story_beats)}
 
-Direct user instructions or corrections (meta-commentary, you MUST adhere to these in future interactions):
-{'\n'.join(self.user_learnings)}
+class Summary(BaseModel):
+    """Legacy summary model retained for compatibility with older pipeline/tests."""
 
-Story quality issues that must be avoided:
-{'\n'.join(issue.to_string() for issue in self.ai_quality_issues) if self.ai_quality_issues else 'None'}
+    story_information: str = Field(default="")
+    story_summary: list[str] = Field(default_factory=list)
+    character_learnings: list[str] = Field(default_factory=list)
+    narrative_overview: str = Field(default="")
 
-Characters physical states:
-{'\n'.join(state.to_string() for state in self.physical_state) if self.physical_state else 'Unknown'}
-
-Characters emotional states:
-{'\n'.join(state.to_string() for state in self.emotional_state) if self.emotional_state else 'Unknown'}
-
-Relationship between characters:
-{self.relationship.to_string()}
-""".strip()
+    def to_string(self) -> str:
+        story_summary = "\n".join(self.story_summary) if self.story_summary else "None"
+        learnings = "\n".join(self.character_learnings) if self.character_learnings else "None"
+        return (
+            "Story information:\n"
+            f"{self.story_information}\n\n"
+            "Story summary:\n"
+            f"{story_summary}\n\n"
+            "Character learnings:\n"
+            f"{learnings}\n\n"
+            "Narrative overview:\n"
+            f"{self.narrative_overview}"
+        )

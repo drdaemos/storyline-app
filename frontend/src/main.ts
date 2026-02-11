@@ -9,9 +9,14 @@ import CharacterPageView from './views/CharacterPageView.vue'
 import ChatView from './views/ChatView.vue'
 import CharacterCreationView from './views/CharacterCreationView.vue'
 import ScenarioCreationView from './views/ScenarioCreationView.vue'
+import CreationHubView from './views/CreationHubView.vue'
+import ScenarioLibraryView from './views/ScenarioLibraryView.vue'
+import WorldLoreLibraryView from './views/WorldLoreLibraryView.vue'
+import WorldLoreCreationView from './views/WorldLoreCreationView.vue'
 import { clerkPlugin } from '@clerk/vue'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+const DEV_AUTH_BYPASS = import.meta.env.VITE_DEV_AUTH_BYPASS === 'true'
 
 const routes = [
   {
@@ -34,7 +39,32 @@ const routes = [
   {
     path: '/create',
     name: 'create',
+    component: CreationHubView,
+  },
+  {
+    path: '/create/character',
+    name: 'create-character',
     component: CharacterCreationView,
+  },
+  {
+    path: '/create/scenario',
+    name: 'create-scenario-global',
+    component: ScenarioCreationView,
+  },
+  {
+    path: '/library/scenarios',
+    name: 'library-scenarios',
+    component: ScenarioLibraryView,
+  },
+  {
+    path: '/library/world-lore',
+    name: 'library-world-lore',
+    component: WorldLoreLibraryView,
+  },
+  {
+    path: '/create/world-lore',
+    name: 'create-world-lore',
+    component: WorldLoreCreationView,
   },
   {
     path: '/character/:characterId/edit',
@@ -58,5 +88,7 @@ const router = createRouter({
 const app = createApp(App)
 app.use(router)
 app.use(ui)
-app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY, appearance: { cssLayerName: 'clerk' } })
+if (!DEV_AUTH_BYPASS && PUBLISHABLE_KEY) {
+  app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY, appearance: { cssLayerName: 'clerk' } })
+}
 app.mount('#app')

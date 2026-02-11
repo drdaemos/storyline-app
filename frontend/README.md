@@ -75,6 +75,11 @@ The application uses Vite with the following configuration:
 - **TypeScript**: Full TypeScript support with strict mode
 - **Vue 3**: Composition API with `<script setup>` syntax
 
+Local auth bypass:
+
+- Set `VITE_DEV_AUTH_BYPASS=true` to run UI flows without Clerk sign-in.
+- This should be used only for local development.
+
 ## Key Technologies
 
 - **Vue 3**: Progressive JavaScript framework

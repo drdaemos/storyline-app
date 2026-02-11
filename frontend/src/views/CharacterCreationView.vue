@@ -1,35 +1,42 @@
 <template>
-  <!-- Header -->
-  <div class="flex mb-8 gap-4 items-center justify-between">
-    <h2 class="text-3xl font-bold font-serif">{{ isEditMode ? 'Edit Character' : 'Create New Character' }}</h2>
-    <div class="flex items-center gap-3">
-      <!-- Auto-save indicator (only in create mode) -->
-      <div v-if="!isEditMode && autoSaveStatus !== 'idle'" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-        <UIcon
-          :name="autoSaveStatus === 'saving' ? 'i-lucide-loader-circle' : 'i-lucide-check-circle'"
-          :class="['w-4 h-4', autoSaveStatus === 'saving' && 'animate-spin']"
-        />
-        <span>{{ autoSaveStatus === 'saving' ? 'Saving...' : 'Saved' }}</span>
+  <section class="space-y-6">
+    <div class="story-panel p-5 md:p-7">
+      <div class="flex gap-4 items-center justify-between flex-wrap">
+        <div>
+          <span class="story-chip px-3 py-1 text-xs font-medium inline-flex mb-3">
+            Assisted Authoring
+          </span>
+          <h2 class="text-3xl story-headline">{{ isEditMode ? 'Edit Character' : 'Create New Character' }}</h2>
+        </div>
+        <div class="flex items-center gap-3">
+          <!-- Auto-save indicator (only in create mode) -->
+          <div v-if="!isEditMode && autoSaveStatus !== 'idle'" class="flex items-center gap-2 text-sm story-subtext">
+            <UIcon
+              :name="autoSaveStatus === 'saving' ? 'i-lucide-loader-circle' : 'i-lucide-check-circle'"
+              :class="['w-4 h-4', autoSaveStatus === 'saving' && 'animate-spin']"
+            />
+            <span>{{ autoSaveStatus === 'saving' ? 'Saving...' : 'Saved' }}</span>
+          </div>
+          <!-- Reset button -->
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-refresh-cw"
+            @click="resetCharacterCreation"
+            :disabled="isThinking || saving"
+          >
+            Reset
+          </UButton>
+        </div>
       </div>
-      <!-- Reset button -->
-      <UButton
-        color="neutral"
-        variant="ghost"
-        icon="i-lucide-refresh-cw"
-        @click="resetCharacterCreation"
-        :disabled="isThinking || saving"
-      >
-        Reset
-      </UButton>
     </div>
-  </div>
 
   <!-- 2 Column Layout -->
   <UMain>
     <div class="grid lg:grid-cols-2 grid-cols-1 gap-6 flex-1 pb-8">
       <!-- Left Column: AI Chat Assistant -->
-      <div class="flex flex-col border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden max-h-[88vh] lg:sticky top-24">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+      <div class="flex flex-col story-panel overflow-hidden max-h-[88vh] lg:sticky top-24">
+        <div class="p-4 border-b border-gray-200/70 dark:border-gray-800 bg-cyan-50/70 dark:bg-gray-900">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-sparkles" class="w-5 h-5 text-primary" />
             <h3 class="text-lg font-semibold">AI Assistant</h3>
@@ -108,7 +115,6 @@
             </div>
           </div>
 
-          <div ref="chatEndRef"></div>
         </div>
 
         <!-- Chat Input -->
@@ -133,8 +139,8 @@
       </div>
 
       <!-- Right Column: Character Sheet -->
-      <div class="overflow-y-auto">
-        <h2 class="text-lg font-semibold mb-2 font-serif">Character card</h2>
+      <div class="overflow-y-auto story-panel p-5 md:p-6">
+        <h2 class="text-xl story-headline mb-3">Character card</h2>
           <div class="flex items-center gap-3 mb-6">
             <div class="flex-1 space-y-2">
               <UFormField>
@@ -193,6 +199,18 @@
               </UFormField>
             </div>
 
+            <div>
+              <h3 class="text-md font-semibold mb-2 font-serif">Tags</h3>
+              <UFormField>
+                <UInput
+                  v-model="tagsInput"
+                  class="w-full"
+                  placeholder="Comma-separated tags, e.g. detective, noir, city"
+                  @blur="syncTagsFromInput"
+                />
+              </UFormField>
+            </div>
+
             <!-- Appearance Section -->
             <div>
               <h3 class="text-md font-semibold mb-2 font-serif">Appearance</h3>
@@ -214,7 +232,7 @@
               <UFormField>
                 <div class="space-y-4">
                   <div
-                    v-for="(interest, index) in characterData.interests"
+                    v-for="(_, index) in characterData.interests"
                     :key="index"
                     class="flex gap-2"
                   >
@@ -252,7 +270,7 @@
               <UFormField>
                 <div class="space-y-4">
                   <div
-                    v-for="(dislike, index) in characterData.dislikes"
+                    v-for="(_, index) in characterData.dislikes"
                     :key="index"
                     class="flex gap-2"
                   >
@@ -290,7 +308,7 @@
               <UFormField>
                 <div class="space-y-4">
                   <div
-                    v-for="(desire, index) in characterData.desires"
+                    v-for="(_, index) in characterData.desires"
                     :key="index"
                     class="flex gap-2"
                   >
@@ -328,7 +346,7 @@
               <UFormField>
                 <div class="space-y-4">
                   <div
-                    v-for="(kink, index) in characterData.kinks"
+                    v-for="(_, index) in characterData.kinks"
                     :key="index"
                     class="flex gap-2"
                   >
@@ -409,63 +427,50 @@
               </UButton>
             </div>
 
-            <!-- World Building Section -->
-            <div>
-              <h3 class="text-md font-semibold mb-3 font-serif">World setting</h3>
+            <div class="space-y-4">
+              <h3 class="text-md font-semibold mb-2 font-serif">Ruleset</h3>
+              <UFormField label="Ruleset">
+                <USelect
+                  class="w-full"
+                  value-key="id"
+                  v-model="characterData.ruleset_id"
+                  :items="rulesets.map(r => ({ id: r.id, label: r.name }))"
+                  :loading="rulesetsLoading"
+                />
+              </UFormField>
+              <p class="text-xs story-subtext">
+                Ruleset controls stat schema used by simulation for this character.
+              </p>
+            </div>
 
-              <!-- Setting Description -->
-              <div class="mb-4">
-                <UFormField>
-                  <UTextarea
-                    v-model="characterData.setting_description"
-                    :rows="4"
-                    autoresize 
-                    variant="ghost"
+            <div v-if="rulesetStatFields.length > 0" class="space-y-3">
+              <h3 class="text-md font-semibold mb-2 font-serif">Ruleset Stats</h3>
+              <div class="grid sm:grid-cols-2 gap-3">
+                <UFormField
+                  v-for="field in rulesetStatFields"
+                  :key="field.key"
+                  :label="field.label"
+                >
+                  <UInput
+                    v-if="field.type === 'integer' || field.type === 'number'"
+                    v-model.number="characterData.ruleset_stats[field.key]"
+                    type="number"
                     class="w-full"
-                    placeholder="Description of the world/setting..."
+                    :min="field.minimum"
+                    :max="field.maximum"
+                  />
+                  <UInput
+                    v-else-if="field.type === 'string'"
+                    v-model="characterData.ruleset_stats[field.key]"
+                    class="w-full"
+                  />
+                  <UCheckbox
+                    v-else
+                    :model-value="Boolean(characterData.ruleset_stats[field.key])"
+                    @update:model-value="(value: boolean | 'indeterminate') => { characterData.ruleset_stats[field.key] = value === true }"
+                    :label="field.key"
                   />
                 </UFormField>
-              </div>
-
-              <!-- Key Locations -->
-              <div>
-                <h3 class="text-md font-semibold mb-3 font-serif">Key locations</h3>
-                <UFormField>
-                  <div class="space-y-4">
-                    <div
-                      v-for="(location, index) in characterData.key_locations"
-                      :key="index"
-                      class="flex gap-2"
-                    >
-                      <UInput
-                        v-model="characterData.key_locations[index]"
-                        :placeholder="`Location ${index + 1}`"
-                        class="flex-1"
-                      />
-                      <UButton
-                        color="neutral"
-                        variant="ghost"
-                        icon="i-lucide-x"
-                        size="sm"
-                        @click="removeLocation(index)"
-                      />
-                    </div>
-                  </div>
-                </UFormField>
-                <UButton
-                  v-if="(characterData.key_locations?.length || 0) < 10"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-plus"
-                  size="sm"
-                  class="mt-3"
-                  @click="addLocation"
-                >
-                  Add Location
-                </UButton>
-              </div>
-
-              <div>
               </div>
             </div>
           </div>
@@ -500,23 +505,24 @@
       </div>
     </div>
   </UMain>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, nextTick, watch, onMounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { useCharacterCreationAutoSave } from '@/composables/useCharacterCreationAutoSave'
 import { usePersonas } from '@/composables/usePersonas'
-import type { Character, ChatMessage, CharacterCreationRequest } from '@/types'
+import type { Character, ChatMessage, CharacterCreationRequest, RulesetDefinition } from '@/types'
 
 const props = defineProps<{
   characterId?: string
 }>()
 
 const router = useRouter()
-const { streamCharacterCreation, createCharacter, updateCharacter, getCharacterInfo } = useApi()
+const { streamCharacterCreation, createCharacter, updateCharacter, getCharacterInfo, listRulesets } = useApi()
 const { settings } = useLocalSettings()
 const { fetchPersonas } = usePersonas()
 
@@ -527,36 +533,147 @@ const messages = ref<ChatMessage[]>([])
 const isThinking = ref(false)
 const error = ref('')
 const saving = ref(false)
-const chatEndRef = ref<HTMLElement | null>(null)
+
+type CharacterFormData = {
+  name: string
+  tagline: string
+  backstory: string
+  personality: string
+  appearance: string
+  relationships: Record<string, string>
+  ruleset_id: string
+  ruleset_stats: Record<string, number | string | boolean>
+  interests: string[]
+  dislikes: string[]
+  desires: string[]
+  kinks: string[]
+  tags: string[]
+}
 
 interface RelationshipItem {
   name: string
   description: string
 }
 
-const characterData = reactive<Partial<Character>>({
+const characterData = reactive<CharacterFormData>({
   name: '',
   tagline: '',
   backstory: '',
   personality: '',
   appearance: '',
   relationships: {},
-  key_locations: [],
-  setting_description: '',
+  ruleset_id: 'everyday-tension',
+  ruleset_stats: {},
   interests: [],
   dislikes: [],
   desires: [],
   kinks: [],
+  tags: [],
 })
 
 const relationshipsList = ref<RelationshipItem[]>([])
+const tagsInput = ref('')
+const rulesets = ref<RulesetDefinition[]>([])
+const rulesetsLoading = ref(false)
+
+type RulesetStatField = {
+  key: string
+  type: 'integer' | 'number' | 'string' | 'boolean'
+  minimum?: number
+  maximum?: number
+  label: string
+}
+
+const selectedRuleset = computed(() => {
+  if (rulesets.value.length === 0) return null
+  return rulesets.value.find(ruleset => ruleset.id === characterData.ruleset_id) || rulesets.value[0]
+})
+
+const rulesetStatFields = computed<RulesetStatField[]>(() => {
+  const schema = selectedRuleset.value?.character_stat_schema
+  if (!schema || typeof schema !== 'object') return []
+  const properties = (schema as Record<string, unknown>).properties
+  if (!properties || typeof properties !== 'object') return []
+  return Object.entries(properties as Record<string, Record<string, unknown>>).map(([key, prop]) => {
+    const rawType = String(prop.type || 'string')
+    const normalizedType = (['integer', 'number', 'string', 'boolean'].includes(rawType) ? rawType : 'string') as RulesetStatField['type']
+    const minimum = typeof prop.minimum === 'number' ? prop.minimum : (typeof prop.min === 'number' ? prop.min : undefined)
+    const maximum = typeof prop.maximum === 'number' ? prop.maximum : (typeof prop.max === 'number' ? prop.max : undefined)
+    return {
+      key,
+      type: normalizedType,
+      minimum,
+      maximum,
+      label: key.replace(/_/g, ' '),
+    }
+  })
+})
+
+const coerceStatValue = (field: RulesetStatField, value: unknown): number | string | boolean => {
+  if (field.type === 'integer') {
+    const numeric = Number(value)
+    const fallback = typeof field.minimum === 'number' ? field.minimum : 0
+    let result = Number.isFinite(numeric) ? Math.round(numeric) : fallback
+    if (typeof field.minimum === 'number') result = Math.max(field.minimum, result)
+    if (typeof field.maximum === 'number') result = Math.min(field.maximum, result)
+    return result
+  }
+  if (field.type === 'number') {
+    const numeric = Number(value)
+    const fallback = typeof field.minimum === 'number' ? field.minimum : 0
+    let result = Number.isFinite(numeric) ? numeric : fallback
+    if (typeof field.minimum === 'number') result = Math.max(field.minimum, result)
+    if (typeof field.maximum === 'number') result = Math.min(field.maximum, result)
+    return result
+  }
+  if (field.type === 'boolean') {
+    return Boolean(value)
+  }
+  return String(value ?? '')
+}
+
+const ensureRulesetStatsDefaults = () => {
+  const next: Record<string, number | string | boolean> = {}
+  for (const field of rulesetStatFields.value) {
+    const existing = characterData.ruleset_stats[field.key]
+    if (existing === undefined || existing === null || existing === '') {
+      if (field.type === 'boolean') {
+        next[field.key] = false
+      } else if (field.type === 'string') {
+        next[field.key] = ''
+      } else {
+        next[field.key] = coerceStatValue(field, field.minimum ?? 0)
+      }
+      continue
+    }
+    next[field.key] = coerceStatValue(field, existing)
+  }
+  characterData.ruleset_stats = next
+}
+
+const loadRulesets = async () => {
+  rulesetsLoading.value = true
+  try {
+    rulesets.value = await listRulesets()
+    if (rulesets.value.length > 0 && !characterData.ruleset_id) {
+      characterData.ruleset_id = rulesets.value[0].id
+    }
+  } finally {
+    rulesetsLoading.value = false
+    ensureRulesetStatsDefaults()
+  }
+}
+const getErrorMessage = (err: unknown, fallback: string): string => {
+  if (err instanceof Error && err.message) return err.message
+  return fallback
+}
 
 // Auto-save functionality (only for create mode, not edit mode)
 const autoSaveEnabled = !isEditMode.value
 const autoSaveFunctions = autoSaveEnabled
   ? useCharacterCreationAutoSave(characterData, messages)
   : {
-      autoSaveStatus: ref<'saved' | 'idle'>('idle'),
+      autoSaveStatus: ref<'saving' | 'saved' | 'idle'>('idle'),
       saveToLocalStorage: () => {},
       loadFromLocalStorage: () => false,
       clearLocalStorage: () => {}
@@ -566,6 +683,7 @@ const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStor
 
 // Load saved state or character data on mount
 onMounted(async () => {
+  await loadRulesets()
   if (isEditMode.value && props.characterId) {
     // Load existing character data for editing
     try {
@@ -578,13 +696,14 @@ onMounted(async () => {
         backstory: characterInfo.backstory || '',
         personality: characterInfo.personality || '',
         appearance: characterInfo.appearance || '',
-        setting_description: characterInfo.setting_description || '',
+        ruleset_id: characterInfo.ruleset_id || characterData.ruleset_id || 'everyday-tension',
+        ruleset_stats: characterInfo.ruleset_stats || {},
         relationships: characterInfo.relationships || {},
-        key_locations: characterInfo.key_locations || [],
         interests: characterInfo.interests || [],
         dislikes: characterInfo.dislikes || [],
         desires: characterInfo.desires || [],
         kinks: characterInfo.kinks || [],
+        tags: characterInfo.tags || [],
       })
 
       // Populate relationshipsList from relationships object
@@ -595,11 +714,13 @@ onMounted(async () => {
         }))
       }
     } catch (err) {
-      error.value = (err as any)?.message || 'Failed to load character data'
+      error.value = getErrorMessage(err, 'Failed to load character data')
     }
+    ensureRulesetStatsDefaults()
   } else {
     // Load from localStorage for new character creation
     loadFromLocalStorage()
+    ensureRulesetStatsDefaults()
   }
 })
 
@@ -622,13 +743,14 @@ const resetCharacterCreation = async () => {
         backstory: characterInfo.backstory || '',
         personality: characterInfo.personality || '',
         appearance: characterInfo.appearance || '',
-        setting_description: characterInfo.setting_description || '',
+        ruleset_id: characterInfo.ruleset_id || characterData.ruleset_id || 'everyday-tension',
+        ruleset_stats: characterInfo.ruleset_stats || {},
         relationships: characterInfo.relationships || {},
-        key_locations: characterInfo.key_locations || [],
         interests: characterInfo.interests || [],
         dislikes: characterInfo.dislikes || [],
         desires: characterInfo.desires || [],
         kinks: characterInfo.kinks || [],
+        tags: characterInfo.tags || [],
       })
 
       // Reload relationshipsList
@@ -645,8 +767,9 @@ const resetCharacterCreation = async () => {
       messages.value = []
       error.value = ''
       userInput.value = ''
+      ensureRulesetStatsDefaults()
     } catch (err) {
-      error.value = (err as any)?.message || 'Failed to reload character data'
+      error.value = getErrorMessage(err, 'Failed to reload character data')
     }
   } else {
     // In create mode: clear everything
@@ -662,12 +785,13 @@ const resetCharacterCreation = async () => {
       personality: '',
       appearance: '',
       relationships: {},
-      key_locations: [],
-      setting_description: '',
+      ruleset_id: rulesets.value[0]?.id || 'everyday-tension',
+      ruleset_stats: {},
       interests: [],
       dislikes: [],
       desires: [],
       kinks: [],
+      tags: [],
     })
 
     // Clear relationshipsList
@@ -682,6 +806,7 @@ const resetCharacterCreation = async () => {
     // Reset other state
     error.value = ''
     userInput.value = ''
+    ensureRulesetStatsDefaults()
   }
 }
 
@@ -711,18 +836,28 @@ watch(() => characterData.relationships, (newRelationships) => {
   }
 }, { deep: true })
 
+const syncTagsFromInput = () => {
+  const tags = tagsInput.value
+    .split(',')
+    .map(tag => tag.trim())
+    .filter(Boolean)
+  characterData.tags = tags.filter((tag, index) => tags.indexOf(tag) === index)
+}
+
+watch(() => characterData.tags, (tags) => {
+  tagsInput.value = (tags || []).join(', ')
+}, { deep: true, immediate: true })
+
+watch(() => characterData.ruleset_id, () => {
+  ensureRulesetStatsDefaults()
+})
+
 const isCharacterValid = computed(() => {
   return true
 })
 
 const navigateBack = () => {
   router.push('/')
-}
-
-const scrollToBottom = () => {
-  nextTick(() => {
-    chatEndRef.value?.scrollIntoView({ behavior: 'smooth' })
-  })
 }
 
 const sendMessage = async () => {
@@ -752,8 +887,8 @@ const sendMessage = async () => {
         content: msg.content,
         is_user: msg.isUser
       })),
-      processor_type: settings.value.aiProcessor,
-      backup_processor_type: settings.value.backupProcessor,
+      processor_type: settings.value.largeModelKey,
+      backup_processor_type: settings.value.smallModelKey,
     }
 
     // Create a temporary AI message that will be updated in real-time
@@ -798,8 +933,7 @@ const sendMessage = async () => {
         isThinking.value = false
       }
     )
-  } catch (err) {
-    console.error('Failed to send message:', err)
+  } catch (_err) {
     error.value = 'Failed to send message. Please try again.'
     isThinking.value = false
   }
@@ -808,6 +942,8 @@ const sendMessage = async () => {
 const saveCharacter = async (isPersona: boolean = false) => {
   if (!isCharacterValid.value) return
 
+  syncTagsFromInput()
+  ensureRulesetStatsDefaults()
   saving.value = true
   try {
     if (isEditMode.value && props.characterId) {
@@ -841,7 +977,7 @@ const saveCharacter = async (isPersona: boolean = false) => {
       router.push('/')
     }
   } catch (err) {
-    error.value = (err as any)?.message || `Failed to ${isEditMode.value ? 'update' : 'create'} character`
+    error.value = getErrorMessage(err, `Failed to ${isEditMode.value ? 'update' : 'create'} character`)
   } finally {
     saving.value = false
   }
@@ -853,19 +989,6 @@ const addRelationship = () => {
 
 const removeRelationship = (index: number) => {
   relationshipsList.value.splice(index, 1)
-}
-
-const addLocation = () => {
-  if (!characterData.key_locations) {
-    characterData.key_locations = []
-  }
-  if (characterData.key_locations.length < 10) {
-    characterData.key_locations.push('')
-  }
-}
-
-const removeLocation = (index: number) => {
-  characterData.key_locations?.splice(index, 1)
 }
 
 const addInterest = () => {

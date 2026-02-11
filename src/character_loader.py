@@ -62,7 +62,15 @@ class CharacterLoader:
             summaries = []
             for char in db_chars:
                 character_data = char.get("character_data", {})
-                summaries.append(CharacterSummary(id=char["id"], name=character_data.get("name", char["id"]), tagline=character_data.get("tagline", "")))
+                summaries.append(
+                    CharacterSummary(
+                        id=char["id"],
+                        name=character_data.get("name", char["id"]),
+                        tagline=character_data.get("tagline", ""),
+                        tags=character_data.get("tags", []),
+                        is_persona=bool(char.get("is_persona", character_data.get("is_persona", False))),
+                    )
+                )
             return sorted(summaries, key=lambda x: x.name)
         except Exception:
             return []
@@ -82,7 +90,15 @@ class CharacterLoader:
             summaries = []
             for char in db_chars:
                 character_data = char.get("character_data", {})
-                summaries.append(CharacterSummary(id=char["id"], name=character_data.get("name", char["id"]), tagline=character_data.get("tagline", "")))
+                summaries.append(
+                    CharacterSummary(
+                        id=char["id"],
+                        name=character_data.get("name", char["id"]),
+                        tagline=character_data.get("tagline", ""),
+                        tags=character_data.get("tags", []),
+                        is_persona=bool(char.get("is_persona", character_data.get("is_persona", False))),
+                    )
+                )
             return sorted(summaries, key=lambda x: x.name)
         except Exception:
             return []

@@ -180,7 +180,7 @@ class TestCharacterLoader:
 
             assert result.name == "Extended Character"
             assert result.relationships == {"friend": "Alice"}
-            assert result.key_locations == ["Castle", "Forest"]
+            assert result.ruleset_id == "everyday-tension"
 
     def test_load_character_empty_yaml_file(self):
         # This test is no longer relevant since database validation prevents empty data
@@ -225,7 +225,7 @@ class TestCharacterLoader:
             assert "30 years" in character.backstory
             assert "Gruff exterior" in character.personality
             assert len(character.relationships) == 2
-            assert len(character.key_locations) == 3
+            assert character.ruleset_id == "everyday-tension"
 
     def test_character_loader_path_resolution(self):
         # Test that CharacterLoader works with different path types

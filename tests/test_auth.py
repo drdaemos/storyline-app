@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.auth import is_auth_enabled, verify_clerk_token
+from src.auth import DEV_BYPASS_USER, is_auth_enabled, is_dev_auth_bypass_enabled, verify_clerk_token
 
 
 class TestIsAuthEnabled:
@@ -60,6 +60,21 @@ class TestVerifyClerkToken:
         with patch.dict(os.environ, {"AUTH_ENABLED": "false"}):
             result = await verify_clerk_token(mock_request)
             assert result == "anonymous"
+
+    def test_dev_auth_bypass_flag(self) -> None:
+        with patch.dict(os.environ, {"DEV_AUTH_BYPASS": "true"}):
+            assert is_dev_auth_bypass_enabled() is True
+        with patch.dict(os.environ, {"DEV_AUTH_BYPASS": "false"}):
+            assert is_dev_auth_bypass_enabled() is False
+
+    @pytest.mark.asyncio
+    async def test_returns_static_user_when_dev_bypass_enabled(self) -> None:
+        mock_request = MagicMock()
+        mock_request.state = MagicMock()
+        with patch.dict(os.environ, {"DEV_AUTH_BYPASS": "true"}, clear=True):
+            result = await verify_clerk_token(mock_request)
+            assert result == DEV_BYPASS_USER["user_id"]
+            assert mock_request.state.auth_user == DEV_BYPASS_USER
 
     @pytest.mark.asyncio
     async def test_authenticates_successfully_when_auth_enabled(self) -> None:

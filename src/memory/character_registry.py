@@ -77,6 +77,7 @@ class CharacterRegistry:
                 return {
                     "id": character.id,
                     "character_data": character.character_data,
+                    "is_persona": character.is_persona,
                     "schema_version": character.schema_version,
                     "created_at": character.created_at.isoformat(),
                     "updated_at": character.updated_at.isoformat(),
@@ -110,7 +111,14 @@ class CharacterRegistry:
             characters = query.order_by(Character.updated_at.desc()).all()
 
             return [
-                {"id": char.id, "character_data": char.character_data, "schema_version": char.schema_version, "created_at": char.created_at.isoformat(), "updated_at": char.updated_at.isoformat()}
+                {
+                    "id": char.id,
+                    "character_data": char.character_data,
+                    "is_persona": char.is_persona,
+                    "schema_version": char.schema_version,
+                    "created_at": char.created_at.isoformat(),
+                    "updated_at": char.updated_at.isoformat(),
+                }
                 for char in characters
             ]
 
@@ -161,7 +169,14 @@ class CharacterRegistry:
             characters = query.order_by(Character.updated_at.desc()).all()
 
             return [
-                {"id": char.id, "character_data": char.character_data, "schema_version": char.schema_version, "created_at": char.created_at.isoformat(), "updated_at": char.updated_at.isoformat()}
+                {
+                    "id": char.id,
+                    "character_data": char.character_data,
+                    "is_persona": char.is_persona,
+                    "schema_version": char.schema_version,
+                    "created_at": char.created_at.isoformat(),
+                    "updated_at": char.updated_at.isoformat(),
+                }
                 for char in characters
             ]
 

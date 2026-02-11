@@ -27,6 +27,15 @@ Run in production:
 uv run main.py serve [--host ""] [--port <int>]
 ```
 
+## Local Auth Bypass
+
+For local development without Clerk sign-in:
+
+- Backend: set `DEV_AUTH_BYPASS=true`
+- Frontend: set `VITE_DEV_AUTH_BYPASS=true`
+
+When enabled, the app uses a static local user identity (`dev-local-user`) for persisted data ownership.
+
 ## Architecture
 
 The system utilizes an LLM-based pipeline consisting of the following components in a more-or-less sequential fashion:

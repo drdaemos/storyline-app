@@ -23,6 +23,6 @@ def format_character_description(character: Character) -> dict[str, str]:
         "character_dislikes": "\n".join([f"- {item}" for item in character.dislikes]),
         "character_kinks": "\n".join([f"- {item}" for item in character.kinks]),
         "relationships": "\n".join([f"- {key}: {value}" for key, value in character.relationships.items()]),
-        "setting_description": character.setting_description or "Not specified",
-        "key_locations": "\n".join([f"- {location}" for location in character.key_locations]),
+        "ruleset_id": character.ruleset_id,
+        "ruleset_stats": str(character.ruleset_stats or {}),
     }

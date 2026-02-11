@@ -173,9 +173,6 @@ class TestScenarioGenerator:
         assert "Protector of the ancient forest" in prompt  # backstory
         assert "Cautious but kind-hearted" in prompt
         assert "Tall elf with silver hair" in prompt
-        assert "Whispering Woods" in prompt
-        assert "Crystal Lake" in prompt
-        assert "mystical forest realm" in prompt
         assert "exactly 3" in prompt
 
     def test_build_user_prompt_with_minimal_character(self):

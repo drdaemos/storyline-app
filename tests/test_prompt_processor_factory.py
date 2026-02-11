@@ -6,8 +6,6 @@ import pytest
 
 from src.models.prompt_processor_factory import PromptProcessorFactory
 from src.processors.claude_prompt_processor import ClaudePromptProcessor
-from src.processors.cohere_prompt_processor import CoherePromptProcessor
-from src.processors.openai_prompt_processor import OpenAiPromptProcessor
 from src.processors.openrouter_prompt_processor import OpenRouterPromptProcessor
 
 
@@ -25,6 +23,12 @@ class TestPromptProcessorFactory:
         processor = PromptProcessorFactory.create_processor("claude-haiku")
         assert isinstance(processor, ClaudePromptProcessor)
         assert processor.model == "claude-haiku-4-5"
+
+    def test_create_claude_opus_processor(self) -> None:
+        """Test creating Claude Opus processor with native Claude backend."""
+        processor = PromptProcessorFactory.create_processor("claude-opus")
+        assert isinstance(processor, ClaudePromptProcessor)
+        assert processor.model == "claude-opus-4-6"
 
     def test_case_insensitive_processor_creation(self) -> None:
         """Test that processor creation is case insensitive."""

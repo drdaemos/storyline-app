@@ -136,8 +136,8 @@ For romance/drama, imperfection creates chemistry. Perfect characters are forget
 - appearance: physical traits, style, distinguishing features (concise comma-separated tags, e.g. "tall, scar on left cheek, wears glasses")
 - personality: key traits, demeanor, habits (concise comma-separated tags, e.g. "sarcastic, quick-tempered, loyal")
 - relationships: {name: description}
-- key_locations: [list]
-- setting_description
+- ruleset_id: mechanics profile id (for example "everyday-tension")
+- ruleset_stats: {stat_name: value} aligned with the selected ruleset
 - interests: [list of hobbies, activities, or topics the character enjoys]
 - dislikes: [list of things the character avoids or finds distasteful]
 - desires: [list of goals, ambitions, or things the character wants]
@@ -153,7 +153,8 @@ Use this when creating/modifying fields:
   "field_name": "value",
   // for example:
   "relationships": {"name": "description"},
-  "key_locations": ["location1", "location2"],
+  "ruleset_id": "everyday-tension",
+  "ruleset_stats": {"warmth": 6, "logic": 7},
   "interests": ["reading", "hiking"],
   "dislikes": ["crowds", "dishonesty"],
   "desires": ["find true love", "publish a novel"],

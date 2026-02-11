@@ -1,49 +1,64 @@
 <template>
-  <!-- Header -->
-  <div class="flex mb-8 gap-4">
-    <h2 class="text-3xl font-bold font-serif">Choose a Character</h2>
-  </div>
-
-  <!-- Loading state -->
-  <UPageGrid v-if="!characters.length && loading">
-    <UCard class="min-h-48 flex items-end-safe">
-      <template #footer>
-        <USkeleton class="h-4 w-40 mb-2"></USkeleton>
-        <USkeleton class="h-4 w-60"></USkeleton>
-      </template>
-    </UCard>
-  </UPageGrid>
-
-  <!-- Error state -->
-  <UAlert
-    v-else-if="error"
-    color="error"
-    variant="soft"
-    icon="i-lucide-alert-triangle"
-    title="Failed to load characters"
-    :description="error.message"
-  >
-    <template #actions>
-      <UButton color="error" variant="solid" @click="loadCharacters">
-        Try Again
+  <section class="space-y-8">
+    <div class="story-panel p-6 md:p-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div>
+        <span class="story-chip px-3 py-1 text-xs font-medium inline-flex mb-3">
+          Character Workspace
+        </span>
+        <h2 class="story-headline text-3xl md:text-4xl">Choose a Character</h2>
+        <p class="story-subtext mt-2">Enter a profile to continue existing sessions or launch a new one.</p>
+      </div>
+      <UButton
+        color="primary"
+        icon="i-lucide-plus"
+        size="lg"
+        @click="navigateToCreate"
+      >
+        Open Create Hub
       </UButton>
-    </template>
-  </UAlert>
+    </div>
 
-  <!-- Character Grid -->
-  <UPageGrid v-else>
-    <CharacterCard
-      v-for="character in characters"
-      :key="character.id"
-      :character-summary="character"
-      @select="selectCharacter"
-    />
+    <!-- Loading state -->
+    <UPageGrid v-if="!characters.length && loading">
+      <UCard class="min-h-48 flex items-end-safe story-panel-muted">
+        <template #footer>
+          <USkeleton class="h-4 w-40 mb-2"></USkeleton>
+          <USkeleton class="h-4 w-60"></USkeleton>
+        </template>
+      </UCard>
+    </UPageGrid>
 
-    <CharacterCard
-      :is-create-new="true"
-      @create="navigateToCreate"
-    />
-  </UPageGrid>
+    <!-- Error state -->
+    <UAlert
+      v-else-if="error"
+      color="error"
+      variant="soft"
+      icon="i-lucide-alert-triangle"
+      title="Failed to load characters"
+      :description="error.message"
+    >
+      <template #actions>
+        <UButton color="error" variant="solid" @click="loadCharacters">
+          Try Again
+        </UButton>
+      </template>
+    </UAlert>
+
+    <!-- Character Grid -->
+    <UPageGrid v-else>
+      <CharacterCard
+        v-for="character in characters"
+        :key="character.id"
+        :character-summary="character"
+        @select="selectCharacter"
+      />
+
+      <CharacterCard
+        :is-create-new="true"
+        @create="navigateToCreate"
+      />
+    </UPageGrid>
+  </section>
 </template>
 
 <script setup lang="ts">
