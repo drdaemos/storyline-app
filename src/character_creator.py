@@ -74,7 +74,7 @@ class CharacterCreator:
 
     def _identify_missing_fields(self, character_data: dict[str, Any]) -> list[str]:
         """Identify which character fields are missing or empty."""
-        all_fields = ["name", "tagline", "backstory", "personality", "appearance", "relationships", "key_locations", "setting_description", "interests", "dislikes", "desires", "kinks"]
+        all_fields = ["name", "tagline", "backstory", "personality", "appearance", "interests", "dislikes", "desires", "kinks"]
 
         missing_fields = []
         for field in all_fields:

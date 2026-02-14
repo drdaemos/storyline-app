@@ -16,7 +16,6 @@ class TestConversationMemory:
         os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
         # Create custom memory instance that uses test database
         self.memory = ConversationMemory(memory_dir=Path(self.temp_dir))
-        self.character_id = "test_character"
 
     def teardown_method(self):
         """Clean up test environment."""
@@ -37,7 +36,7 @@ class TestConversationMemory:
 
     def test_create_session(self):
         """Test session creation."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         assert isinstance(session_id, str)
         assert len(session_id) > 0
@@ -46,39 +45,39 @@ class TestConversationMemory:
 
     def test_add_message(self):
         """Test adding a message to memory."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
-        message_id = self.memory.add_message(self.character_id, session_id, "user", "Hello there!")
+        message_id = self.memory.add_message(session_id, "user", "Hello there!")
 
         assert isinstance(message_id, int)
         assert message_id > 0
 
     def test_get_session_messages(self):
         """Test retrieving session messages."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add some messages
-        self.memory.add_message(self.character_id, session_id, "user", "Hello!")
-        self.memory.add_message(self.character_id, session_id, "assistant", "Hi there!")
-        self.memory.add_message(self.character_id, session_id, "user", "How are you?")
+        self.memory.add_message(session_id, "user", "Hello!")
+        self.memory.add_message(session_id, "narration", "Hi there!")
+        self.memory.add_message(session_id, "user", "How are you?")
 
         messages = self.memory.get_session_messages(session_id, "anonymous")
 
         assert len(messages) == 3
         assert messages[0]["role"] == "user"
         assert messages[0]["content"] == "Hello!"
-        assert messages[1]["role"] == "assistant"
+        assert messages[1]["role"] == "narration"
         assert messages[1]["content"] == "Hi there!"
         assert messages[2]["role"] == "user"
         assert messages[2]["content"] == "How are you?"
 
     def test_get_session_messages_with_limit(self):
         """Test retrieving session messages with limit."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add multiple messages
         for i in range(5):
-            self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
+            self.memory.add_message(session_id, "user", f"Message {i}")
 
         messages = self.memory.get_session_messages(session_id, "anonymous", limit=3)
 
@@ -90,23 +89,23 @@ class TestConversationMemory:
 
     def test_get_session_messages_empty_session(self):
         """Test retrieving messages from empty session."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         messages = self.memory.get_session_messages(session_id, "anonymous")
 
         assert messages == []
 
-    def test_get_character_sessions(self):
-        """Test retrieving character sessions."""
+    def test_get_user_sessions(self):
+        """Test retrieving user sessions."""
         # Create multiple sessions with messages
-        session1 = self.memory.create_session(self.character_id)
-        session2 = self.memory.create_session(self.character_id)
+        session1 = self.memory.create_session()
+        session2 = self.memory.create_session()
 
-        self.memory.add_message(self.character_id, session1, "user", "Session 1 message")
-        self.memory.add_message(self.character_id, session2, "user", "Session 2 message")
-        self.memory.add_message(self.character_id, session2, "assistant", "Session 2 response")
+        self.memory.add_message(session1, "user", "Session 1 message")
+        self.memory.add_message(session2, "user", "Session 2 message")
+        self.memory.add_message(session2, "narration", "Session 2 response")
 
-        sessions = self.memory.get_character_sessions(self.character_id, "anonymous")
+        sessions = self.memory.get_user_sessions("anonymous")
 
         assert len(sessions) == 2
         # Should be ordered by last_message_time DESC
@@ -115,30 +114,30 @@ class TestConversationMemory:
         assert sessions[1]["session_id"] == session1
         assert sessions[1]["message_count"] == 1
 
-    def test_get_character_sessions_with_limit(self):
-        """Test retrieving character sessions with limit."""
+    def test_get_user_sessions_with_limit(self):
+        """Test retrieving user sessions with limit."""
         # Create more sessions than the limit
         for i in range(5):
-            session_id = self.memory.create_session(self.character_id)
-            self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
+            session_id = self.memory.create_session()
+            self.memory.add_message(session_id, "user", f"Message {i}")
 
-        sessions = self.memory.get_character_sessions(self.character_id, "anonymous", limit=3)
+        sessions = self.memory.get_user_sessions("anonymous", limit=3)
 
         assert len(sessions) == 3
 
-    def test_get_character_sessions_no_sessions(self):
-        """Test retrieving sessions for character with no sessions."""
-        sessions = self.memory.get_character_sessions("nonexistent_character", "anonymous")
+    def test_get_user_sessions_no_sessions(self):
+        """Test retrieving sessions when none exist."""
+        sessions = self.memory.get_user_sessions("nonexistent_user")
 
         assert sessions == []
 
     def test_get_recent_messages(self):
         """Test retrieving recent messages."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add multiple messages
         for i in range(10):
-            self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
+            self.memory.add_message(session_id, "user", f"Message {i}")
 
         recent = self.memory.get_recent_messages(session_id, "anonymous", limit=5)
 
@@ -149,7 +148,7 @@ class TestConversationMemory:
 
     def test_get_recent_messages_empty_session(self):
         """Test retrieving recent messages from empty session."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         recent = self.memory.get_recent_messages(session_id, "anonymous")
 
@@ -157,11 +156,11 @@ class TestConversationMemory:
 
     def test_delete_session(self):
         """Test deleting a session."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add messages
-        self.memory.add_message(self.character_id, session_id, "user", "Message 1")
-        self.memory.add_message(self.character_id, session_id, "assistant", "Response 1")
+        self.memory.add_message(session_id, "user", "Message 1")
+        self.memory.add_message(session_id, "narration", "Response 1")
 
         # Verify messages exist
         messages = self.memory.get_session_messages(session_id, "anonymous")
@@ -182,47 +181,19 @@ class TestConversationMemory:
         deleted_count = self.memory.delete_session(fake_session_id, "anonymous")
         assert deleted_count == 0
 
-    def test_clear_character_memory(self):
-        """Test clearing all memory for a character."""
-        # Create multiple sessions
-        session1 = self.memory.create_session(self.character_id)
-        session2 = self.memory.create_session(self.character_id)
-
-        # Add messages to both sessions
-        self.memory.add_message(self.character_id, session1, "user", "Session 1")
-        self.memory.add_message(self.character_id, session2, "user", "Session 2")
-
-        # Create session for different character
-        other_character = "other_character"
-        other_session = self.memory.create_session(other_character)
-        self.memory.add_message(other_character, other_session, "user", "Other character")
-
-        # Clear memory for test character
-        deleted_count = self.memory.clear_character_memory(self.character_id, "anonymous")
-        assert deleted_count == 2
-
-        # Verify test character messages are gone
-        sessions = self.memory.get_character_sessions(self.character_id, "anonymous")
-        assert len(sessions) == 0
-
-        # Verify other character messages remain
-        other_sessions = self.memory.get_character_sessions(other_character, "anonymous")
-        assert len(other_sessions) == 1
-
     def test_get_session_summary(self):
         """Test getting session summary."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add messages
-        self.memory.add_message(self.character_id, session_id, "user", "First message")
-        self.memory.add_message(self.character_id, session_id, "assistant", "First response")
-        self.memory.add_message(self.character_id, session_id, "user", "Second message")
+        self.memory.add_message(session_id, "user", "First message")
+        self.memory.add_message(session_id, "narration", "First response")
+        self.memory.add_message(session_id, "user", "Second message")
 
         summary = self.memory.get_session_summary(session_id, "anonymous")
 
         assert summary is not None
         assert summary["session_id"] == session_id
-        assert summary["character_id"] == self.character_id
         assert summary["message_count"] == 3
         assert "first_message_time" in summary
         assert "last_message_time" in summary
@@ -235,40 +206,27 @@ class TestConversationMemory:
 
         assert summary is None
 
-    def test_multiple_characters_isolation(self):
-        """Test that different characters' data is properly isolated."""
-        character1 = "character_1"
-        character2 = "character_2"
+    def test_multiple_sessions_isolation(self):
+        """Test that different sessions' data is properly isolated."""
+        session1 = self.memory.create_session()
+        session2 = self.memory.create_session()
 
-        session1 = self.memory.create_session(character1)
-        session2 = self.memory.create_session(character2)
-
-        self.memory.add_message(character1, session1, "user", "Character 1 message")
-        self.memory.add_message(character2, session2, "user", "Character 2 message")
-
-        # Check character 1 sessions
-        char1_sessions = self.memory.get_character_sessions(character1, "anonymous")
-        assert len(char1_sessions) == 1
-        assert char1_sessions[0]["session_id"] == session1
-
-        # Check character 2 sessions
-        char2_sessions = self.memory.get_character_sessions(character2, "anonymous")
-        assert len(char2_sessions) == 1
-        assert char2_sessions[0]["session_id"] == session2
+        self.memory.add_message(session1, "user", "Session 1 message")
+        self.memory.add_message(session2, "user", "Session 2 message")
 
         # Check messages are isolated
-        char1_messages = self.memory.get_session_messages(session1, "anonymous")
-        assert len(char1_messages) == 1
-        assert char1_messages[0]["content"] == "Character 1 message"
+        session1_messages = self.memory.get_session_messages(session1, "anonymous")
+        assert len(session1_messages) == 1
+        assert session1_messages[0]["content"] == "Session 1 message"
 
-        char2_messages = self.memory.get_session_messages(session2, "anonymous")
-        assert len(char2_messages) == 1
-        assert char2_messages[0]["content"] == "Character 2 message"
+        session2_messages = self.memory.get_session_messages(session2, "anonymous")
+        assert len(session2_messages) == 1
+        assert session2_messages[0]["content"] == "Session 2 message"
 
     def test_database_persistence(self):
         """Test that data persists across memory instance recreation."""
-        session_id = self.memory.create_session(self.character_id)
-        self.memory.add_message(self.character_id, session_id, "user", "Persistent message")
+        session_id = self.memory.create_session()
+        self.memory.add_message(session_id, "user", "Persistent message")
 
         # Create new memory instance with same directory and test database
         new_memory = ConversationMemory(memory_dir=Path(self.temp_dir))
@@ -285,12 +243,12 @@ class TestConversationMemory:
 
     def test_message_offset_incremental(self):
         """Test that message offsets increment correctly within a session."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add messages one by one
-        self.memory.add_message(self.character_id, session_id, "user", "Message 0")
-        self.memory.add_message(self.character_id, session_id, "assistant", "Message 1")
-        self.memory.add_message(self.character_id, session_id, "user", "Message 2")
+        self.memory.add_message(session_id, "user", "Message 0")
+        self.memory.add_message(session_id, "narration", "Message 1")
+        self.memory.add_message(session_id, "user", "Message 2")
 
         # Verify messages can be retrieved in correct order
         messages = self.memory.get_session_messages(session_id, "anonymous")
@@ -301,14 +259,14 @@ class TestConversationMemory:
 
     def test_message_offset_across_sessions(self):
         """Test that offsets are isolated per session."""
-        session1 = self.memory.create_session(self.character_id)
-        session2 = self.memory.create_session(self.character_id)
+        session1 = self.memory.create_session()
+        session2 = self.memory.create_session()
 
         # Add messages to both sessions
-        self.memory.add_message(self.character_id, session1, "user", "Session1 Msg0")
-        self.memory.add_message(self.character_id, session2, "user", "Session2 Msg0")
-        self.memory.add_message(self.character_id, session1, "assistant", "Session1 Msg1")
-        self.memory.add_message(self.character_id, session2, "assistant", "Session2 Msg1")
+        self.memory.add_message(session1, "user", "Session1 Msg0")
+        self.memory.add_message(session2, "user", "Session2 Msg0")
+        self.memory.add_message(session1, "narration", "Session1 Msg1")
+        self.memory.add_message(session2, "narration", "Session2 Msg1")
 
         # Verify messages are isolated per session and in correct order
         session1_messages = self.memory.get_session_messages(session1, "anonymous")
@@ -324,14 +282,14 @@ class TestConversationMemory:
 
     def test_add_messages_offset_batch(self):
         """Test that add_messages correctly handles offset incrementation."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add an initial message
-        self.memory.add_message(self.character_id, session_id, "user", "Initial message")
+        self.memory.add_message(session_id, "user", "Initial message")
 
         # Add multiple messages at once
-        batch_messages = [{"role": "assistant", "content": "Batch message 1"}, {"role": "user", "content": "Batch message 2"}, {"role": "assistant", "content": "Batch message 3"}]
-        self.memory.add_messages(self.character_id, session_id, batch_messages)
+        batch_messages = [{"role": "narration", "content": "Batch message 1"}, {"role": "user", "content": "Batch message 2"}, {"role": "narration", "content": "Batch message 3"}]
+        self.memory.add_messages(session_id, batch_messages)
 
         # Verify all messages are in correct order
         messages = self.memory.get_session_messages(session_id, "anonymous")
@@ -343,12 +301,12 @@ class TestConversationMemory:
 
     def test_message_ordering_by_offset(self):
         """Test that messages are retrieved in correct order by offset."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add messages
-        self.memory.add_message(self.character_id, session_id, "user", "First")
-        self.memory.add_message(self.character_id, session_id, "assistant", "Second")
-        self.memory.add_message(self.character_id, session_id, "user", "Third")
+        self.memory.add_message(session_id, "user", "First")
+        self.memory.add_message(session_id, "narration", "Second")
+        self.memory.add_message(session_id, "user", "Third")
 
         # Get messages and verify order
         messages = self.memory.get_session_messages(session_id, "anonymous")
@@ -360,11 +318,11 @@ class TestConversationMemory:
 
     def test_get_recent_messages_offset_ordering(self):
         """Test that get_recent_messages uses offset for correct ordering."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add many messages
         for i in range(10):
-            self.memory.add_message(self.character_id, session_id, "user", f"Message {i}")
+            self.memory.add_message(session_id, "user", f"Message {i}")
 
         # Get recent messages
         recent = self.memory.get_recent_messages(session_id, "anonymous", limit=3)
@@ -377,18 +335,18 @@ class TestConversationMemory:
 
     def test_delete_messages_from_offset(self):
         """Test deleting messages from a specific offset onwards."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add multiple messages
         messages = [
-            {"role": "user", "content": "Message 0", "created_at": "2023-01-01T00:00:00Z", "type": "conversation"},
-            {"role": "assistant", "content": "Message 1", "created_at": "2023-01-01T00:00:01Z", "type": "evaluation"},
-            {"role": "assistant", "content": "Message 2", "created_at": "2023-01-01T00:00:02Z", "type": "conversation"},
-            {"role": "user", "content": "Message 3", "created_at": "2023-01-01T00:01:00Z", "type": "conversation"},
-            {"role": "assistant", "content": "Message 4", "created_at": "2023-01-01T00:01:01Z", "type": "evaluation"},
-            {"role": "assistant", "content": "Message 5", "created_at": "2023-01-01T00:01:02Z", "type": "conversation"},
+            {"role": "user", "content": "Message 0"},
+            {"role": "narration", "content": "Message 1"},
+            {"role": "narration", "content": "Message 2"},
+            {"role": "user", "content": "Message 3"},
+            {"role": "narration", "content": "Message 4"},
+            {"role": "narration", "content": "Message 5"},
         ]
-        self.memory.add_messages(self.character_id, session_id, messages)
+        self.memory.add_messages(session_id, messages)
 
         # Verify all messages are there
         all_messages = self.memory.get_session_messages(session_id, "anonymous")
@@ -407,11 +365,11 @@ class TestConversationMemory:
 
     def test_delete_messages_from_offset_edge_cases(self):
         """Test edge cases for delete_messages_from_offset."""
-        session_id = self.memory.create_session(self.character_id)
+        session_id = self.memory.create_session()
 
         # Add some messages
-        self.memory.add_message(self.character_id, session_id, "user", "Message 0")
-        self.memory.add_message(self.character_id, session_id, "assistant", "Message 1")
+        self.memory.add_message(session_id, "user", "Message 0")
+        self.memory.add_message(session_id, "narration", "Message 1")
 
         # Delete from offset beyond existing messages (should delete nothing)
         deleted_count = self.memory.delete_messages_from_offset(session_id, "anonymous", 10)

@@ -159,6 +159,7 @@ class TestCharacterLoader:
             assert result is None
 
     def test_load_character_with_extra_fields(self):
+        """Test that unknown fields in stored data are silently ignored."""
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = CharacterRegistry(Path(temp_dir))
 
@@ -168,9 +169,11 @@ class TestCharacterLoader:
                 "backstory": "Test backstory",
                 "personality": "Test personality",
                 "appearance": "Test appearance",
+                "interests": ["Cooking", "Reading"],
+                "dislikes": ["Loud noise"],
+                # These legacy fields should be silently ignored
                 "relationships": {"friend": "Alice"},
                 "key_locations": ["Castle", "Forest"],
-                "setting_description": "Fantasy world",
             }
 
             registry.save_character("extended_char", character_data)
@@ -179,8 +182,8 @@ class TestCharacterLoader:
             result = loader.load_character("extended_char")
 
             assert result.name == "Extended Character"
-            assert result.relationships == {"friend": "Alice"}
-            assert result.key_locations == ["Castle", "Forest"]
+            assert result.interests == ["Cooking", "Reading"]
+            assert result.dislikes == ["Loud noise"]
 
     def test_load_character_empty_yaml_file(self):
         # This test is no longer relevant since database validation prevents empty data
@@ -210,9 +213,8 @@ class TestCharacterLoader:
                 "backstory": "Eldric has been the village blacksmith for over 30 years. He's known for his exceptional craftsmanship and his willingness to help anyone in need. He lost his wife to a plague 10 years ago and has since dedicated his life to his craft and the community.",
                 "personality": "Gruff exterior but kind heart. Speaks directly and honestly. Has a soft spot for children and animals. Takes pride in his work and doesn't tolerate shoddy craftsmanship.",
                 "appearance": "A tall, sturdy man in his fifties with calloused hands, graying hair, and kind brown eyes. Usually covered in soot from the forge.",
-                "relationships": {"The Mayor": "Respectful professional relationship", "Local children": "Protective and nurturing, like a grandfather figure"},
-                "key_locations": ["The Village Forge", "The Local Tavern", "The Cemetery"],
-                "setting_description": "A small, peaceful village surrounded by rolling hills and farmland. The forge is at the center of town, always filled with the sound of hammer on anvil.",
+                "interests": ["Metalworking", "Mentoring"],
+                "dislikes": ["Shoddy craftsmanship", "Dishonesty"],
             }
 
             registry.save_character("eldric_ironforge", character_data)
@@ -224,8 +226,8 @@ class TestCharacterLoader:
             assert character.tagline == "Village Blacksmith"
             assert "30 years" in character.backstory
             assert "Gruff exterior" in character.personality
-            assert len(character.relationships) == 2
-            assert len(character.key_locations) == 3
+            assert len(character.interests) == 2
+            assert len(character.dislikes) == 2
 
     def test_character_loader_path_resolution(self):
         # Test that CharacterLoader works with different path types

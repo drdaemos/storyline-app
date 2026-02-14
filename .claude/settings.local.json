@@ -3,7 +3,17 @@
     "allow": [
       "Bash(uv run ruff check:*)",
       "Bash(uv run pytest:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(xargs:*)",
+      "Bash(ls:*)",
+      "Bash(for pipeline_file in /Users/eugenedementjev/repos/storyline-app/src/pipeline/*.py)",
+      "Bash(do)",
+      "Bash(basename:*)",
+      "Bash(then)",
+      "Bash(if [ -f \"$test_file\" ])",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

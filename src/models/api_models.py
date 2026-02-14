@@ -1,6 +1,14 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from .character import Character, PartialCharacter
+from .simulation import (
+    ContinuationOption,
+    Ruleset,
+    WorldLore,
+    WorldState,
+)
 
 
 class CharacterSummary(BaseModel):
@@ -26,20 +34,14 @@ class CreateCharacterResponse(BaseModel):
     character_filename: str
 
 
-class InteractRequest(BaseModel):
-    character_name: str = Field(..., min_length=1, description="Name of the character to interact with")
-    user_message: str = Field(..., min_length=1, description="User's message to the character")
-    session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
-    processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
-    backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
-
-
 class SessionInfo(BaseModel):
     session_id: str
     character_name: str
     message_count: int
     last_message_time: str
     last_character_response: str | None = None
+    scenario_name: str | None = None
+    turn_count: int | None = None
 
 
 class SessionMessage(BaseModel):
@@ -56,10 +58,27 @@ class SessionDetails(BaseModel):
     last_message_time: str
 
 
+class InteractRequest(BaseModel):
+    """Legacy interact request — retained until old pipeline is removed."""
+
+    character_name: str = Field(..., min_length=1, description="Name of the character to interact with")
+    user_message: str = Field(..., min_length=1, description="User's message to the character")
+    session_id: str | None = Field(None, description="Optional session ID for conversation continuity")
+    processor_type: str = Field("google", description="AI processor type (google, openai, cohere, etc.)")
+    backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
+
+
+class SessionSummaryResponse(BaseModel):
+    """Legacy session summary response — retained until old pipeline is removed."""
+
+    session_id: str = Field(..., description="The session ID")
+    summary_text: str = Field(..., description="Formatted summary text")
+    has_summary: bool = Field(..., description="Whether the session has any summaries")
+
+
 class HealthStatus(BaseModel):
     status: str
     conversation_memory: str
-    summary_memory: str
     details: dict[str, str] | None = None
 
 
@@ -70,18 +89,22 @@ class ErrorResponse(BaseModel):
 
 class ThinkingEvent(BaseModel):
     type: str = "thinking"
-    stage: str = Field(..., description="Current processing stage: 'summarizing', 'deliberating', 'responding'")
+    stage: str = Field(..., description="Current processing stage")
 
 
 class StreamEvent(BaseModel):
-    type: str = Field(..., description="Event type: 'chunk', 'session', 'error', 'complete', 'thinking'")
-    # Optional fields for different event types
+    type: str = Field(..., description="Event type: 'chunk', 'session', 'error', 'complete', 'thinking', 'stage', 'dice', 'narration_chunk', 'narration_complete', 'options', 'world_state', 'turn_complete'")
     content: str | None = None
     session_id: str | None = None
     error: str | None = None
     full_response: str | None = None
     message_count: int | None = None
-    stage: str | None = None  # For thinking events
+    stage: str | None = None
+    # New turn pipeline fields
+    turn_number: int | None = None
+    options: list[ContinuationOption] | None = None
+    world_state: WorldState | None = None
+    dice_result: dict[str, Any] | None = None
 
 
 class GenerateCharacterRequest(BaseModel):
@@ -102,52 +125,45 @@ class GenerateCharacterResponse(BaseModel):
 class Scenario(BaseModel):
     """Model for a rich scenario with story development information."""
 
-    # Core fields (used in both batch and interactive generation)
-    summary: str = Field(..., min_length=1, description="Short engaging, striking name for the scenario (take inspiration from series or book chapter titles)")
-    intro_message: str = Field(..., min_length=1, description="Complete introductory message to set the scene in the story")
-    narrative_category: str = Field(..., min_length=1, description="Short label for both the genre and tone of the scenario + the level of twistedness of the story")
+    summary: str = Field(..., min_length=1, description="Short engaging name for the scenario")
+    intro_message: str = Field(..., min_length=1, description="Introductory message to set the scene")
 
-    # Character references (for interactive/stored scenarios)
-    character_id: str = Field(default="", description="Main AI character ID this scenario is for")
-    persona_id: str = Field(..., min_length=1, description="User persona ID - required for all scenarios")
+    # Character references — multi-character
+    character_ids: list[str] = Field(default_factory=list, description="NPC character IDs in this scenario")
+    persona_id: str = Field(default="", description="User persona ID")
+
+    # Ruleset and world lore
+    ruleset_id: str = Field(..., min_length=1, description="References a Ruleset")
+    lore_ids: list[str] = Field(default_factory=list, description="References selected WorldLore entries")
 
     # Location/Setting
-    location: str = Field(default="", description="Where the scenario takes place")
-    time_context: str = Field(default="", description="When/what situation (e.g., 'late evening', 'after the argument')")
-    atmosphere: str = Field(default="", description="Detailed mood/atmosphere description")
+    location: str = Field(default="", description="Starting location")
+    time_context: str = Field(default="", description="Starting time/situation")
+    atmosphere: str = Field(default="", description="Mood/atmosphere description")
 
     # Story structure
-    plot_hooks: list[str] = Field(default_factory=list, description="Key tensions/conflicts to develop (2-4 items)")
-    stakes: str = Field(default="", description="What's at risk in this scenario")
-    character_goals: dict[str, str] = Field(default_factory=dict, description="{character_name: goal} - what each is trying to achieve")
-    potential_directions: list[str] = Field(default_factory=list, description="Where the story could go (2-3 possibilities)")
+    plot_hooks: list[str] = Field(default_factory=list, description="Key tensions/conflicts (2-4 items)")
+    stakes: str = Field(default="", description="What's at risk")
+    character_goals: dict[str, str] = Field(default_factory=dict, description="{character_name: goal}")
+    potential_directions: list[str] = Field(default_factory=list, description="Where the story could go")
 
+    # Starting world state
+    starting_world_state: WorldState | None = Field(default=None, description="Initial world state")
 
-class GenerateScenariosRequest(BaseModel):
-    """Request model for generating scenario intros for a character."""
+    # Per-character starting state overrides for this scenario
+    character_starting_overrides: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="{char_id: {drives: {...}, skills: {...}, emotional_state: {...}}}",
+    )
 
-    character_name: str = Field(..., min_length=1, description="Name/ID of the character from the registry")
-    count: int = Field(default=3, ge=1, le=10, description="Number of scenario intros to generate (1-10)")
-    mood: str = Field(default="normal", description="Level of spiciness/twistedness of the scenarios: normal, spicy, dark, unhinged, mysterious, comedic, dramatic, gritty, philosophical, chaotic")
-    persona_id: str | None = Field(None, description="Optional persona ID to use as user context for scenario generation")
-    processor_type: str = Field(default="claude", description="AI processor type to use for generation (claude, openai, cohere, etc.)")
-    backup_processor_type: str | None = Field(None, description="Optional backup processor type to use if primary fails")
-
-
-class GenerateScenariosResponse(BaseModel):
-    """Response model for scenario generation."""
-
-    character_name: str = Field(..., description="Name of the character the scenarios were generated for")
-    scenarios: list[Scenario] = Field(..., description="List of generated scenarios")
 
 
 class StartSessionRequest(BaseModel):
     """Request model for starting a session with a scenario."""
 
-    character_name: str = Field(..., min_length=1, description="Name of the character")
-    scenario_id: str | None = Field(None, description="ID of a stored scenario to use")
-    intro_message: str | None = Field(None, description="The scenario intro message (used if scenario_id not provided)")
-    processor_type: str = Field(default="claude", description="AI processor type")
+    scenario_id: str = Field(..., min_length=1, description="ID of a stored scenario to use")
+    processor_type: str = Field(default="google", description="Large model processor type")
+    mini_processor_type: str | None = Field(default=None, description="Mini model processor type")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
 
 
@@ -170,7 +186,7 @@ class CharacterCreationRequest(BaseModel):
 
     user_message: str = Field(..., min_length=1, description="User's message describing the character")
     current_character: PartialCharacter = Field(default_factory=dict, description="Current partial character data")
-    conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages for context")
+    conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages")
     processor_type: str = Field(default="claude", description="AI processor type to use")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
 
@@ -183,14 +199,6 @@ class CharacterCreationStreamEvent(BaseModel):
     updates: PartialCharacter | None = Field(None, description="Updated character state with current values")
     error: str | None = Field(None, description="Error message if type is 'error'")
 
-
-class ScenarioGenerationStreamEvent(BaseModel):
-    """Stream event for scenario generation."""
-
-    type: str = Field(..., description="Event type: 'chunk', 'scenario', 'complete', 'error'")
-    chunk: str | None = Field(None, description="Text chunk from the AI generation (raw XML)")
-    scenario: Scenario | None = Field(None, description="Completed scenario object")
-    error: str | None = Field(None, description="Error message if type is 'error'")
 
 
 class PersonaSummary(BaseModel):
@@ -206,17 +214,18 @@ class PartialScenario(BaseModel):
     """Partial scenario for incremental updates during interactive creation."""
 
     summary: str = Field(default="", description="Short engaging name for the scenario")
-    intro_message: str = Field(default="", description="Complete introductory message to set the scene")
-    narrative_category: str = Field(default="", description="Short label for genre and tone")
-    character_id: str = Field(default="", description="Main AI character ID")
+    intro_message: str = Field(default="", description="Introductory message to set the scene")
+    character_ids: list[str] = Field(default_factory=list, description="NPC character IDs")
     persona_id: str | None = Field(None, description="Optional user persona ID")
-    suggested_persona_id: str | None = Field(None, description="AI-suggested persona ID based on scenario direction")
+    suggested_persona_id: str | None = Field(None, description="AI-suggested persona ID")
     suggested_persona_reason: str = Field(default="", description="Reason for persona suggestion")
-    location: str = Field(default="", description="Where the scenario takes place")
-    time_context: str = Field(default="", description="When/what situation")
-    atmosphere: str = Field(default="", description="Detailed mood/atmosphere description")
-    plot_hooks: list[str] = Field(default_factory=list, description="Key tensions/conflicts to develop")
-    stakes: str = Field(default="", description="What's at risk in this scenario")
+    ruleset_id: str = Field(default="", description="Ruleset ID")
+    lore_ids: list[str] = Field(default_factory=list, description="WorldLore entry IDs")
+    location: str = Field(default="", description="Starting location")
+    time_context: str = Field(default="", description="Starting time/situation")
+    atmosphere: str = Field(default="", description="Mood/atmosphere description")
+    plot_hooks: list[str] = Field(default_factory=list, description="Key tensions/conflicts")
+    stakes: str = Field(default="", description="What's at risk")
     character_goals: dict[str, str] = Field(default_factory=dict, description="{character_name: goal}")
     potential_directions: list[str] = Field(default_factory=list, description="Where the story could go")
 
@@ -228,8 +237,8 @@ class ScenarioCreationRequest(BaseModel):
     current_scenario: PartialScenario = Field(default_factory=PartialScenario, description="Current partial scenario data")
     character_name: str = Field(..., min_length=1, description="Name/ID of the AI character to build scenario for")
     persona_id: str | None = Field(None, description="Optional persona ID currently selected by user")
-    available_personas: list[PersonaSummary] = Field(default_factory=list, description="List of available personas for AI to suggest from")
-    conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages for context")
+    available_personas: list[PersonaSummary] = Field(default_factory=list, description="List of available personas")
+    conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages")
     processor_type: str = Field(default="claude", description="AI processor type to use")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
 
@@ -239,7 +248,7 @@ class ScenarioCreationStreamEvent(BaseModel):
 
     type: str = Field(..., description="Event type: 'message', 'update', 'complete', 'error'")
     message: str | None = Field(None, description="AI message chunk to show in chat")
-    updates: PartialScenario | None = Field(None, description="Updated scenario state with current values")
+    updates: PartialScenario | None = Field(None, description="Updated scenario state")
     error: str | None = Field(None, description="Error message if type is 'error'")
 
 
@@ -262,8 +271,8 @@ class ScenarioSummary(BaseModel):
 
     id: str = Field(..., description="Scenario ID")
     summary: str = Field(..., description="Scenario title/summary")
-    narrative_category: str = Field(..., description="Genre/tone label")
-    character_id: str = Field(..., description="Associated character ID")
+    character_ids: list[str] = Field(default_factory=list, description="NPC character IDs")
+    ruleset_id: str = Field(default="", description="Ruleset ID")
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
 
@@ -271,13 +280,73 @@ class ScenarioSummary(BaseModel):
 class ListScenariosResponse(BaseModel):
     """Response model for listing scenarios."""
 
-    character_name: str = Field(..., description="Name of the character")
     scenarios: list[ScenarioSummary] = Field(..., description="List of scenario summaries")
 
 
-class SessionSummaryResponse(BaseModel):
-    """Response model for session summary."""
+# --- Ruleset API models ---
 
-    session_id: str = Field(..., description="The session ID")
-    summary_text: str = Field(..., description="Formatted summary text as it would appear in the prompt")
-    has_summary: bool = Field(..., description="Whether the session has any summaries")
+
+class RulesetSummary(BaseModel):
+    """Summary model for ruleset listing."""
+
+    id: str
+    name: str
+    drive_count: int = 0
+    skill_count: int = 0
+    created_at: str = ""
+
+
+class CreateRulesetRequest(BaseModel):
+    """Request model for creating a ruleset."""
+
+    ruleset: Ruleset
+
+
+class WorldLoreSummary(BaseModel):
+    """Summary model for world lore listing."""
+
+    id: str
+    name: str
+    tags: list[str] = Field(default_factory=list)
+    content_preview: str = Field(default="", description="First 100 chars of content")
+
+
+class CreateWorldLoreRequest(BaseModel):
+    """Request model for creating a world lore entry."""
+
+    lore: WorldLore
+
+
+# --- Session state API models ---
+
+
+class SessionStateResponse(BaseModel):
+    """Full session state response."""
+
+    session_id: str
+    world_state: WorldState
+    turn_counter: int
+    status: str
+    character_states: dict[str, Any] = Field(default_factory=dict)
+    narration_history: list[str] = Field(default_factory=list)
+
+
+class SessionCharacterSummary(BaseModel):
+    """Summary of a character's state in a session."""
+
+    character_id: str
+    character_name: str
+    is_present: bool
+    drives: dict[str, float] = Field(default_factory=dict)
+    active_intent_goal: str | None = None
+
+
+class TurnRequest(BaseModel):
+    """Request model for executing a simulation turn."""
+
+    session_id: str = Field(..., min_length=1, description="Session ID to execute turn in")
+    user_input: str = Field(..., min_length=1, description="User's action/input text")
+    input_type: str | None = Field(None, description="Optional pre-classified input type (action, relocation, time_skip)")
+    processor_type: str = Field(default="google", description="Large model processor type")
+    mini_processor_type: str | None = Field(default=None, description="Mini model processor type")
+    backup_processor_type: str | None = Field(None, description="Optional backup processor type")

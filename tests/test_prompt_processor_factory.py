@@ -6,8 +6,6 @@ import pytest
 
 from src.models.prompt_processor_factory import PromptProcessorFactory
 from src.processors.claude_prompt_processor import ClaudePromptProcessor
-from src.processors.cohere_prompt_processor import CoherePromptProcessor
-from src.processors.openai_prompt_processor import OpenAiPromptProcessor
 from src.processors.openrouter_prompt_processor import OpenRouterPromptProcessor
 
 

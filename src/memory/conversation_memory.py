@@ -29,12 +29,9 @@ class ConversationMemory:
         # Database initialization is handled by DatabaseConfig
         pass
 
-    def create_session(self, character_id: str) -> str:
+    def create_session(self) -> str:
         """
         Create a new conversation session.
-
-        Args:
-            character_id: ID of the character for this session
 
         Returns:
             Generated session ID
@@ -45,11 +42,9 @@ class ConversationMemory:
 
     def add_message(
         self,
-        character_id: str,
         session_id: str,
         role: str,
         content: str,
-        message_type: str = "conversation",
         user_id: str = "anonymous",
         scenario_id: str | None = None,
     ) -> int:
@@ -57,11 +52,9 @@ class ConversationMemory:
         Add a message to the conversation memory.
 
         Args:
-            character_id: ID of the character
             session_id: Session ID for this conversation
-            role: Role of the message sender (user/assistant)
+            role: Role of the message sender ('user' or 'narration')
             content: Content of the message
-            message_type: Type of message ('conversation' or 'evaluation')
             user_id: ID of the user (defaults to 'anonymous')
             scenario_id: Optional scenario ID to link this message to
 
@@ -74,12 +67,10 @@ class ConversationMemory:
             next_offset = max_offset + 1
 
             message = Message(
-                character_id=character_id,
                 session_id=session_id,
                 role=role,
                 content=content,
                 offset=next_offset,
-                type=message_type,
                 user_id=user_id,
                 scenario_id=scenario_id,
                 created_at=datetime.now(),
@@ -89,12 +80,11 @@ class ConversationMemory:
             session.commit()
             return message.id
 
-    def add_messages(self, character_id: str, session_id: str, messages: list[GenericMessage], user_id: str = "anonymous") -> int:
+    def add_messages(self, session_id: str, messages: list[GenericMessage], user_id: str = "anonymous") -> int:
         """
         Add multiple messages to the conversation memory.
 
         Args:
-            character_id: ID of the character
             session_id: Session ID for this conversation
             messages: List of messages to add
             user_id: ID of the user (defaults to 'anonymous')
@@ -109,9 +99,8 @@ class ConversationMemory:
             # Create message objects with incremental offsets
             message_objects = []
             for i, msg in enumerate(messages):
-                message_type = msg.get("type", "conversation")
                 message_obj = Message(
-                    character_id=character_id, session_id=session_id, role=msg["role"], content=msg["content"], offset=max_offset + 1 + i, type=message_type, user_id=user_id, created_at=datetime.now()
+                    session_id=session_id, role=msg["role"], content=msg["content"], offset=max_offset + 1 + i, user_id=user_id, created_at=datetime.now()
                 )
                 message_objects.append(message_obj)
 
@@ -139,14 +128,13 @@ class ConversationMemory:
 
             messages = query.all()
 
-            return [{"role": msg.role, "content": msg.content, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]
+            return [{"role": msg.role, "content": msg.content, "created_at": msg.created_at.isoformat()} for msg in messages]
 
-    def get_character_sessions(self, character_id: str, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
+    def get_user_sessions(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
         """
-        Get recent sessions for a character.
+        Get recent sessions for a user.
 
         Args:
-            character_id: ID of the character
             user_id: ID of the user to filter sessions for
             limit: Maximum number of sessions to return
 
@@ -156,7 +144,7 @@ class ConversationMemory:
         with self.db_config.create_session() as session:
             results = (
                 session.query(Message.session_id, func.max(Message.created_at).label("last_message_time"), func.count().label("message_count"))
-                .filter(Message.character_id == character_id, Message.user_id == user_id)
+                .filter(Message.user_id == user_id)
                 .group_by(Message.session_id)
                 .order_by(func.max(Message.created_at).desc())
                 .limit(limit)
@@ -179,17 +167,17 @@ class ConversationMemory:
         with self.db_config.create_session() as session:
             result = (
                 session.query(
-                    Message.character_id, func.count().label("message_count"), func.min(Message.created_at).label("first_message_time"), func.max(Message.created_at).label("last_message_time")
+                    func.count().label("message_count"),
+                    func.min(Message.created_at).label("first_message_time"),
+                    func.max(Message.created_at).label("last_message_time"),
                 )
                 .filter(Message.session_id == session_id, Message.user_id == user_id)
-                .group_by(Message.character_id, Message.session_id)
                 .first()
             )
 
-            if result:
+            if result and result.message_count > 0:
                 return {
                     "session_id": session_id,
-                    "character_id": result.character_id,
                     "message_count": result.message_count,
                     "first_message_time": result.first_message_time.isoformat(),
                     "last_message_time": result.last_message_time.isoformat(),
@@ -224,7 +212,7 @@ class ConversationMemory:
             # Query the subquery ordered by offset ascending (chronological order)
             messages = session.query(subquery).order_by(subquery.c.offset).all()
 
-            return [{"role": msg.role, "content": msg.content, "type": msg.type, "created_at": msg.created_at.isoformat()} for msg in messages]
+            return [{"role": msg.role, "content": msg.content, "created_at": msg.created_at.isoformat()} for msg in messages]
 
     def delete_messages_from_offset(self, session_id: str, user_id: str, from_offset: int) -> int:
         """
@@ -259,22 +247,6 @@ class ConversationMemory:
             session.commit()
             return count
 
-    def clear_character_memory(self, character_id: str, user_id: str) -> int:
-        """
-        Delete all messages for a character.
-
-        Args:
-            character_id: Character ID to clear memory for
-            user_id: ID of the user (for authorization check)
-
-        Returns:
-            Number of messages deleted
-        """
-        with self.db_config.create_session() as session:
-            count = session.query(Message).filter(Message.character_id == character_id, Message.user_id == user_id).delete()
-            session.commit()
-            return count
-
     def get_session_summary(self, session_id: str, user_id: str) -> dict[str, Any] | None:
         """
         Get summary information about a session.
@@ -289,17 +261,17 @@ class ConversationMemory:
         with self.db_config.create_session() as session:
             result = (
                 session.query(
-                    Message.character_id, func.count().label("message_count"), func.min(Message.created_at).label("first_message_time"), func.max(Message.created_at).label("last_message_time")
+                    func.count().label("message_count"),
+                    func.min(Message.created_at).label("first_message_time"),
+                    func.max(Message.created_at).label("last_message_time"),
                 )
                 .filter(Message.session_id == session_id, Message.user_id == user_id)
-                .group_by(Message.character_id, Message.session_id)
                 .first()
             )
 
-            if result:
+            if result and result.message_count > 0:
                 return {
                     "session_id": session_id,
-                    "character_id": result.character_id,
                     "message_count": result.message_count,
                     "first_message_time": result.first_message_time.isoformat(),
                     "last_message_time": result.last_message_time.isoformat(),

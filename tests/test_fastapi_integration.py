@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -48,9 +48,6 @@ def mock_character():
         backstory="Test character for API testing",
         personality="Helpful and direct",
         appearance="Digital assistant",
-        relationships={"user": "helper"},
-        key_locations=["digital space"],
-        setting_description="Test digital environment",
     )
 
 
@@ -70,12 +67,7 @@ class TestFastAPIEndpoints:
         data = response.json()
         assert "status" in data
         assert "conversation_memory" in data
-        assert "summary_memory" in data
-        assert "details" in data
-
-        # Check that both databases are accessible
         assert data["conversation_memory"] in ["ok", "error"]
-        assert data["summary_memory"] in ["ok", "error"]
         assert data["status"] in ["healthy", "unhealthy"]
 
     @patch("src.fastapi_server.character_loader")
@@ -123,8 +115,6 @@ class TestFastAPIEndpoints:
         assert response.status_code == 200
         sessions = response.json()
         assert isinstance(sessions, list)
-        # Since sessions come from the database, we can't guarantee empty list
-        # Just check that each session has the required fields
         for session in sessions:
             assert "session_id" in session
             assert "character_name" in session
@@ -137,248 +127,28 @@ class TestFastAPIEndpoints:
         response = client.delete("/api/sessions/nonexistent-session")
         assert response.status_code == 404
 
-    def test_get_session_summary_nonexistent(self, client):
-        """Test getting summary for a session that doesn't exist."""
-        response = client.get("/api/sessions/nonexistent-session/summary")
-        assert response.status_code == 404
-
-    @patch("src.fastapi_server.SummaryMemory")
-    @patch("src.fastapi_server.ConversationMemory")
-    def test_get_session_summary_no_summaries(self, mock_conv_memory_class, mock_summary_memory_class, client):
-        """Test getting summary when no summaries exist."""
-        # Mock conversation memory to return valid session
-        mock_conv_memory = Mock()
-        mock_conv_memory.get_session_details.return_value = {
-            "session_id": "test-session",
-            "character_id": "test-char",
-            "message_count": 5,
-            "last_message_time": "2024-01-01T12:00:00",
-        }
-        mock_conv_memory_class.return_value = mock_conv_memory
-
-        # Mock summary memory to return no summaries
-        mock_summary_memory = Mock()
-        mock_summary_memory.get_session_summaries.return_value = []
-        mock_summary_memory_class.return_value = mock_summary_memory
-
-        response = client.get("/api/sessions/test-session/summary")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["session_id"] == "test-session"
-        assert data["has_summary"] is False
-        assert "No summary available yet" in data["summary_text"]
-
-    @patch("src.fastapi_server.SummaryMemory")
-    @patch("src.fastapi_server.ConversationMemory")
-    def test_get_session_summary_with_data(self, mock_conv_memory_class, mock_summary_memory_class, client):
-        """Test getting summary when summaries exist."""
-        from src.models.summary import (
-            EmotionalState,
-            PhysicalState,
-            PlotTracking,
-            RelationshipState,
-            StorySummary,
-            TimeState,
-        )
-
-        # Mock conversation memory to return valid session
-        mock_conv_memory = Mock()
-        mock_conv_memory.get_session_details.return_value = {
-            "session_id": "test-session",
-            "character_id": "test-char",
-            "message_count": 20,
-            "last_message_time": "2024-01-01T12:00:00",
-        }
-        mock_conv_memory_class.return_value = mock_conv_memory
-
-        # Create a test summary
-        test_summary = StorySummary(
-            time=TimeState(current_time="Day 1, morning"),
-            relationship=RelationshipState(trust=7, attraction=5, emotional_intimacy=6, conflict=3, power_balance=5, relationship_label="friends"),
-            plot=PlotTracking(ongoing_plots=["Meeting new friend"], resolved_outcomes=[], location="Coffee shop", notable_objects=None),
-            physical_state=[PhysicalState(character_name="TestBot", character_position="sitting at table", clothing_status=None, physical_contact=None, conditions=None)],
-            emotional_state=[EmotionalState(character_name="TestBot", character_emotions="friendly", character_wants="have good conversation")],
-            story_beats=["User and TestBot met at coffee shop", "They started talking about interests"],
-            user_learnings=["User prefers casual conversation"],
-            ai_quality_issues=[],
-            character_goals={},
-        )
-
-        # Mock summary memory to return test summaries
-        mock_summary_memory = Mock()
-        mock_summary_memory.get_session_summaries.return_value = [{"id": 1, "session_id": "test-session", "summary": test_summary.model_dump_json(), "start_offset": 0, "end_offset": 10, "created_at": "2024-01-01T12:00:00"}]
-        mock_summary_memory_class.return_value = mock_summary_memory
-
-        response = client.get("/api/sessions/test-session/summary")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["session_id"] == "test-session"
-        assert data["has_summary"] is True
-        assert "Day 1, morning" in data["summary_text"]
-        assert "Coffee shop" in data["summary_text"]
-        assert "friends" in data["summary_text"]
-
-
-class TestInteractEndpoint:
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    @patch("src.fastapi_server.CharacterResponder")
-    def test_interact_success(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
-        """Test successful interaction with character."""
-        # Setup mocks
-        mock_loader.load_character.return_value = mock_character
-
-        mock_dependencies = Mock()
-        mock_dependencies.session_id = "test-session-123"
-        mock_deps_class.create_default.return_value = mock_dependencies
-
-        mock_responder = Mock()
-        mock_responder.character = mock_character
-        mock_responder.session_id = "test-session-123"
-        mock_responder.memory = []
-        mock_responder.respond.return_value = "Hello there!"
-        mock_responder.chat_logger = None
-        mock_responder_class.return_value = mock_responder
-
-        # Make request
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
-
-        assert response.status_code == 200
-        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
-
-        # Read streaming response
-        content = response.text
-        assert "data: " in content
-        assert '"type": "session"' in content
-        assert '"type": "complete"' in content
-
-    @patch("src.fastapi_server.character_loader")
-    def test_interact_character_not_found(self, mock_loader, client):
-        """Test interaction with non-existent character."""
-        mock_loader.load_character.return_value = None
-
-        response = client.post("/api/interact", json={"character_name": "NonExistent", "user_message": "Hello!", "processor_type": "google"})
-
-        assert response.status_code == 404
-
-    def test_interact_invalid_request(self, client):
-        """Test interaction with invalid request data."""
-        response = client.post(
-            "/api/interact",
-            json={
-                "user_message": "Hello!"
-                # Missing required character_name
-            },
-        )
-
-        assert response.status_code == 422  # Validation error
-
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    @patch("src.fastapi_server.CharacterResponder")
-    def test_interact_with_session_id(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
-        """Test interaction with specific session ID."""
-        # Setup mocks
-        mock_loader.load_character.return_value = mock_character
-
-        mock_dependencies = Mock()
-        mock_dependencies.session_id = "test-session-123"
-        mock_deps_class.create_default.return_value = mock_dependencies
-
-        mock_responder = Mock()
-        mock_responder.character = mock_character
-        mock_responder.session_id = "test-session-123"
-        mock_responder.memory = []
-        mock_responder.respond.return_value = "Hello there!"
-        mock_responder.chat_logger = None
-        mock_responder_class.return_value = mock_responder
-
-        # First request to create session
-        response1 = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-123", "processor_type": "google"})
-
-        assert response1.status_code == 200
-        content1 = response1.text
-        assert '"session_id": "test-session-123"' in content1
-
-
-class TestSessionManagement:
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    @patch("src.fastapi_server.CharacterResponder")
-    def test_session_creation_and_listing(self, mock_responder_class, mock_deps_class, mock_loader, client, mock_character):
-        """Test session creation and listing."""
-        # Setup mocks
-        mock_loader.load_character.return_value = mock_character
-        mock_dependencies = Mock()
-        mock_deps_class.create_default.return_value = mock_dependencies
-
-        mock_responder = Mock()
-        mock_responder.character = mock_character
-        mock_responder.memory = [{"role": "user", "content": "test"}]
-        mock_responder.respond.return_value = "Hello!"
-        mock_responder_class.return_value = mock_responder
-
-        # Create interaction to establish session
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "test-session-456", "processor_type": "google"})
-
-        assert response.status_code == 200
-
-        # List sessions
-        response = client.get("/api/sessions")
-        assert response.status_code == 200
-        sessions = response.json()
-        assert len(sessions) >= 0  # Session might be created
-
-        # Try to clear the test session we created (might not exist in the sessions list since it only shows persisted sessions)
-        response = client.delete("/api/sessions/test-session-456")
-        # The session might not exist in character_sessions dict, so 404 is acceptable
-        assert response.status_code in [200, 404]
-
 
 class TestRequestValidation:
-    def test_interact_request_validation(self, client):
-        """Test request validation for interact endpoint."""
-        # Test missing required fields
+    def test_turn_request_validation(self, client):
+        """Test request validation for turn endpoint."""
         test_cases = [
             {},  # Empty request
-            {"user_message": "Hello!"},  # Missing character_name
-            {"character_name": "TestBot"},  # Missing user_message
-            {"character_name": "", "user_message": "Hello!"},  # Empty character_name
-            {"character_name": "TestBot", "user_message": ""},  # Empty user_message
+            {"user_input": "Hello!"},  # Missing session_id
+            {"session_id": "test"},  # Missing user_input
+            {"session_id": "", "user_input": "Hello!"},  # Empty session_id
+            {"session_id": "test", "user_input": ""},  # Empty user_input
         ]
 
         for test_data in test_cases:
-            response = client.post("/api/interact", json=test_data)
+            response = client.post("/api/turn", json=test_data)
             assert response.status_code == 422, f"Failed for data: {test_data}"
-
-    def test_interact_request_optional_fields(self, client):
-        """Test optional fields in interact request."""
-        # Mock the character loader to avoid actual file system access
-        with patch("src.fastapi_server.character_loader") as mock_loader:
-            mock_loader.load_character.return_value = None  # Will cause 404
-
-            response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "session_id": "custom-session", "processor_type": "openai"})
-
-            assert response.status_code == 404  # Character not found, but validation passed
 
 
 class TestErrorHandling:
-    @patch("src.fastapi_server.character_loader")
-    def test_character_loading_error(self, mock_loader, client):
-        """Test error handling when character loading fails."""
-        mock_loader.load_character.side_effect = Exception("File system error")
+    @patch("src.fastapi_server.session_repository")
+    def test_turn_session_not_found(self, mock_session_repo, client):
+        """Test turn with non-existent session."""
+        mock_session_repo.get_session.return_value = None
 
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
-
-        assert response.status_code == 500
-
-    @patch("src.fastapi_server.character_loader")
-    @patch("src.fastapi_server.CharacterResponderDependencies")
-    def test_dependencies_creation_error(self, mock_deps_class, mock_loader, client, mock_character):
-        """Test error handling when dependencies creation fails."""
-        mock_loader.load_character.return_value = mock_character
-        mock_deps_class.create_default.side_effect = Exception("Dependencies error")
-
-        response = client.post("/api/interact", json={"character_name": "TestBot", "user_message": "Hello!", "processor_type": "google"})
-
-        assert response.status_code == 500
+        response = client.post("/api/turn", json={"session_id": "nonexistent", "user_input": "Hello!", "processor_type": "google"})
+        assert response.status_code == 404

@@ -116,7 +116,7 @@ class TestScenarioCreationAssistant:
 {
   "summary": "The Midnight Encounter",
   "intro_message": "The clock strikes midnight...",
-  "narrative_category": "mystery/thriller",
+  "atmosphere": "dark and mysterious",
   "location": "Old mansion",
   "stakes": "Life and death"
 }
@@ -138,7 +138,7 @@ What do you think?"""
 
         assert updated_scenario.summary == "The Midnight Encounter"
         assert updated_scenario.intro_message == "The clock strikes midnight..."
-        assert updated_scenario.narrative_category == "mystery/thriller"
+        assert updated_scenario.atmosphere == "dark and mysterious"
         assert updated_scenario.location == "Old mansion"
         assert updated_scenario.stakes == "Life and death"
 
@@ -148,7 +148,7 @@ What do you think?"""
 {
   "summary": "Test",
   "intro_message": "Test intro",
-  "narrative_category": "test",
+  "atmosphere": "test",
   "plot_hooks": ["tension 1", "tension 2", "tension 3"],
   "potential_directions": ["direction 1", "direction 2"]
 }
@@ -176,7 +176,7 @@ What do you think?"""
 {
   "summary": "Test",
   "intro_message": "Test intro",
-  "narrative_category": "test",
+  "atmosphere": "test",
   "character_goals": {"Alice": "Find the truth", "Bob": "Hide the secret"}
 }
 </scenario_update>"""
@@ -408,7 +408,7 @@ What do you think?"""
 {
   "summary": "The Last Clue",
   "intro_message": "The rain pelted the window as the case file lay open...",
-  "narrative_category": "mystery/thriller",
+  "atmosphere": "dark and mysterious",
   "suggested_persona_id": "persona-1",
   "suggested_persona_reason": "Detective Jane's analytical nature fits perfectly with investigating this mystery"
 }

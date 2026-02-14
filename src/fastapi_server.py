@@ -4,6 +4,7 @@ import os
 import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -14,71 +15,90 @@ from src.character_creation_assistant import CharacterCreationAssistant
 from src.character_creator import CharacterCreator
 from src.character_loader import CharacterLoader
 from src.character_manager import CharacterManager
-from src.character_responder import CharacterResponder
+from src.memory.character_state_repository import CharacterStateRepository
 from src.memory.conversation_memory import ConversationMemory
+from src.memory.event_repository import EventRepository
+from src.memory.ruleset_registry import RulesetRegistry
 from src.memory.scenario_registry import ScenarioRegistry
-from src.memory.summary_memory import SummaryMemory
+from src.memory.session_repository import SessionRepository
+from src.memory.world_lore_registry import WorldLoreRegistry
 from src.models.api_models import (
     CharacterCreationRequest,
     CharacterCreationStreamEvent,
     CharacterSummary,
     CreateCharacterRequest,
     CreateCharacterResponse,
+    CreateRulesetRequest,
+    CreateWorldLoreRequest,
     GenerateCharacterRequest,
     GenerateCharacterResponse,
-    GenerateScenariosRequest,
-    GenerateScenariosResponse,
     HealthStatus,
-    InteractRequest,
     ListScenariosResponse,
     PartialScenario,
+    RulesetSummary,
     SaveScenarioRequest,
     SaveScenarioResponse,
     Scenario,
     ScenarioCreationRequest,
     ScenarioCreationStreamEvent,
-    ScenarioGenerationStreamEvent,
     ScenarioSummary,
+    SessionCharacterSummary,
     SessionDetails,
     SessionInfo,
     SessionMessage,
-    SessionSummaryResponse,
+    SessionStateResponse,
     StartSessionRequest,
     StartSessionResponse,
+    TurnRequest,
+    WorldLoreSummary,
 )
-from src.models.character import Character, PartialCharacter
-from src.models.character_responder_dependencies import CharacterResponderDependencies
-from src.models.persona import create_default_persona
+from src.models.character import PartialCharacter
+from src.models.prompt_processor_factory import PromptProcessorFactory
+from src.models.simulation import Ruleset
+from src.pipeline.session_initializer import SessionInitializer
+from src.pipeline.turn_pipeline import TurnPipeline
 from src.scenario_creation_assistant import ScenarioCreationAssistant
-from src.scenario_generator import ScenarioGenerator
-from src.session_starter import SessionStarter
+from src.services.event_stream_service import EventStreamService
+from src.services.ruleset_service import RulesetService
+from src.services.session_state_service import SessionStateService
 
-app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
+app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.2.0")
 
 # Mount static files for the web interface
 static_dir = Path(__file__).parent.parent / "static" / "assets"
 if static_dir.exists():
     app.mount("/assets", StaticFiles(directory=static_dir), name="assets")
 
+# --- Shared service instances ---
 character_loader = CharacterLoader()
 character_manager = CharacterManager()
 conversation_memory = ConversationMemory()
 scenario_registry = ScenarioRegistry()
-session_starter = SessionStarter(character_loader, conversation_memory, scenario_registry, SummaryMemory())
+ruleset_registry = RulesetRegistry()
+world_lore_registry = WorldLoreRegistry()
+session_repository = SessionRepository()
+character_state_repository = CharacterStateRepository()
+event_repository = EventRepository()
+
+# Composed services
+session_state_service = SessionStateService(session_repository, character_state_repository)
+ruleset_service = RulesetService(ruleset_registry)
+event_stream_service = EventStreamService(event_repository)
+
+
+# ───────────────────────────── Health & Info ──────────────────────────────
 
 
 @app.get("/health")
 async def health_check() -> HealthStatus:
     """Health check endpoint that verifies database connectivity."""
     conversation_status = "ok"
-    summary_status = "ok"
     overall_status = "healthy"
-    details = {}
+    details: dict[str, str] = {}
 
     try:
-        # Test conversation memory database
-        conversation_memory = ConversationMemory()
-        if conversation_memory.health_check():
+        mem = ConversationMemory()
+        if mem.health_check():
             details["conversation_db_status"] = "connected"
         else:
             conversation_status = "error"
@@ -89,27 +109,16 @@ async def health_check() -> HealthStatus:
         overall_status = "unhealthy"
         details["conversation_error"] = str(e)
 
-    try:
-        # Test summary memory database
-        summary_memory = SummaryMemory()
-        if summary_memory.health_check():
-            details["summary_db_status"] = "connected"
-        else:
-            summary_status = "error"
-            overall_status = "unhealthy"
-            details["summary_error"] = "Database connectivity failed"
-    except Exception as e:
-        summary_status = "error"
-        overall_status = "unhealthy"
-        details["summary_error"] = str(e)
-
-    return HealthStatus(status=overall_status, conversation_memory=conversation_status, summary_memory=summary_status, details=details)
+    return HealthStatus(status=overall_status, conversation_memory=conversation_status, details=details)
 
 
 @app.get("/api")
 async def api_info() -> dict[str, str]:
     """API information endpoint."""
-    return {"message": "Storyline API - Interactive Character Chat", "version": "0.1.0"}
+    return {"message": "Storyline API - Interactive Character Chat", "version": "0.2.0"}
+
+
+# ───────────────────────────── Characters ─────────────────────────────
 
 
 @app.get("/api/characters")
@@ -137,8 +146,6 @@ async def get_character_info(character_name: str, user_id: UserIdDep) -> dict:
         character_info = character_loader.get_character_info(character_name, user_id)
         if not character_info:
             raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
-
-        # Return full character data as dict
         return character_info.model_dump()
     except HTTPException:
         raise
@@ -150,7 +157,8 @@ async def get_character_info(character_name: str, user_id: UserIdDep) -> dict:
 async def create_character(request: CreateCharacterRequest, user_id: UserIdDep) -> CreateCharacterResponse:
     """Create a new character from either structured data or freeform YAML text."""
     try:
-        # Delegate to service layer
+        from src.models.character import Character
+
         if request.is_yaml_text:
             if not isinstance(request.data, str):
                 raise HTTPException(status_code=400, detail="When is_yaml_text is true, data must be a string")
@@ -161,9 +169,7 @@ async def create_character(request: CreateCharacterRequest, user_id: UserIdDep) 
             character_data = request.data.model_dump()
 
         filename = character_manager.create_character_file(character_data, user_id=user_id, is_persona=request.is_persona)
-
         return CreateCharacterResponse(message=f"Character '{character_data['name']}' created successfully", character_filename=filename)
-
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except FileExistsError as e:
@@ -176,7 +182,8 @@ async def create_character(request: CreateCharacterRequest, user_id: UserIdDep) 
 async def update_character(character_id: str, request: CreateCharacterRequest, user_id: UserIdDep) -> CreateCharacterResponse:
     """Update an existing character's data."""
     try:
-        # Delegate to service layer
+        from src.models.character import Character
+
         if request.is_yaml_text:
             if not isinstance(request.data, str):
                 raise HTTPException(status_code=400, detail="When is_yaml_text is true, data must be a string")
@@ -187,9 +194,7 @@ async def update_character(character_id: str, request: CreateCharacterRequest, u
             character_data = request.data.model_dump()
 
         updated_character_id = character_manager.update_character(character_id, character_data, user_id=user_id)
-
         return CreateCharacterResponse(message=f"Character '{character_data['name']}' updated successfully", character_filename=updated_character_id)
-
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
@@ -202,33 +207,21 @@ async def update_character(character_id: str, request: CreateCharacterRequest, u
 async def generate_character(request: GenerateCharacterRequest, user_id: UserIdDep) -> GenerateCharacterResponse:
     """Generate a complete character from partial character data using AI."""
     try:
-        # Get the appropriate prompt processor
-        dependencies = CharacterResponderDependencies.create_default(
-            character_name="temp",  # Temp name for processor creation
-            processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type,
-        )
+        processor = PromptProcessorFactory.create_processor(request.processor_type)
+        character_creator = CharacterCreator(prompt_processor=processor, character_manager=character_manager)
 
-        # Create character creator with the selected processor
-        character_creator = CharacterCreator(prompt_processor=dependencies.primary_processor, character_manager=character_manager)
-
-        # Track which fields were originally missing to report what was generated
         original_fields = set(request.partial_character.keys())
-
-        # Generate the complete character
         complete_character = character_creator.generate(request.partial_character)
         all_character_fields = set(complete_character.model_dump().keys())
 
-        # Determine which fields were generated
         generated_fields = []
         character_dict = complete_character.model_dump()
         for field in all_character_fields:
             if field not in original_fields or not request.partial_character.get(field):
-                if character_dict.get(field):  # Field was populated
+                if character_dict.get(field):
                     generated_fields.append(field)
 
         return GenerateCharacterResponse(character=complete_character, generated_fields=generated_fields)
-
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -237,45 +230,23 @@ async def generate_character(request: GenerateCharacterRequest, user_id: UserIdD
 
 @app.post("/api/characters/create-stream")
 async def create_character_stream(request: CharacterCreationRequest, _user_id: UserIdDep) -> StreamingResponse:
-    """
-    Interactive character creation with AI assistant via Server-Sent Events.
-
-    The response will be streamed as Server-Sent Events with the following format:
-    - data: {"type": "message", "message": "AI response text chunk"}
-    - data: {"type": "update", "updates": {"name": "...", "backstory": "..."}}
-    - data: {"type": "complete"}
-    - data: {"type": "error", "error": "error_message"}
-    """
+    """Interactive character creation with AI assistant via Server-Sent Events."""
     try:
-        # Get the appropriate prompt processor
-        dependencies = CharacterResponderDependencies.create_default(
-            character_name="temp",  # Temp name for processor creation
-            processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type,
-        )
+        processor = PromptProcessorFactory.create_processor(request.processor_type)
+        assistant = CharacterCreationAssistant(prompt_processor=processor)
 
-        # Create character creation assistant with the selected processor
-        assistant = CharacterCreationAssistant(prompt_processor=dependencies.primary_processor)
-
-        # Create async generator for streaming response
         async def generate_sse_response() -> AsyncGenerator[str, None]:
-            """Generate Server-Sent Events for streaming character creation."""
             try:
-                # Create queue for streaming chunks
                 chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
                 ai_response_parts: list[str] = []
                 loop = asyncio.get_event_loop()
 
                 def streaming_callback(chunk: str) -> None:
-                    """Called by assistant when a chunk is available."""
                     ai_response_parts.append(chunk)
-                    # Use call_soon_threadsafe to safely add to queue from executor thread
                     loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
 
-                # Run the assistant processing in a separate task
                 async def run_assistant() -> tuple[str, PartialCharacter]:
                     try:
-                        # Process message with streaming
                         response, updates = await loop.run_in_executor(
                             None,
                             lambda: assistant.process_message(
@@ -287,38 +258,26 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
                         )
                         return response, updates
                     finally:
-                        # Signal completion
                         await chunk_queue.put(None)
 
-                # Start the assistant task
                 assistant_task = asyncio.create_task(run_assistant())
 
-                # Stream message chunks as they become available
                 while True:
                     chunk = await chunk_queue.get()
-                    if chunk is None:  # Completion signal
+                    if chunk is None:
                         break
-
-                    # Remove character_update tags from chunk but preserve spacing
-                    # Don't use clean_response_text() as it strips whitespace which breaks streaming
                     clean_chunk = re.sub(r"<character_update>[\s\S]*?</character_update>", "", chunk)
-
-                    if clean_chunk:  # Only send non-empty chunks
+                    if clean_chunk:
                         event_data = CharacterCreationStreamEvent(type="message", message=clean_chunk)
                         yield f"data: {event_data.model_dump_json()}\n\n"
 
-                # Wait for assistant task to complete and get the updates
                 full_response, updated_character = await assistant_task
-
-                # Send character updates if any
                 if updated_character != request.current_character:
                     update_event = CharacterCreationStreamEvent(type="update", updates=updated_character)
                     yield f"data: {update_event.model_dump_json()}\n\n"
 
-                # Send completion marker
                 complete_event = CharacterCreationStreamEvent(type="complete")
                 yield f"data: {complete_event.model_dump_json()}\n\n"
-
             except Exception as e:
                 error_event = CharacterCreationStreamEvent(type="error", error=str(e))
                 yield f"data: {error_event.model_dump_json()}\n\n"
@@ -326,256 +285,52 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
         return StreamingResponse(
             generate_sse_response(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*"},
         )
-
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process character creation: {str(e)}") from e
 
 
-@app.post("/api/scenarios/generate")
-async def generate_scenarios(request: GenerateScenariosRequest, user_id: UserIdDep) -> GenerateScenariosResponse:
-    """Generate scenario intros for a given character."""
-    try:
-        # Load the character from registry
-        character = character_loader.load_character(request.character_name, user_id)
-        if not character:
-            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
-
-        # Load the persona if provided
-        persona = None
-        if request.persona_id:
-            persona = character_loader.load_character(request.persona_id, user_id)
-            # Don't fail if persona not found, just proceed without it
-
-        # Get the appropriate prompt processor
-        dependencies = CharacterResponderDependencies.create_default(
-            character_name="temp",  # Temp name for processor creation
-            processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type,
-        )
-
-        # Create scenario generator with the selected processor
-        scenario_generator = ScenarioGenerator(processors=[dependencies.primary_processor, dependencies.backup_processor], logger=dependencies.chat_logger)
-
-        # Generate scenarios
-        scenarios = scenario_generator.generate_scenarios(character, count=request.count, mood=request.mood, persona=persona)
-
-        return GenerateScenariosResponse(character_name=character.name, scenarios=scenarios)
-
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate scenarios: {str(e)}") from e
-
-
-@app.post("/api/scenarios/generate-stream")
-async def generate_scenarios_stream(request: GenerateScenariosRequest, user_id: UserIdDep) -> StreamingResponse:
-    """
-    Generate scenario intros for a given character with streaming via Server-Sent Events.
-
-    The response will be streamed as Server-Sent Events with the following format:
-    - data: {"type": "chunk", "chunk": "XML text chunk"}
-    - data: {"type": "scenario", "scenario": {...}}
-    - data: {"type": "complete"}
-    - data: {"type": "error", "error": "error_message"}
-    """
-    try:
-        # Load the character from registry
-        character = character_loader.load_character(request.character_name, user_id)
-        if not character:
-            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
-
-        # Load the persona if provided
-        persona = None
-        if request.persona_id:
-            persona = character_loader.load_character(request.persona_id, user_id)
-            # Don't fail if persona not found, just proceed without it
-
-        # Get the appropriate prompt processor
-        dependencies = CharacterResponderDependencies.create_default(
-            character_name="temp",  # Temp name for processor creation
-            processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type,
-        )
-
-        # Create scenario generator with the selected processor
-        scenario_generator = ScenarioGenerator(processors=[dependencies.primary_processor, dependencies.backup_processor], logger=dependencies.chat_logger)
-
-        # Create async generator for streaming response
-        async def generate_sse_response() -> AsyncGenerator[str, None]:
-            """Generate Server-Sent Events for streaming scenario generation."""
-            try:
-                # Create queues for streaming chunks and scenario events
-                chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
-                scenario_queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
-                loop = asyncio.get_event_loop()
-
-                def streaming_callback(chunk: str) -> None:
-                    """Called by generator when a chunk is available."""
-                    loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
-
-                def scenario_callback(scenario: object) -> None:
-                    """Called by generator when a complete scenario is parsed."""
-                    from src.models.api_models import Scenario
-
-                    if isinstance(scenario, Scenario):
-                        scenario_data = {"type": "scenario", "scenario": scenario.model_dump()}
-                        loop.call_soon_threadsafe(lambda: asyncio.create_task(scenario_queue.put(scenario_data)))
-
-                # Run the scenario generation in a separate task
-                async def run_generation() -> list[object]:
-                    try:
-                        scenarios = await loop.run_in_executor(
-                            None,
-                            lambda: scenario_generator.generate_scenarios_streaming(
-                                character, count=request.count, mood=request.mood, persona=persona, streaming_callback=streaming_callback, scenario_callback=scenario_callback
-                            ),
-                        )
-                        return scenarios
-                    finally:
-                        # Signal completion
-                        await chunk_queue.put(None)
-                        await scenario_queue.put(None)
-
-                # Start the generation task
-                generation_task = asyncio.create_task(run_generation())
-
-                # Stream chunks and scenarios as they become available
-                chunk_done = False
-                scenario_done = False
-
-                while not (chunk_done and scenario_done):
-                    # Use asyncio.wait to handle both queues concurrently
-                    chunk_task = asyncio.create_task(chunk_queue.get()) if not chunk_done else None
-                    scenario_task = asyncio.create_task(scenario_queue.get()) if not scenario_done else None
-
-                    tasks = [task for task in [chunk_task, scenario_task] if task is not None]
-                    if not tasks:
-                        break
-
-                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
-                    # Cancel pending tasks to avoid resource leaks
-                    for task in pending:
-                        task.cancel()
-
-                    for task in done:
-                        if task == chunk_task and chunk_task is not None:
-                            chunk = await chunk_task
-                            if chunk is None:  # Completion signal
-                                chunk_done = True
-                            else:
-                                # Send chunk event
-                                event_data = ScenarioGenerationStreamEvent(type="chunk", chunk=chunk)
-                                yield f"data: {event_data.model_dump_json()}\n\n"
-                        elif task == scenario_task and scenario_task is not None:
-                            scenario_data = await scenario_task
-                            if scenario_data is None:  # Completion signal
-                                scenario_done = True
-                            else:
-                                # Send scenario event
-                                yield f"data: {json.dumps(scenario_data)}\n\n"
-
-                # Wait for generation task to complete
-                await generation_task
-
-                # Send completion marker
-                complete_event = ScenarioGenerationStreamEvent(type="complete")
-                yield f"data: {complete_event.model_dump_json()}\n\n"
-
-            except Exception as e:
-                error_event = ScenarioGenerationStreamEvent(type="error", error=str(e))
-                yield f"data: {error_event.model_dump_json()}\n\n"
-
-        return StreamingResponse(
-            generate_sse_response(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process scenario generation: {str(e)}") from e
+# ───────────────────────────── Scenarios ──────────────────────────────
 
 
 @app.post("/api/scenarios/create-stream")
 async def create_scenario_stream(request: ScenarioCreationRequest, user_id: UserIdDep) -> StreamingResponse:
-    """
-    Interactive scenario creation with AI assistant via Server-Sent Events.
-
-    The response will be streamed as Server-Sent Events with the following format:
-    - data: {"type": "message", "message": "AI response text chunk"}
-    - data: {"type": "update", "updates": {"summary": "...", "intro_message": "..."}}
-    - data: {"type": "complete"}
-    - data: {"type": "error", "error": "error_message"}
-    """
+    """Interactive scenario creation with AI assistant via Server-Sent Events."""
     try:
-        # Load the character from registry
         character = character_loader.load_character(request.character_name, user_id)
         if not character:
             raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
 
-        # Load the currently selected persona if provided
         persona = None
         if request.persona_id:
             persona = character_loader.load_character(request.persona_id, user_id)
-            # Don't fail if persona not found, just proceed without it
 
-        # Get the appropriate prompt processor
-        dependencies = CharacterResponderDependencies.create_default(
-            character_name="temp",  # Temp name for processor creation
-            processor_type=request.processor_type,
-            backup_processor_type=request.backup_processor_type,
-        )
+        processor = PromptProcessorFactory.create_processor(request.processor_type)
+        assistant = ScenarioCreationAssistant(prompt_processor=processor)
 
-        # Create scenario creation assistant with the selected processor
-        assistant = ScenarioCreationAssistant(prompt_processor=dependencies.primary_processor)
-
-        # Ensure character_id is set in current_scenario
         current_scenario = request.current_scenario
-        if not current_scenario.character_id:
-            current_scenario = current_scenario.model_copy(update={"character_id": request.character_name})
+        if not current_scenario.character_ids:
+            current_scenario = current_scenario.model_copy(update={"character_ids": [request.character_name]})
         if request.persona_id and not current_scenario.persona_id:
             current_scenario = current_scenario.model_copy(update={"persona_id": request.persona_id})
 
-        # Get available personas for AI suggestions
         available_personas = request.available_personas
 
-        # Create async generator for streaming response
         async def generate_sse_response() -> AsyncGenerator[str, None]:
-            """Generate Server-Sent Events for streaming scenario creation."""
             try:
-                # Create queue for streaming chunks
                 chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
                 ai_response_parts: list[str] = []
                 loop = asyncio.get_event_loop()
 
                 def streaming_callback(chunk: str) -> None:
-                    """Called by assistant when a chunk is available."""
                     ai_response_parts.append(chunk)
-                    # Use call_soon_threadsafe to safely add to queue from executor thread
                     loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
 
-                # Run the assistant processing in a separate task
                 async def run_assistant() -> tuple[str, PartialScenario]:
                     try:
-                        # Process message with streaming
                         response, updates = await loop.run_in_executor(
                             None,
                             lambda: assistant.process_message(
@@ -590,37 +345,26 @@ async def create_scenario_stream(request: ScenarioCreationRequest, user_id: User
                         )
                         return response, updates
                     finally:
-                        # Signal completion
                         await chunk_queue.put(None)
 
-                # Start the assistant task
                 assistant_task = asyncio.create_task(run_assistant())
 
-                # Stream message chunks as they become available
                 while True:
                     chunk = await chunk_queue.get()
-                    if chunk is None:  # Completion signal
+                    if chunk is None:
                         break
-
-                    # Remove scenario_update tags from chunk but preserve spacing
                     clean_chunk = re.sub(r"<scenario_update>[\s\S]*?</scenario_update>", "", chunk)
-
-                    if clean_chunk:  # Only send non-empty chunks
+                    if clean_chunk:
                         event_data = ScenarioCreationStreamEvent(type="message", message=clean_chunk)
                         yield f"data: {event_data.model_dump_json()}\n\n"
 
-                # Wait for assistant task to complete and get the updates
                 full_response, updated_scenario = await assistant_task
-
-                # Send scenario updates if any
                 if updated_scenario != current_scenario:
                     update_event = ScenarioCreationStreamEvent(type="update", updates=updated_scenario)
                     yield f"data: {update_event.model_dump_json()}\n\n"
 
-                # Send completion marker
                 complete_event = ScenarioCreationStreamEvent(type="complete")
                 yield f"data: {complete_event.model_dump_json()}\n\n"
-
             except Exception as e:
                 error_event = ScenarioCreationStreamEvent(type="error", error=str(e))
                 yield f"data: {error_event.model_dump_json()}\n\n"
@@ -628,14 +372,8 @@ async def create_scenario_stream(request: ScenarioCreationRequest, user_id: User
         return StreamingResponse(
             generate_sse_response(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*"},
         )
-
     except HTTPException:
         raise
     except Exception as e:
@@ -646,58 +384,44 @@ async def create_scenario_stream(request: ScenarioCreationRequest, user_id: User
 async def save_scenario(request: SaveScenarioRequest, user_id: UserIdDep) -> SaveScenarioResponse:
     """Save a completed scenario to the database."""
     try:
-        # Validate the scenario has required fields
         if not request.scenario.summary or not request.scenario.intro_message:
             raise HTTPException(status_code=400, detail="Scenario must have summary and intro_message")
+        if not request.scenario.character_ids:
+            raise HTTPException(status_code=400, detail="Scenario must have at least one character_id")
+        if not request.scenario.ruleset_id:
+            raise HTTPException(status_code=400, detail="Scenario must have a ruleset_id")
 
-        if not request.scenario.character_id:
-            raise HTTPException(status_code=400, detail="Scenario must have character_id")
-
-        # Save the scenario
         scenario_id = scenario_registry.save_scenario(
             scenario_data=request.scenario.model_dump(),
-            character_id=request.scenario.character_id,
             scenario_id=request.scenario_id,
             user_id=user_id,
+            ruleset_id=request.scenario.ruleset_id,
+            character_ids=request.scenario.character_ids,
         )
-
         return SaveScenarioResponse(scenario_id=scenario_id)
-
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save scenario: {str(e)}") from e
 
 
-@app.get("/api/scenarios/list/{character_name}")
-async def list_scenarios_for_character(character_name: str, user_id: UserIdDep) -> ListScenariosResponse:
-    """List all saved scenarios for a character."""
+@app.get("/api/scenarios/list")
+async def list_scenarios(user_id: UserIdDep) -> ListScenariosResponse:
+    """List all saved scenarios for the user."""
     try:
-        # Verify character exists
-        character = character_loader.load_character(character_name, user_id)
-        if not character:
-            raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
-
-        # Get scenarios for this character
-        scenarios = scenario_registry.get_scenarios_for_character(character_name, user_id)
-
-        # Convert to summaries
+        scenarios = scenario_registry.get_all_scenarios(user_id)
         scenario_summaries = [
             ScenarioSummary(
                 id=s["id"],
                 summary=s["scenario_data"].get("summary", "Untitled"),
-                narrative_category=s["scenario_data"].get("narrative_category", ""),
-                character_id=s["character_id"],
+                character_ids=s.get("character_ids") or [],
+                ruleset_id=s.get("ruleset_id") or "",
                 created_at=s["created_at"],
                 updated_at=s["updated_at"],
             )
             for s in scenarios
         ]
-
-        return ListScenariosResponse(character_name=character_name, scenarios=scenario_summaries)
-
-    except HTTPException:
-        raise
+        return ListScenariosResponse(scenarios=scenario_summaries)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list scenarios: {str(e)}") from e
 
@@ -709,10 +433,7 @@ async def get_scenario_detail(scenario_id: str, user_id: UserIdDep) -> Scenario:
         scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
         if not scenario_data:
             raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
-
-        # Return the scenario data as a Scenario model
         return Scenario(**scenario_data["scenario_data"])
-
     except HTTPException:
         raise
     except Exception as e:
@@ -723,65 +444,244 @@ async def get_scenario_detail(scenario_id: str, user_id: UserIdDep) -> Scenario:
 async def delete_scenario(scenario_id: str, user_id: UserIdDep) -> dict[str, str]:
     """Delete a scenario by ID."""
     try:
-        # Verify scenario exists
         if not scenario_registry.scenario_exists(scenario_id, user_id):
             raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
-
-        # Delete the scenario
         deleted = scenario_registry.delete_scenario(scenario_id, user_id)
         if not deleted:
             raise HTTPException(status_code=403, detail="Cannot delete scenario - you may not have permission")
-
         return {"message": f"Scenario '{scenario_id}' deleted successfully"}
-
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete scenario: {str(e)}") from e
 
 
+# ───────────────────────────── Rulesets ───────────────────────────────
+
+
+@app.get("/api/rulesets")
+async def list_rulesets(user_id: UserIdDep) -> list[RulesetSummary]:
+    """List all rulesets for the user."""
+    try:
+        rulesets = ruleset_registry.get_all_rulesets(user_id)
+        return [
+            RulesetSummary(
+                id=r["id"],
+                name=r["name"],
+                drive_count=len(r.get("state_schemas", {}).get("drives", [])),
+                skill_count=len(r.get("state_schemas", {}).get("skills", [])),
+                created_at=r.get("created_at", ""),
+            )
+            for r in rulesets
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list rulesets: {str(e)}") from e
+
+
+@app.post("/api/rulesets")
+async def create_ruleset(request: CreateRulesetRequest, user_id: UserIdDep) -> dict[str, str]:
+    """Create a new ruleset."""
+    try:
+        ruleset_id = ruleset_registry.save_ruleset(
+            name=request.ruleset.name,
+            rules_text=request.ruleset.rules_text,
+            state_schemas=request.ruleset.state_schemas.model_dump(),
+            config=request.ruleset.config.model_dump(),
+            user_id=user_id,
+        )
+        return {"id": ruleset_id, "message": "Ruleset created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create ruleset: {str(e)}") from e
+
+
+@app.get("/api/rulesets/{ruleset_id}")
+async def get_ruleset(ruleset_id: str, user_id: UserIdDep) -> dict[str, Any]:
+    """Get a specific ruleset by ID."""
+    try:
+        ruleset = ruleset_registry.get_ruleset(ruleset_id, user_id)
+        if not ruleset:
+            raise HTTPException(status_code=404, detail=f"Ruleset '{ruleset_id}' not found")
+        return ruleset
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get ruleset: {str(e)}") from e
+
+
+@app.put("/api/rulesets/{ruleset_id}")
+async def update_ruleset(ruleset_id: str, request: CreateRulesetRequest, user_id: UserIdDep) -> dict[str, str]:
+    """Update an existing ruleset."""
+    try:
+        existing = ruleset_registry.get_ruleset(ruleset_id, user_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Ruleset '{ruleset_id}' not found")
+        ruleset_registry.save_ruleset(
+            name=request.ruleset.name,
+            rules_text=request.ruleset.rules_text,
+            state_schemas=request.ruleset.state_schemas.model_dump(),
+            config=request.ruleset.config.model_dump(),
+            ruleset_id=ruleset_id,
+            user_id=user_id,
+        )
+        return {"id": ruleset_id, "message": "Ruleset updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update ruleset: {str(e)}") from e
+
+
+@app.delete("/api/rulesets/{ruleset_id}")
+async def delete_ruleset(ruleset_id: str, user_id: UserIdDep) -> dict[str, str]:
+    """Delete a ruleset by ID."""
+    try:
+        deleted = ruleset_registry.delete_ruleset(ruleset_id, user_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Ruleset '{ruleset_id}' not found")
+        return {"message": f"Ruleset '{ruleset_id}' deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete ruleset: {str(e)}") from e
+
+
+# ───────────────────────────── World Lore ─────────────────────────────
+
+
+@app.get("/api/world-lore")
+async def list_world_lore(user_id: UserIdDep) -> list[WorldLoreSummary]:
+    """List all world lore entries for the user."""
+    try:
+        entries = world_lore_registry.get_all_lore(user_id)
+        return [
+            WorldLoreSummary(
+                id=e["id"],
+                name=e["name"],
+                tags=e.get("tags", []),
+                content_preview=e.get("content", "")[:100],
+            )
+            for e in entries
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list world lore: {str(e)}") from e
+
+
+@app.post("/api/world-lore")
+async def create_world_lore(request: CreateWorldLoreRequest, user_id: UserIdDep) -> dict[str, str]:
+    """Create a new world lore entry."""
+    try:
+        lore_id = world_lore_registry.save_lore(
+            name=request.lore.name,
+            content=request.lore.content,
+            tags=request.lore.tags,
+            user_id=user_id,
+        )
+        return {"id": lore_id, "message": "World lore created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create world lore: {str(e)}") from e
+
+
+@app.get("/api/world-lore/tags")
+async def get_world_lore_tags(user_id: UserIdDep) -> list[str]:
+    """Get all unique tags across world lore entries."""
+    try:
+        return world_lore_registry.get_all_tags(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get tags: {str(e)}") from e
+
+
+@app.get("/api/world-lore/{lore_id}")
+async def get_world_lore(lore_id: str, user_id: UserIdDep) -> dict[str, Any]:
+    """Get a specific world lore entry by ID."""
+    try:
+        lore = world_lore_registry.get_lore(lore_id, user_id)
+        if not lore:
+            raise HTTPException(status_code=404, detail=f"World lore '{lore_id}' not found")
+        return lore
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get world lore: {str(e)}") from e
+
+
+@app.put("/api/world-lore/{lore_id}")
+async def update_world_lore(lore_id: str, request: CreateWorldLoreRequest, user_id: UserIdDep) -> dict[str, str]:
+    """Update an existing world lore entry."""
+    try:
+        existing = world_lore_registry.get_lore(lore_id, user_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"World lore '{lore_id}' not found")
+        world_lore_registry.save_lore(
+            name=request.lore.name,
+            content=request.lore.content,
+            tags=request.lore.tags,
+            lore_id=lore_id,
+            user_id=user_id,
+        )
+        return {"id": lore_id, "message": "World lore updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update world lore: {str(e)}") from e
+
+
+@app.delete("/api/world-lore/{lore_id}")
+async def delete_world_lore(lore_id: str, user_id: UserIdDep) -> dict[str, str]:
+    """Delete a world lore entry by ID."""
+    try:
+        deleted = world_lore_registry.delete_lore(lore_id, user_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"World lore '{lore_id}' not found")
+        return {"message": f"World lore '{lore_id}' deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete world lore: {str(e)}") from e
+
+
+# ───────────────────────────── Sessions ───────────────────────────────
+
+
 @app.get("/api/sessions")
 async def list_sessions(user_id: UserIdDep) -> list[SessionInfo]:
     """List all sessions from conversation memory."""
     try:
-        conversation_memory = ConversationMemory()
-        char_loader = CharacterLoader()
-        available_characters = char_loader.list_characters(user_id)
+        mem = ConversationMemory()
         sessions: list[SessionInfo] = []
 
-        for character_filename in available_characters:
-            # Load the character to get the actual name used in the database
+        user_sessions = mem.get_user_sessions(user_id, limit=50)
+
+        for session_info in user_sessions:
+            last_character_response = None
             try:
-                character = char_loader.load_character(character_filename, user_id)
-                character_name = character.name if character else character_filename.capitalize()
-            except FileNotFoundError:
-                continue  # Skip characters not found for this user
-
-            character_sessions = conversation_memory.get_character_sessions(character_name, user_id, limit=50)
-
-            for session_info in character_sessions:
-                # Get the last character response from this session (conversation type only, not evaluations)
+                recent_messages = mem.get_recent_messages(session_info["session_id"], user_id, limit=1)
+                last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
+            except Exception:
                 last_character_response = None
-                try:
-                    recent_messages = conversation_memory.get_recent_messages(session_info["session_id"], user_id, limit=1)
-                    last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
-                except Exception:
-                    # If there's an issue getting recent messages, just set to None
-                    last_character_response = None
 
-                sessions.append(
-                    SessionInfo(
-                        session_id=session_info["session_id"],
-                        character_name=character_filename,  # Use filename for frontend consistency
-                        message_count=session_info["message_count"],
-                        last_message_time=session_info["last_message_time"],
-                        last_character_response=last_character_response,
-                    )
+            scenario_id = mem.get_session_scenario_id(session_info["session_id"], user_id)
+            scenario_name = None
+            if scenario_id:
+                scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
+                if scenario_data:
+                    scenario_name = scenario_data["scenario_data"].get("summary", "Untitled")
+
+            # Get turn count from session state if available
+            turn_count = None
+            session_db = session_repository.get_session(session_info["session_id"], user_id)
+            if session_db:
+                turn_count = session_db.get("turn_counter")
+
+            sessions.append(
+                SessionInfo(
+                    session_id=session_info["session_id"],
+                    character_name=scenario_name or "Session",
+                    message_count=session_info["message_count"],
+                    last_message_time=session_info["last_message_time"],
+                    last_character_response=last_character_response,
+                    scenario_name=scenario_name,
+                    turn_count=turn_count,
                 )
-
-        # Sort by last message time (newest first)
-        sessions.sort(key=lambda x: x.last_message_time, reverse=True)
-
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list sessions: {str(e)}") from e
 
@@ -798,19 +698,13 @@ async def get_session(session_id: str, user_id: UserIdDep) -> SessionDetails:
 
     try:
         session_messages = memory.get_recent_messages(session_id, user_id, limit=50)
-
         last_messages = [
-            SessionMessage(
-                role=msg["role"],
-                content=msg["content"],
-                created_at=msg["created_at"],  # type: ignore
-            )
+            SessionMessage(role=msg["role"], content=msg["content"], created_at=msg["created_at"])
             for msg in session_messages
         ]
-
         return SessionDetails(
             session_id=session_id,
-            character_name=session_details["character_id"],
+            character_name="Session",
             message_count=session_details["message_count"],
             last_messages=last_messages,
             last_message_time=session_details["last_message_time"],
@@ -819,100 +713,94 @@ async def get_session(session_id: str, user_id: UserIdDep) -> SessionDetails:
         raise HTTPException(status_code=500, detail=f"Failed to get session details: {str(e)}") from e
 
 
-@app.get("/api/sessions/{session_id}/summary")
-async def get_session_summary(session_id: str, user_id: UserIdDep) -> SessionSummaryResponse:
-    """Get the current summary for a session as it would appear in the prompt."""
+@app.get("/api/sessions/{session_id}/state")
+async def get_session_state(session_id: str, user_id: UserIdDep) -> SessionStateResponse:
+    """Get the full simulation state for a session."""
     try:
-        from src.models.summary import StorySummary
-
-        summary_memory = SummaryMemory()
-        conversation_memory = ConversationMemory()
-
-        # Validate session exists
-        session_details = conversation_memory.get_session_details(session_id, user_id)
-        if not session_details or session_details.get("message_count", 0) == 0:
+        world_state = session_state_service.get_world_state(session_id, user_id)
+        if not world_state:
             raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-        # Get all summaries for this session
-        summaries = summary_memory.get_session_summaries(session_id, user_id)
+        turn_counter = session_state_service.get_turn_counter(session_id, user_id)
+        all_states = session_state_service.get_all_character_states(session_id)
+        narration_history = session_state_service.get_narration_history(session_id, user_id)
 
-        if not summaries:
-            return SessionSummaryResponse(session_id=session_id, summary_text="No summary available yet. Summary will be generated after the conversation progresses.", has_summary=False)
+        session_db = session_repository.get_session(session_id, user_id)
+        status = session_db.get("status", "active") if session_db else "active"
 
-        # Concatenate all summary texts into a single StorySummary (same logic as CharacterResponder)
-        beats = []
-        learnings = []
-        last_summary = None
+        character_states = {
+            cid: state.model_dump() for cid, state in all_states.items()
+        }
 
-        for summary in summaries:
-            try:
-                summary_model = StorySummary.model_validate_json(summary["summary"])
-                beats.extend(summary_model.story_beats)
-                learnings.extend(summary_model.user_learnings)
-                last_summary = summary_model
-            except Exception as e:
-                # Log but continue processing other summaries
-                print(f"Failed to parse summary JSON: {e}")
-
-        if not last_summary:
-            return SessionSummaryResponse(session_id=session_id, summary_text="Summary data is corrupted or invalid.", has_summary=False)
-
-        # Rebuild the consolidated summary
-        consolidated_summary = StorySummary(
-            time=last_summary.time,
-            relationship=last_summary.relationship,
-            plot=last_summary.plot,
-            physical_state=last_summary.physical_state,
-            emotional_state=last_summary.emotional_state,
-            story_beats=beats,
-            user_learnings=learnings,
-            ai_quality_issues=last_summary.ai_quality_issues,
-            character_goals=last_summary.character_goals,
+        return SessionStateResponse(
+            session_id=session_id,
+            world_state=world_state,
+            turn_counter=turn_counter,
+            status=status,
+            character_states=character_states,
+            narration_history=narration_history,
         )
-
-        # Convert to the formatted string as it would appear in the prompt
-        summary_text = consolidated_summary.to_string()
-
-        return SessionSummaryResponse(session_id=session_id, summary_text=summary_text, has_summary=True)
-
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get session summary: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get session state: {str(e)}") from e
+
+
+@app.get("/api/sessions/{session_id}/characters")
+async def get_session_characters(session_id: str, user_id: UserIdDep) -> list[SessionCharacterSummary]:
+    """Get character summaries for a session."""
+    try:
+        world_state = session_state_service.get_world_state(session_id, user_id)
+        if not world_state:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        all_states = session_state_service.get_all_character_states(session_id)
+        summaries: list[SessionCharacterSummary] = []
+
+        for char_id, state in all_states.items():
+            char_info = character_loader.get_character_info(char_id, user_id)
+            char_name = char_info.name if char_info else char_id
+
+            summaries.append(SessionCharacterSummary(
+                character_id=char_id,
+                character_name=char_name,
+                is_present=state.is_present,
+                drives=state.drives,
+                active_intent_goal=state.active_intent.goal if state.active_intent else None,
+            ))
+
+        return summaries
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get session characters: {str(e)}") from e
 
 
 @app.get("/api/sessions/{session_id}/persona")
 async def get_session_persona(session_id: str, user_id: UserIdDep) -> dict[str, str | None]:
-    """Get the persona information for a session (if the session was started from a scenario)."""
+    """Get the persona information for a session."""
     try:
-        # Validate session exists
         session_details = conversation_memory.get_session_details(session_id, user_id)
         if not session_details or session_details.get("message_count", 0) == 0:
             raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-        # Get the scenario_id from the session
         scenario_id = conversation_memory.get_session_scenario_id(session_id, user_id)
         if not scenario_id:
             return {"persona_id": None, "persona_name": None}
 
-        # Load the scenario
         scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
         if not scenario_data:
             return {"persona_id": None, "persona_name": None}
 
-        # Get persona_id from scenario
         persona_id = scenario_data["scenario_data"].get("persona_id")
         if not persona_id:
             return {"persona_id": None, "persona_name": None}
 
-        # Try to load the persona to get its name
         try:
             persona = character_loader.load_character(persona_id, user_id)
             return {"persona_id": persona_id, "persona_name": persona.name}
         except FileNotFoundError:
-            # Persona exists in scenario but file not found
             return {"persona_id": persona_id, "persona_name": None}
-
     except HTTPException:
         raise
     except Exception as e:
@@ -923,211 +811,147 @@ async def get_session_persona(session_id: str, user_id: UserIdDep) -> dict[str, 
 async def clear_session(session_id: str, user_id: UserIdDep) -> dict[str, str]:
     """Clear a specific session."""
     memory = ConversationMemory()
-    messages = memory.get_session_messages(session_id, user_id, limit=1)  # Validate session exists
+    messages = memory.get_session_messages(session_id, user_id, limit=1)
     if len(messages) == 0:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
     try:
         memory.delete_session(session_id, user_id)
-        SummaryMemory().delete_session_summaries(session_id, user_id)
+        # Also clean up simulation state if it exists
+        session_repository.delete_session(session_id, user_id)
         return {"message": f"Session '{session_id}' cleared successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}") from e
 
 
 @app.post("/api/sessions/start")
-async def start_session_with_scenario(request: StartSessionRequest, user_id: UserIdDep) -> StartSessionResponse:
-    """
-    Start a new session with a scenario.
-
-    This endpoint creates a new session and initializes it with either:
-    - A stored scenario (by scenario_id)
-    - A raw intro message
-
-    At least one of scenario_id or intro_message must be provided.
-    Optionally, a persona can be specified to provide user context as hidden_context tags.
-    """
+async def start_session(request: StartSessionRequest, user_id: UserIdDep) -> StartSessionResponse:
+    """Start a new simulation session from a stored scenario."""
     try:
-        # Validate that at least one of scenario_id or intro_message is provided
-        if not request.scenario_id and not request.intro_message:
-            raise HTTPException(status_code=400, detail="Either scenario_id or intro_message must be provided")
+        initializer = SessionInitializer(
+            session_state_service=session_state_service,
+            ruleset_service=ruleset_service,
+            event_stream_service=event_stream_service,
+            character_loader=character_loader,
+            scenario_registry=scenario_registry,
+            conversation_memory=conversation_memory,
+            world_lore_registry=world_lore_registry,
+        )
 
-        if request.scenario_id:
-            # Use stored scenario
-            session_id = session_starter.start_session_with_scenario_id(
-                character_name=request.character_name,
-                scenario_id=request.scenario_id,
-                user_id=user_id,
-            )
-        else:
-            # Use raw intro message
-            session_id = session_starter.start_session_with_intro(
-                character_name=request.character_name,
-                intro_message=request.intro_message,  # type: ignore - validated above
-                user_id=user_id,
-            )
+        result = initializer.initialize(
+            scenario_id=request.scenario_id,
+            user_id=user_id,
+        )
 
-        return StartSessionResponse(session_id=session_id)
-
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        return StartSessionResponse(session_id=result["session_id"])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start session: {str(e)}") from e
 
 
-@app.post("/api/interact")
-async def interact(request: InteractRequest, user_id: UserIdDep) -> StreamingResponse:
-    """
-    Interact with a character and get streaming response via Server-Sent Events.
+# ───────────────────────────── Turn Pipeline ──────────────────────────
 
-    The response will be streamed as Server-Sent Events with the following format:
-    - data: {"type": "chunk", "content": "response_text"}
-    - data: {"type": "session", "session_id": "session_id_value"}
-    - data: {"type": "thinking", "stage": "summarizing|deliberating|responding"}
-    - data: {"type": "error", "error": "error_message"}
-    - data: {"type": "complete", "full_response": "full_response_text", "message_count": n}
+
+@app.post("/api/turn")
+async def execute_turn(request: TurnRequest, user_id: UserIdDep) -> StreamingResponse:
+    """Execute a simulation turn with streaming narration via Server-Sent Events.
+
+    SSE events:
+    - {"type": "status", "step": "..."}
+    - {"type": "narration_chunk", "text": "..."}
+    - {"type": "narration_complete", "text": "..."}
+    - {"type": "continuation_options", "options": [...]}
+    - {"type": "turn_complete", "turn": int}
+    - {"type": "error", "message": "..."}
     """
     try:
-        responder = get_character_responder(
-            session_id=request.session_id, character_name=request.character_name, processor_type=request.processor_type, backup_processor_type=request.backup_processor_type, user_id=user_id
+        # Load ruleset for this session if one exists
+        session_db = session_repository.get_session(request.session_id, user_id)
+        if not session_db:
+            raise HTTPException(status_code=404, detail=f"Session '{request.session_id}' not found")
+
+        scenario_data = scenario_registry.get_scenario(session_db.get("scenario_id", ""), user_id)
+        ruleset: Ruleset | None = None
+        if scenario_data:
+            ruleset_id = scenario_data.get("scenario_data", {}).get("ruleset_id", "")
+            if ruleset_id:
+                ruleset = ruleset_service.load_ruleset(ruleset_id, user_id)
+
+        # Create processors
+        large_processor = PromptProcessorFactory.create_processor(request.processor_type)
+        mini_processor = large_processor
+        if request.mini_processor_type:
+            mini_processor = PromptProcessorFactory.create_processor(request.mini_processor_type)
+
+        pipeline = TurnPipeline(
+            large_processor=large_processor,
+            mini_processor=mini_processor,
+            session_state=session_state_service,
+            ruleset_service=ruleset_service,
+            event_stream=event_stream_service,
+            character_loader=character_loader,
         )
 
-        # Create async generator for streaming response
         async def generate_sse_response() -> AsyncGenerator[str, None]:
-            """Generate Server-Sent Events for streaming response."""
             try:
-                # Send session info first
-                yield f"data: {json.dumps({'type': 'session', 'session_id': responder.session_id})}\n\n"
-
-                # Create queues for streaming chunks and events
-                chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
-                event_queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
-                character_response = ""
                 loop = asyncio.get_event_loop()
+                event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
-                def streaming_callback(chunk: str) -> None:
-                    """Called by responder when a chunk is available."""
-                    # Use call_soon_threadsafe to safely add to queue from executor thread
-                    loop.call_soon_threadsafe(lambda: asyncio.create_task(chunk_queue.put(chunk)))
-
-                def event_callback(event_type: str, **kwargs: str) -> None:
-                    """Called by responder when an event occurs."""
-                    event_data = {"type": event_type, **kwargs}
-                    loop.call_soon_threadsafe(lambda: asyncio.create_task(event_queue.put(event_data)))
-
-                # Run the character response in a separate task
-                async def run_character_response() -> None:
-                    nonlocal character_response
+                def run_pipeline() -> None:
                     try:
-                        character_response = await loop.run_in_executor(None, lambda: responder.respond(request.user_message, streaming_callback, event_callback))
+                        for event in pipeline.execute_turn(
+                            session_id=request.session_id,
+                            user_input=request.user_input,
+                            input_type=request.input_type,
+                            ruleset=ruleset,
+                            user_id=user_id,
+                        ):
+                            loop.call_soon_threadsafe(
+                                lambda e=event: asyncio.create_task(event_queue.put(e))
+                            )
                     finally:
-                        # Signal completion
-                        await chunk_queue.put(None)
-                        await event_queue.put(None)
+                        loop.call_soon_threadsafe(
+                            lambda: asyncio.create_task(event_queue.put(None))
+                        )
 
-                # Start the character response task
-                response_task = asyncio.create_task(run_character_response())
+                # Run pipeline in executor
+                asyncio.create_task(loop.run_in_executor(None, run_pipeline))
 
-                # Stream chunks and events as they become available
-                chunk_done = False
-                event_done = False
-
-                while not (chunk_done and event_done):
-                    # Use asyncio.wait to handle both queues concurrently
-                    chunk_task = asyncio.create_task(chunk_queue.get()) if not chunk_done else None
-                    event_task = asyncio.create_task(event_queue.get()) if not event_done else None
-
-                    tasks = [task for task in [chunk_task, event_task] if task is not None]
-                    if not tasks:
+                # Stream events
+                while True:
+                    event = await event_queue.get()
+                    if event is None:
                         break
+                    yield f"data: {json.dumps(event)}\n\n"
 
-                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
-                    # Cancel pending tasks to avoid resource leaks
-                    for task in pending:
-                        task.cancel()
-
-                    for task in done:
-                        if task == chunk_task and chunk_task is not None:
-                            chunk = await chunk_task
-                            if chunk is None:  # Completion signal
-                                chunk_done = True
-                            else:
-                                chunk_data = {"type": "chunk", "content": chunk}
-                                yield f"data: {json.dumps(chunk_data)}\n\n"
-                        elif task == event_task and event_task is not None:
-                            event = await event_task
-                            if event is None:  # Completion signal
-                                event_done = True
-                            else:
-                                yield f"data: {json.dumps(event)}\n\n"
-
-                # Wait for response task to complete and send completion marker
-                await response_task
-                completion_data = {"type": "complete", "full_response": character_response, "message_count": len(responder.memory)}
-                yield f"data: {json.dumps(completion_data)}\n\n"
+                # Store user message in conversation log
+                conversation_memory.add_message(
+                    session_id=request.session_id,
+                    role="user",
+                    content=request.user_input,
+                    user_id=user_id,
+                )
 
             except Exception as e:
-                error_data = {"type": "error", "error": str(e)}
-                responder.chat_logger.log_exception(e) if responder.chat_logger else None
-                yield f"data: {json.dumps(error_data)}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
         return StreamingResponse(
             generate_sse_response(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*"},
         )
-
     except HTTPException:
         raise
     except Exception as e:
-        if 'responder' in locals() and responder and hasattr(responder, 'chat_logger') and responder.chat_logger:
-            responder.chat_logger.log_exception(e)
-        raise HTTPException(status_code=500, detail=f"Failed to process interaction: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to execute turn: {str(e)}") from e
 
 
-def get_character_responder(
-    session_id: str | None, character_name: str, processor_type: str, backup_processor_type: str | None = None, user_id: str = "anonymous"
-) -> CharacterResponder:
-    # Load character if not already loaded
-    character = character_loader.load_character(character_name, user_id)
-    if not character:
-        raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
-
-    # Load persona from scenario if session exists
-    persona = create_default_persona()
-    if session_id:
-        # Get the scenario_id from the session
-        scenario_id = conversation_memory.get_session_scenario_id(session_id, user_id)
-        if scenario_id:
-            # Load the scenario
-            scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
-            if scenario_data:
-                # Get persona_id from scenario
-                persona_id = scenario_data["scenario_data"].get("persona_id")
-                if persona_id:
-                    try:
-                        persona = character_loader.load_character(persona_id, user_id)
-                    except FileNotFoundError:
-                        # If persona not found, use default
-                        pass
-
-    dependencies = CharacterResponderDependencies.create_default(
-        character_name=character.name, session_id=session_id, logs_dir=None, processor_type=processor_type, backup_processor_type=backup_processor_type, user_id=user_id
-    )
-
-    session_id = dependencies.session_id
-    return CharacterResponder(character, dependencies, persona)
+# ───────────────────────────── Static / Frontend ──────────────────────
 
 
-# Root route - serve the Vue.js app
 @app.get("/")
 async def serve_root() -> FileResponse:
     """Serve the frontend application for the root route."""
@@ -1137,7 +961,6 @@ async def serve_root() -> FileResponse:
     raise HTTPException(status_code=404, detail="Frontend not found")
 
 
-# Frontend routing - serve the Vue.js app for all other non-API routes
 @app.get("/{path:path}")
 async def serve_frontend(path: str = "") -> FileResponse:
     """Serve the frontend application for all non-API routes."""

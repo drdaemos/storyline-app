@@ -123,17 +123,14 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         assert "Current character state:" in user_prompt
         assert '"name": "Bob"' in user_prompt
 
-    def test_extract_character_updates_with_relationships(self, assistant):
-        """Test extracting updates with complex relationship structure."""
-        ai_response = """Here's your character with relationships!
+    def test_extract_character_updates_with_interests(self, assistant):
+        """Test extracting updates with interests list."""
+        ai_response = """Here's your character with interests!
 
 <character_update>
 {
   "name": "Jane",
-  "relationships": {
-    "Bob": "Brother and rival",
-    "Alice": "Childhood friend"
-  }
+  "interests": ["Cooking", "Archery", "Reading"]
 }
 </character_update>"""
 
@@ -141,19 +138,16 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 
         assert isinstance(updates, PartialCharacter)
         assert updates.name == "Jane"
-        assert updates.relationships == {
-            "Bob": "Brother and rival",
-            "Alice": "Childhood friend",
-        }
+        assert updates.interests == ["Cooking", "Archery", "Reading"]
 
-    def test_extract_character_updates_with_key_locations(self, assistant):
-        """Test extracting updates with key_locations list."""
-        ai_response = """Your character explores many places!
+    def test_extract_character_updates_with_dislikes(self, assistant):
+        """Test extracting updates with dislikes list."""
+        ai_response = """Your character has strong opinions!
 
 <character_update>
 {
   "name": "Explorer",
-  "key_locations": ["Ancient Temple", "Hidden Valley", "Crystal Caves"]
+  "dislikes": ["Crowds", "Loud noise", "Rain"]
 }
 </character_update>"""
 
@@ -161,7 +155,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
 
         assert isinstance(updates, PartialCharacter)
         assert updates.name == "Explorer"
-        assert updates.key_locations == ["Ancient Temple", "Hidden Valley", "Crystal Caves"]
+        assert updates.dislikes == ["Crowds", "Loud noise", "Rain"]
 
     def test_extract_character_updates_filters_invalid_fields(self, assistant):
         """Test that invalid fields are filtered out from updates."""
@@ -308,12 +302,12 @@ I've created the character for you."""
         assert updates.tagline == ""
 
     def test_extract_character_updates_filters_empty_collections(self, assistant):
-        """Test that empty dicts and lists are allowed in PartialCharacter."""
+        """Test that empty lists are allowed in PartialCharacter."""
         ai_response = """<character_update>
 {
   "name": "Valid",
-  "relationships": {},
-  "key_locations": [],
+  "interests": [],
+  "dislikes": [],
   "personality": "Brave"
 }
 </character_update>"""
@@ -324,5 +318,5 @@ I've created the character for you."""
         assert isinstance(updates, PartialCharacter)
         assert updates.name == "Valid"
         assert updates.personality == "Brave"
-        assert updates.relationships == {}
-        assert updates.key_locations == []
+        assert updates.interests == []
+        assert updates.dislikes == []
