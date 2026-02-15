@@ -67,6 +67,8 @@ class SessionRepository:
         user_id: str = "anonymous",
         status: str | None = None,
         limit: int = 20,
+        offset: int = 0,
+        scenario_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve sessions for a user, optionally filtered by status."""
         with self.db_config.create_session() as db:
@@ -77,7 +79,12 @@ class SessionRepository:
             if status is not None:
                 query = query.filter(SessionDB.status == status)
 
-            rows = query.order_by(SessionDB.updated_at.desc()).limit(limit).all()
+            if scenario_ids is not None:
+                if len(scenario_ids) == 0:
+                    return []
+                query = query.filter(SessionDB.scenario_id.in_(list(scenario_ids)))
+
+            rows = query.order_by(SessionDB.updated_at.desc()).offset(offset).limit(limit).all()
             return [self._row_to_dict(r) for r in rows]
 
     def update_world_state(self, session_id: str, world_state: dict[str, Any]) -> bool:

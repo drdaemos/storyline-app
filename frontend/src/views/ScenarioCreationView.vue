@@ -260,11 +260,7 @@
           <div>
             <h3 class="text-md font-semibold mb-3 font-serif">Plot Hooks</h3>
             <div class="space-y-2">
-              <div
-                v-for="(hook, index) in scenarioData.plot_hooks"
-                :key="index"
-                class="flex gap-2"
-              >
+              <div v-for="(_, index) in scenarioData.plot_hooks" :key="index" class="flex gap-2">
                 <UInput
                   v-model="scenarioData.plot_hooks[index]"
                   :placeholder="`Tension ${index + 1}`"
@@ -296,11 +292,7 @@
           <div>
             <h3 class="text-md font-semibold mb-3 font-serif">Potential Directions</h3>
             <div class="space-y-2">
-              <div
-                v-for="(direction, index) in scenarioData.potential_directions"
-                :key="index"
-                class="flex gap-2"
-              >
+              <div v-for="(_, index) in scenarioData.potential_directions" :key="index" class="flex gap-2">
                 <UInput
                   v-model="scenarioData.potential_directions[index]"
                   :placeholder="`Direction ${index + 1}`"
@@ -368,11 +360,18 @@ import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { usePersonas } from '@/composables/usePersonas'
 import { useCharacterCreationAutoSave } from '@/composables/useCharacterCreationAutoSave'
-import type { PartialScenario, ChatMessage, ScenarioCreationRequest, PersonaSummary, Scenario } from '@/types'
+import type {
+  PartialScenario,
+  ChatMessage,
+  ScenarioCreationRequest,
+  PersonaSummary,
+  Scenario,
+} from '@/types'
 
 const router = useRouter()
 const route = useRoute()
-const { streamScenarioCreation, saveScenario, startSessionWithScenario, getCharacterInfo } = useApi()
+const { streamScenarioCreation, saveScenario, startSessionWithScenario, getCharacterInfo } =
+  useApi()
 const { settings } = useLocalSettings()
 const { personaOptions, personasLoading, fetchPersonas, personas } = usePersonas()
 
@@ -384,11 +383,30 @@ const messages = ref<ChatMessage[]>([])
 const isThinking = ref(false)
 const error = ref('')
 const saving = ref(false)
-const chatEndRef = ref<HTMLElement | null>(null)
 const selectedPersonaId = ref<string>('')
 const characterInfo = ref<{ name: string; tagline: string } | null>(null)
 
-const scenarioData = reactive<PartialScenario>({
+type EditableScenario = Required<
+  Pick<
+    PartialScenario,
+    | 'summary'
+    | 'intro_message'
+    | 'narrative_category'
+    | 'character_id'
+    | 'persona_id'
+    | 'location'
+    | 'time_context'
+    | 'atmosphere'
+    | 'plot_hooks'
+    | 'stakes'
+    | 'character_goals'
+    | 'potential_directions'
+    | 'suggested_persona_id'
+    | 'suggested_persona_reason'
+  >
+>
+
+const scenarioData = reactive<EditableScenario>({
   summary: '',
   intro_message: '',
   narrative_category: '',
@@ -407,11 +425,11 @@ const scenarioData = reactive<PartialScenario>({
 
 // Auto-save functionality (using separate localStorage keys for scenarios)
 const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } =
-  useCharacterCreationAutoSave(scenarioData as any, messages, 'scenario-creation')
+  useCharacterCreationAutoSave(scenarioData, messages, 'scenario-creation')
 
 // Build available personas list for API
 const availablePersonas = computed<PersonaSummary[]>(() => {
-  return personas.value.map(p => ({
+  return personas.value.map((p) => ({
     id: p.id,
     name: p.name,
     tagline: p.tagline || '',
@@ -438,11 +456,14 @@ onMounted(async () => {
 })
 
 // Watch for AI persona suggestions
-watch(() => scenarioData.suggested_persona_id, (newId) => {
-  if (newId && (!selectedPersonaId.value || selectedPersonaId.value === 'none')) {
-    selectedPersonaId.value = newId
+watch(
+  () => scenarioData.suggested_persona_id,
+  (newId) => {
+    if (newId && (!selectedPersonaId.value || selectedPersonaId.value === 'none')) {
+      selectedPersonaId.value = newId
+    }
   }
-})
+)
 
 // Update persona_id when selection changes
 watch(selectedPersonaId, (newId) => {
@@ -517,9 +538,12 @@ const sendMessage = async () => {
       user_message: message,
       current_scenario: { ...scenarioData },
       character_name: characterId.value,
-      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
+      persona_id:
+        selectedPersonaId.value && selectedPersonaId.value !== 'none'
+          ? selectedPersonaId.value
+          : null,
       available_personas: availablePersonas.value,
-      conversation_history: messages.value.map(msg => ({
+      conversation_history: messages.value.map((msg) => ({
         author: msg.author,
         content: msg.content,
         is_user: msg.isUser,
@@ -590,7 +614,10 @@ const saveAndReturnToCharacter = async () => {
       intro_message: scenarioData.intro_message || '',
       narrative_category: scenarioData.narrative_category || '',
       character_id: characterId.value,
-      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : undefined,
+      persona_id:
+        selectedPersonaId.value && selectedPersonaId.value !== 'none'
+          ? selectedPersonaId.value
+          : undefined,
       location: scenarioData.location,
       time_context: scenarioData.time_context,
       atmosphere: scenarioData.atmosphere,
@@ -625,7 +652,10 @@ const startSessionWithCurrentScenario = async () => {
       intro_message: scenarioData.intro_message || '',
       narrative_category: scenarioData.narrative_category || '',
       character_id: characterId.value,
-      persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : undefined,
+      persona_id:
+        selectedPersonaId.value && selectedPersonaId.value !== 'none'
+          ? selectedPersonaId.value
+          : undefined,
       location: scenarioData.location,
       time_context: scenarioData.time_context,
       atmosphere: scenarioData.atmosphere,

@@ -238,3 +238,30 @@ class TestScenarioRegistry:
         """Test health check method."""
         result = self.registry.health_check()
         assert isinstance(result, bool)
+
+    def test_get_scenario_ids_for_character_matches_npc_persona_and_legacy(self) -> None:
+        """Test scenario ID filtering by NPC IDs, persona ID, and legacy character_id."""
+        npc_id = self.registry.save_scenario(
+            scenario_data={**self.test_scenario_data, "summary": "NPC Match"},
+            character_ids=["char-1", "char-2"],
+            ruleset_id=self.test_ruleset_id,
+        )
+        persona_id = self.registry.save_scenario(
+            scenario_data={**self.test_scenario_data, "summary": "Persona Match", "persona_id": "char-1"},
+            character_ids=["char-9"],
+            ruleset_id=self.test_ruleset_id,
+        )
+        legacy_id = self.registry.save_scenario(
+            scenario_data={**self.test_scenario_data, "summary": "Legacy Match", "character_id": "char-1"},
+            character_ids=["char-8"],
+            ruleset_id=self.test_ruleset_id,
+        )
+        self.registry.save_scenario(
+            scenario_data={**self.test_scenario_data, "summary": "No Match"},
+            character_ids=["char-x"],
+            ruleset_id=self.test_ruleset_id,
+        )
+
+        matches = self.registry.get_scenario_ids_for_character("char-1")
+
+        assert matches == {npc_id, persona_id, legacy_id}

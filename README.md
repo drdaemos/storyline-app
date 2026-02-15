@@ -21,6 +21,11 @@ Run for development with hot reload:
 ./dev.sh
 ```
 
+## Local Auth Modes
+
+- Backend auth can be bypassed with `AUTH_ENABLED=false` (or `AUTH_BYPASS=true`), which uses the default user ID `anonymous`.
+- Frontend can bypass Clerk gating with `VITE_AUTH_BYPASS=true` (useful for local UI inspection).
+
 Run in production:
 
 ```

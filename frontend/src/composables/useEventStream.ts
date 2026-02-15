@@ -124,6 +124,9 @@ export function useEventStream() {
 
           // Create a mock EventSource object for compatibility
           const mockEventSource = {
+            CONNECTING: 0,
+            OPEN: 1,
+            CLOSED: 2,
             close: cleanup,
             readyState: 1,
             url: '/api/interact',
@@ -134,7 +137,7 @@ export function useEventStream() {
             onopen: null,
             onmessage: null,
             onerror: null,
-          } as EventSource
+          } as unknown as EventSource
 
           resolve(mockEventSource)
         })

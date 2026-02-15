@@ -120,10 +120,7 @@ class ChatHighlightParser extends CstParser {
     this.CONSUME(Chevron)
     this.CONSUME(Word)
     this.MANY(() => {
-      this.OR([
-        { ALT: () => this.CONSUME2(Word) },
-        { ALT: () => this.CONSUME(Punctuation) },
-      ])
+      this.OR([{ ALT: () => this.CONSUME2(Word) }, { ALT: () => this.CONSUME(Punctuation) }])
     })
     this.CONSUME2(Chevron)
   })

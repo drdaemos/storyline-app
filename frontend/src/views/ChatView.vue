@@ -140,8 +140,12 @@ import { useLocalSettings } from '@/composables/useLocalSettings'
 import { getThinkingDescriptor } from '@/utils/formatters'
 import ChatInput from '@/components/ChatInput.vue'
 import SummaryModal from '@/components/SummaryModal.vue'
-import type { ChatMessage as ChatMessageType, InteractRequest, SessionDetails, SessionPersonaResponse } from '@/types'
-import { useChatHighlight } from '@/composables/useChatHighlight.ts'
+import type {
+  ChatMessage as ChatMessageType,
+  InteractRequest,
+  SessionDetails,
+  SessionPersonaResponse,
+} from '@/types'
 
 interface Props {
   characterId: string
@@ -151,7 +155,6 @@ interface Props {
 const props = defineProps<Props>()
 
 const router = useRouter()
-const { highlight } = useChatHighlight()
 const { settings } = useLocalSettings()
 const {
   isConnected,

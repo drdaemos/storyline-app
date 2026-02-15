@@ -1,5 +1,5 @@
 <template>
-  <UModal v-model:open="isOpen" :ui="{ width: 'max-w-3xl' }">
+  <UModal v-model:open="isOpen">
     <template #content>
       <UCard>
         <template #header>
@@ -114,7 +114,6 @@ const loadSummary = async () => {
     summaryText.value = data.summary_text
     hasSummary.value = data.has_summary
   } catch (err) {
-    console.error('Failed to load summary:', err)
     error.value = err instanceof Error ? err.message : 'Failed to load summary'
   } finally {
     loading.value = false
@@ -122,9 +121,13 @@ const loadSummary = async () => {
 }
 
 // Load summary when modal is opened
-watch(() => props.show, (newValue) => {
-  if (newValue) {
-    loadSummary()
-  }
-}, { immediate: true })
+watch(
+  () => props.show,
+  (newValue) => {
+    if (newValue) {
+      loadSummary()
+    }
+  },
+  { immediate: true }
+)
 </script>

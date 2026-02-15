@@ -75,6 +75,20 @@ The application uses Vite with the following configuration:
 - **TypeScript**: Full TypeScript support with strict mode
 - **Vue 3**: Composition API with `<script setup>` syntax
 
+### Auth Bypass Mode (for local UI inspection)
+
+To run frontend without Clerk sign-in (while backend auth is disabled), set:
+
+```bash
+VITE_AUTH_BYPASS=true
+```
+
+When bypass is enabled:
+
+- Clerk plugin is not initialized.
+- App routes render without `SignedIn` gating.
+- API requests are sent without auth token.
+
 ## Key Technologies
 
 - **Vue 3**: Progressive JavaScript framework

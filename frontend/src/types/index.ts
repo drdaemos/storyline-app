@@ -77,6 +77,7 @@ export interface LocalSettings {
   aiProcessor: string
   backupProcessor: string
   lastSelectedCharacter?: string
+  selectedPersonaId?: string
 }
 
 export interface SessionMessage {
@@ -98,7 +99,10 @@ export interface Scenario {
   intro_message: string
   narrative_category: string
   character_id?: string
+  character_ids?: string[]
   persona_id?: string
+  ruleset_id?: string
+  lore_ids?: string[]
   location?: string
   time_context?: string
   atmosphere?: string
@@ -115,7 +119,10 @@ export interface PartialScenario {
   intro_message?: string
   narrative_category?: string
   character_id?: string
+  character_ids?: string[]
   persona_id?: string
+  ruleset_id?: string
+  lore_ids?: string[]
   location?: string
   time_context?: string
   atmosphere?: string
@@ -197,6 +204,7 @@ export interface StartSessionRequest {
   character_name: string
   intro_message?: string
   scenario_id?: string
+  persona_id?: string | null
   processor_type?: string
   backup_processor_type?: string
 }

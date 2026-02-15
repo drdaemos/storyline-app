@@ -16,7 +16,7 @@ export function usePersonas() {
         personas.value = personaList
         personaOptions.value = [
           { label: 'None', id: 'none' },
-          ...personaList.map(p => ({ label: `${p.name} - ${p.tagline}`, id: p.id }))
+          ...personaList.map((p) => ({ label: `${p.name} - ${p.tagline}`, id: p.id })),
         ]
       } else {
         console.error('Failed to fetch personas')
@@ -36,6 +36,6 @@ export function usePersonas() {
     personaOptions,
     personas,
     personasLoading,
-    fetchPersonas
+    fetchPersonas,
   }
 }

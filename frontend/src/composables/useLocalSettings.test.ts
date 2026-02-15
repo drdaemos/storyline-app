@@ -24,7 +24,7 @@ describe('useLocalSettings', () => {
     instance1.settings.value.aiProcessor = 'claude-sonnet'
 
     // Wait for Vue's reactivity to propagate
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     // instance2 should see the change
     expect(instance2.settings.value.aiProcessor).toBe('claude-sonnet')
@@ -38,7 +38,7 @@ describe('useLocalSettings', () => {
     instance.settings.value.backupProcessor = 'claude-haiku'
 
     // Wait for the watcher to trigger
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
 
     // Check localStorage
     expect(localStorage.getItem('storyline_ai_processor')).toBe('gpt-5.2')

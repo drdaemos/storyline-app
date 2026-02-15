@@ -13,8 +13,15 @@ from fastapi import Depends, HTTPException, Request, status
 
 
 # Check if authentication is enabled
+def is_auth_bypass_enabled() -> bool:
+    """Check if auth bypass mode is enabled for local/dev usage."""
+    return os.getenv("AUTH_BYPASS", "false").lower() in ("true", "1", "yes")
+
+
 def is_auth_enabled() -> bool:
     """Check if authentication is enabled via AUTH_ENABLED environment variable."""
+    if is_auth_bypass_enabled():
+        return False
     return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
 
 

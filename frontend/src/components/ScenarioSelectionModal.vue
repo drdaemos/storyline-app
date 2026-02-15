@@ -229,7 +229,7 @@ const error = ref<string | null>(null)
 const isGeneratingScenarios = ref<boolean>(false)
 
 const selectedMoodsArray = computed(() => {
-  return Object.keys(moodSelections.value).filter(key => moodSelections.value[key])
+  return Object.keys(moodSelections.value).filter((key) => moodSelections.value[key])
 })
 
 const moodOptions = [
@@ -309,7 +309,10 @@ const generateScenariosForMood = async () => {
         character_name: props.characterName,
         count: 3,
         mood: selectedMoodsArray.value.join(', '),
-        persona_id: selectedPersonaId.value && selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
+        persona_id:
+          selectedPersonaId.value && selectedPersonaId.value !== 'none'
+            ? selectedPersonaId.value
+            : null,
         processor_type: settings.value.aiProcessor,
         backup_processor_type: settings.value.backupProcessor,
       },
@@ -362,7 +365,7 @@ const goBackToMood = () => {
   selectedScenario.value = null
   expandedScenario.value = null
   // Reset all mood selections
-  Object.keys(moodSelections.value).forEach(key => {
+  Object.keys(moodSelections.value).forEach((key) => {
     moodSelections.value[key] = false
   })
   error.value = null
@@ -395,7 +398,7 @@ const startSession = async () => {
 const resetModal = () => {
   currentStep.value = 'choice'
   // Reset all mood selections
-  Object.keys(moodSelections.value).forEach(key => {
+  Object.keys(moodSelections.value).forEach((key) => {
     moodSelections.value[key] = false
   })
   scenarios.value = []

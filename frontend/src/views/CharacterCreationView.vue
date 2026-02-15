@@ -108,7 +108,6 @@
             </div>
           </div>
 
-          <div ref="chatEndRef"></div>
         </div>
 
         <!-- Chat Input -->
@@ -213,11 +212,7 @@
               <h3 class="text-md font-semibold mb-3 font-serif">Interests</h3>
               <UFormField>
                 <div class="space-y-4">
-                  <div
-                    v-for="(interest, index) in characterData.interests"
-                    :key="index"
-                    class="flex gap-2"
-                  >
+                  <div v-for="(_, index) in characterData.interests" :key="index" class="flex gap-2">
                     <UInput
                       v-model="characterData.interests[index]"
                       :placeholder="`Interest ${index + 1}`"
@@ -251,11 +246,7 @@
               <h3 class="text-md font-semibold mb-3 font-serif">Dislikes</h3>
               <UFormField>
                 <div class="space-y-4">
-                  <div
-                    v-for="(dislike, index) in characterData.dislikes"
-                    :key="index"
-                    class="flex gap-2"
-                  >
+                  <div v-for="(_, index) in characterData.dislikes" :key="index" class="flex gap-2">
                     <UInput
                       v-model="characterData.dislikes[index]"
                       :placeholder="`Dislike ${index + 1}`"
@@ -289,11 +280,7 @@
               <h3 class="text-md font-semibold mb-3 font-serif">Desires</h3>
               <UFormField>
                 <div class="space-y-4">
-                  <div
-                    v-for="(desire, index) in characterData.desires"
-                    :key="index"
-                    class="flex gap-2"
-                  >
+                  <div v-for="(_, index) in characterData.desires" :key="index" class="flex gap-2">
                     <UInput
                       v-model="characterData.desires[index]"
                       :placeholder="`Desire ${index + 1}`"
@@ -327,11 +314,7 @@
               <h3 class="text-md font-semibold mb-3 font-serif">Kinks</h3>
               <UFormField>
                 <div class="space-y-4">
-                  <div
-                    v-for="(kink, index) in characterData.kinks"
-                    :key="index"
-                    class="flex gap-2"
-                  >
+                  <div v-for="(_, index) in characterData.kinks" :key="index" class="flex gap-2">
                     <UInput
                       v-model="characterData.kinks[index]"
                       :placeholder="`Kink ${index + 1}`"
@@ -432,11 +415,7 @@
                 <h3 class="text-md font-semibold mb-3 font-serif">Key locations</h3>
                 <UFormField>
                   <div class="space-y-4">
-                    <div
-                      v-for="(location, index) in characterData.key_locations"
-                      :key="index"
-                      class="flex gap-2"
-                    >
+                    <div v-for="(_, index) in characterData.key_locations" :key="index" class="flex gap-2">
                       <UInput
                         v-model="characterData.key_locations[index]"
                         :placeholder="`Location ${index + 1}`"
@@ -503,7 +482,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, nextTick, watch, onMounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
@@ -527,14 +506,25 @@ const messages = ref<ChatMessage[]>([])
 const isThinking = ref(false)
 const error = ref('')
 const saving = ref(false)
-const chatEndRef = ref<HTMLElement | null>(null)
 
 interface RelationshipItem {
   name: string
   description: string
 }
 
-const characterData = reactive<Partial<Character>>({
+type EditableCharacter = Character & {
+  personality: string
+  appearance: string
+  relationships: Record<string, string>
+  key_locations: string[]
+  setting_description: string
+  interests: string[]
+  dislikes: string[]
+  desires: string[]
+  kinks: string[]
+}
+
+const characterData = reactive<EditableCharacter>({
   name: '',
   tagline: '',
   backstory: '',
@@ -556,13 +546,14 @@ const autoSaveEnabled = !isEditMode.value
 const autoSaveFunctions = autoSaveEnabled
   ? useCharacterCreationAutoSave(characterData, messages)
   : {
-      autoSaveStatus: ref<'saved' | 'idle'>('idle'),
+      autoSaveStatus: ref<'saved' | 'saving' | 'idle'>('idle'),
       saveToLocalStorage: () => {},
       loadFromLocalStorage: () => false,
-      clearLocalStorage: () => {}
+      clearLocalStorage: () => {},
     }
 
-const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } = autoSaveFunctions
+const { autoSaveStatus, saveToLocalStorage, loadFromLocalStorage, clearLocalStorage } =
+  autoSaveFunctions
 
 // Load saved state or character data on mount
 onMounted(async () => {
@@ -589,10 +580,12 @@ onMounted(async () => {
 
       // Populate relationshipsList from relationships object
       if (characterInfo.relationships) {
-        relationshipsList.value = Object.entries(characterInfo.relationships).map(([name, description]) => ({
-          name,
-          description: description as string,
-        }))
+        relationshipsList.value = Object.entries(characterInfo.relationships).map(
+          ([name, description]) => ({
+            name,
+            description: description as string,
+          })
+        )
       }
     } catch (err) {
       error.value = (err as any)?.message || 'Failed to load character data'
@@ -608,7 +601,11 @@ const resetCharacterCreation = async () => {
   // Different behavior for edit mode vs create mode
   if (isEditMode.value && props.characterId) {
     // In edit mode: reload from server
-    if (!confirm('Are you sure you want to discard your changes? This will reload the character from the server.')) {
+    if (
+      !confirm(
+        'Are you sure you want to discard your changes? This will reload the character from the server.'
+      )
+    ) {
       return
     }
 
@@ -633,10 +630,12 @@ const resetCharacterCreation = async () => {
 
       // Reload relationshipsList
       if (characterInfo.relationships) {
-        relationshipsList.value = Object.entries(characterInfo.relationships).map(([name, description]) => ({
-          name,
-          description: description as string,
-        }))
+        relationshipsList.value = Object.entries(characterInfo.relationships).map(
+          ([name, description]) => ({
+            name,
+            description: description as string,
+          })
+        )
       } else {
         relationshipsList.value = []
       }
@@ -686,30 +685,38 @@ const resetCharacterCreation = async () => {
 }
 
 // Watch for relationships changes and sync with characterData
-watch(relationshipsList, (newList) => {
-  const relationshipsObj: Record<string, string> = {}
-  newList.forEach((rel) => {
-    if (rel.name.trim() && rel.description.trim()) {
-      relationshipsObj[rel.name.trim()] = rel.description.trim()
-    }
-  })
-  characterData.relationships = relationshipsObj
-}, { deep: true })
+watch(
+  relationshipsList,
+  (newList) => {
+    const relationshipsObj: Record<string, string> = {}
+    newList.forEach((rel) => {
+      if (rel.name.trim() && rel.description.trim()) {
+        relationshipsObj[rel.name.trim()] = rel.description.trim()
+      }
+    })
+    characterData.relationships = relationshipsObj
+  },
+  { deep: true }
+)
 
 // Watch for characterData.relationships changes from AI and sync with list
-watch(() => characterData.relationships, (newRelationships) => {
-  if (newRelationships) {
-    const newList = Object.entries(newRelationships).map(([name, description]) => ({
-      name,
-      description,
-    }))
+watch(
+  () => characterData.relationships,
+  (newRelationships) => {
+    if (newRelationships) {
+      const newList = Object.entries(newRelationships).map(([name, description]) => ({
+        name,
+        description,
+      }))
 
-    // Only update if different to avoid infinite loop
-    if (JSON.stringify(newList) !== JSON.stringify(relationshipsList.value)) {
-      relationshipsList.value = newList
+      // Only update if different to avoid infinite loop
+      if (JSON.stringify(newList) !== JSON.stringify(relationshipsList.value)) {
+        relationshipsList.value = newList
+      }
     }
-  }
-}, { deep: true })
+  },
+  { deep: true }
+)
 
 const isCharacterValid = computed(() => {
   return true
@@ -717,12 +724,6 @@ const isCharacterValid = computed(() => {
 
 const navigateBack = () => {
   router.push('/')
-}
-
-const scrollToBottom = () => {
-  nextTick(() => {
-    chatEndRef.value?.scrollIntoView({ behavior: 'smooth' })
-  })
 }
 
 const sendMessage = async () => {
@@ -747,10 +748,10 @@ const sendMessage = async () => {
     const payload: CharacterCreationRequest = {
       user_message: message,
       current_character: characterData,
-      conversation_history: messages.value.map(msg => ({
+      conversation_history: messages.value.map((msg) => ({
         author: msg.author,
         content: msg.content,
-        is_user: msg.isUser
+        is_user: msg.isUser,
       })),
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
@@ -841,14 +842,15 @@ const saveCharacter = async (isPersona: boolean = false) => {
       router.push('/')
     }
   } catch (err) {
-    error.value = (err as any)?.message || `Failed to ${isEditMode.value ? 'update' : 'create'} character`
+    error.value =
+      (err as any)?.message || `Failed to ${isEditMode.value ? 'update' : 'create'} character`
   } finally {
     saving.value = false
   }
 }
 
 const addRelationship = () => {
-  relationshipsList.value.push({ name: '', description: ''})
+  relationshipsList.value.push({ name: '', description: '' })
 }
 
 const removeRelationship = (index: number) => {

@@ -131,6 +131,42 @@ class ScenarioRegistry:
             )
             return [self._row_to_dict(s) for s in scenarios]
 
+    def get_scenario_ids_for_character(
+        self,
+        character_id: str,
+        user_id: str = "anonymous",
+    ) -> set[str]:
+        """
+        Return scenario IDs where the character participates.
+
+        Matches both NPC participation (`character_ids`) and persona usage (`persona_id`).
+        Also supports legacy single-character scenario payloads (`character_id`).
+        """
+        with self.db_config.create_session() as session:
+            scenarios = (
+                session.query(Scenario)
+                .filter(or_(Scenario.user_id == user_id, Scenario.user_id == "anonymous"))
+                .all()
+            )
+
+            matching_ids: set[str] = set()
+            for scenario in scenarios:
+                scenario_data = scenario.scenario_data or {}
+                scenario_character_ids = set(scenario.character_ids or [])
+                scenario_character_ids.update(scenario_data.get("character_ids") or [])
+
+                persona_id = scenario_data.get("persona_id")
+                legacy_character_id = scenario_data.get("character_id")
+
+                if (
+                    character_id in scenario_character_ids
+                    or persona_id == character_id
+                    or legacy_character_id == character_id
+                ):
+                    matching_ids.add(scenario.id)
+
+            return matching_ids
+
     def delete_scenario(self, scenario_id: str, user_id: str = "anonymous") -> bool:
         """Delete a scenario by ID."""
         with self.db_config.create_session() as session:

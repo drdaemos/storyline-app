@@ -506,8 +506,12 @@ export function useApi() {
     })
   }
 
-  const listScenariosForCharacter = async (characterName: string): Promise<ListScenariosResponse> => {
-    return makeRequest<ListScenariosResponse>(`/api/scenarios/list/${encodeURIComponent(characterName)}`)
+  const listScenariosForCharacter = async (
+    characterName: string
+  ): Promise<ListScenariosResponse> => {
+    return makeRequest<ListScenariosResponse>(
+      `/api/scenarios/list/${encodeURIComponent(characterName)}`
+    )
   }
 
   const getScenarioDetail = async (scenarioId: string): Promise<Scenario> => {

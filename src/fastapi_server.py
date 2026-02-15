@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -641,47 +641,180 @@ async def delete_world_lore(lore_id: str, user_id: UserIdDep) -> dict[str, str]:
 # ───────────────────────────── Sessions ───────────────────────────────
 
 
+def _build_session_info_list(
+    user_id: str,
+    allowed_scenario_ids: set[str] | None = None,
+) -> list[SessionInfo]:
+    """Build SessionInfo rows, optionally filtering to an allowed scenario set."""
+    mem = ConversationMemory()
+    sessions: list[SessionInfo] = []
+    scenario_name_cache: dict[str, str | None] = {}
+
+    user_sessions = mem.get_user_sessions(user_id, limit=50)
+
+    for session_info in user_sessions:
+        session_id = session_info["session_id"]
+        session_db = session_repository.get_session(session_id, user_id)
+        scenario_id = session_db.get("scenario_id") if session_db else None
+
+        if not scenario_id:
+            scenario_id = mem.get_session_scenario_id(session_id, user_id)
+
+        if allowed_scenario_ids is not None:
+            if not scenario_id or scenario_id not in allowed_scenario_ids:
+                continue
+
+        last_character_response = None
+        try:
+            recent_messages = mem.get_recent_messages(session_id, user_id, limit=1)
+            last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
+        except Exception:
+            last_character_response = None
+
+        scenario_name = None
+        if scenario_id:
+            if scenario_id not in scenario_name_cache:
+                scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
+                scenario_name_cache[scenario_id] = (
+                    scenario_data["scenario_data"].get("summary", "Untitled")
+                    if scenario_data
+                    else None
+                )
+            scenario_name = scenario_name_cache[scenario_id]
+
+        turn_count = session_db.get("turn_counter") if session_db else None
+
+        sessions.append(
+            SessionInfo(
+                session_id=session_id,
+                character_name=scenario_name or "Session",
+                message_count=session_info["message_count"],
+                last_message_time=session_info["last_message_time"],
+                last_character_response=last_character_response,
+                scenario_name=scenario_name,
+                turn_count=turn_count,
+            )
+        )
+
+    return sessions
+
+
+def _normalize_session_status(status: str | None) -> str | None:
+    """Normalize session status query params and validate supported values."""
+    if status is None:
+        return None
+
+    normalized = status.strip().lower()
+    if normalized == "complete":
+        normalized = "completed"
+
+    if normalized not in {"active", "paused", "completed"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid status. Allowed values: active, paused, completed",
+        )
+
+    return normalized
+
+
+def _build_character_session_info_list(
+    user_id: str,
+    scenario_ids: set[str],
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[SessionInfo]:
+    """Build character-scoped session list using DB-level filtering and pagination."""
+    mem = ConversationMemory()
+    sessions: list[SessionInfo] = []
+    scenario_name_cache: dict[str, str | None] = {}
+
+    session_rows = session_repository.get_user_sessions(
+        user_id=user_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+        scenario_ids=scenario_ids,
+    )
+
+    for session_row in session_rows:
+        session_id = session_row["id"]
+        scenario_id = session_row.get("scenario_id")
+
+        session_details = mem.get_session_details(session_id, user_id)
+        message_count = session_details["message_count"] if session_details else 0
+        last_message_time = session_details["last_message_time"] if session_details else session_row["updated_at"]
+
+        last_character_response = None
+        try:
+            recent_messages = mem.get_recent_messages(session_id, user_id, limit=1)
+            last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
+        except Exception:
+            last_character_response = None
+
+        scenario_name = None
+        if scenario_id:
+            if scenario_id not in scenario_name_cache:
+                scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
+                scenario_name_cache[scenario_id] = (
+                    scenario_data["scenario_data"].get("summary", "Untitled")
+                    if scenario_data
+                    else None
+                )
+            scenario_name = scenario_name_cache[scenario_id]
+
+        sessions.append(
+            SessionInfo(
+                session_id=session_id,
+                character_name=scenario_name or "Session",
+                message_count=message_count,
+                last_message_time=last_message_time,
+                last_character_response=last_character_response,
+                scenario_name=scenario_name,
+                turn_count=session_row.get("turn_counter"),
+            )
+        )
+
+    return sessions
+
+
+@app.get("/api/characters/{character_id}/sessions")
+async def list_sessions_for_character(
+    character_id: str,
+    user_id: UserIdDep,
+    status: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[SessionInfo]:
+    """List sessions that include the given character (as NPC or persona)."""
+    try:
+        character_info = character_loader.get_character_info(character_id, user_id)
+        if not character_info:
+            raise HTTPException(status_code=404, detail=f"Character '{character_id}' not found")
+
+        normalized_status = _normalize_session_status(status)
+        scenario_ids = scenario_registry.get_scenario_ids_for_character(character_id, user_id)
+        if len(scenario_ids) == 0:
+            return []
+
+        return _build_character_session_info_list(
+            user_id=user_id,
+            scenario_ids=scenario_ids,
+            status=normalized_status,
+            limit=limit,
+            offset=offset,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list character sessions: {str(e)}") from e
+
+
 @app.get("/api/sessions")
 async def list_sessions(user_id: UserIdDep) -> list[SessionInfo]:
     """List all sessions from conversation memory."""
     try:
-        mem = ConversationMemory()
-        sessions: list[SessionInfo] = []
-
-        user_sessions = mem.get_user_sessions(user_id, limit=50)
-
-        for session_info in user_sessions:
-            last_character_response = None
-            try:
-                recent_messages = mem.get_recent_messages(session_info["session_id"], user_id, limit=1)
-                last_character_response = recent_messages[0]["content"] if len(recent_messages) > 0 else None
-            except Exception:
-                last_character_response = None
-
-            scenario_id = mem.get_session_scenario_id(session_info["session_id"], user_id)
-            scenario_name = None
-            if scenario_id:
-                scenario_data = scenario_registry.get_scenario(scenario_id, user_id)
-                if scenario_data:
-                    scenario_name = scenario_data["scenario_data"].get("summary", "Untitled")
-
-            # Get turn count from session state if available
-            turn_count = None
-            session_db = session_repository.get_session(session_info["session_id"], user_id)
-            if session_db:
-                turn_count = session_db.get("turn_counter")
-
-            sessions.append(
-                SessionInfo(
-                    session_id=session_info["session_id"],
-                    character_name=scenario_name or "Session",
-                    message_count=session_info["message_count"],
-                    last_message_time=session_info["last_message_time"],
-                    last_character_response=last_character_response,
-                    scenario_name=scenario_name,
-                    turn_count=turn_count,
-                )
-            )
+        sessions = _build_session_info_list(user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list sessions: {str(e)}") from e
 

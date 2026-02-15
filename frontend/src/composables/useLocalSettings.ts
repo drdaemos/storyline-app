@@ -7,45 +7,55 @@ const defaultSettings: LocalSettings = {
   aiProcessor: 'google-flash',
   backupProcessor: 'deepseek-v32',
   lastSelectedCharacter: undefined,
+  selectedPersonaId: undefined,
 }
 
-// Create a singleton ref that's shared across all component instances
 const settings: Ref<LocalSettings> = ref({ ...defaultSettings })
 
-export function useLocalSettings() {
-
-  const loadSettings = () => {
-    try {
-      const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
-      const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
-      const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
-
-      settings.value = {
-        aiProcessor: aiProcessor || defaultSettings.aiProcessor,
-        backupProcessor: backupProcessor || defaultSettings.backupProcessor,
-        lastSelectedCharacter: lastSelectedCharacter || undefined,
-      }
-    } catch (error) {
-      console.warn('Failed to load settings from localStorage, using defaults:', error)
-      settings.value = { ...defaultSettings }
+const loadSettingsFromStorage = (): LocalSettings => {
+  try {
+    return {
+      aiProcessor:
+        localStorage.getItem(`${STORAGE_PREFIX}ai_processor`) || defaultSettings.aiProcessor,
+      backupProcessor:
+        localStorage.getItem(`${STORAGE_PREFIX}backup_processor`) ||
+        defaultSettings.backupProcessor,
+      lastSelectedCharacter:
+        localStorage.getItem(`${STORAGE_PREFIX}last_character`) ||
+        defaultSettings.lastSelectedCharacter,
+      selectedPersonaId:
+        localStorage.getItem(`${STORAGE_PREFIX}selected_persona`) ||
+        defaultSettings.selectedPersonaId,
     }
+  } catch {
+    return { ...defaultSettings }
   }
+}
 
-  const saveSettings = () => {
-    try {
-      localStorage.removeItem(`{STORAGE_PREFIX}last_character`)
-      localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
-      localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
+const persistSettings = () => {
+  try {
+    localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
+    localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
 
-      if (settings.value.lastSelectedCharacter) {
-        localStorage.setItem(
-          `${STORAGE_PREFIX}last_character`,
-          settings.value.lastSelectedCharacter
-        )
-      }
-    } catch (error) {
-      console.error('Failed to save settings to localStorage:', error)
+    if (settings.value.lastSelectedCharacter) {
+      localStorage.setItem(`${STORAGE_PREFIX}last_character`, settings.value.lastSelectedCharacter)
+    } else {
+      localStorage.removeItem(`${STORAGE_PREFIX}last_character`)
     }
+
+    if (settings.value.selectedPersonaId) {
+      localStorage.setItem(`${STORAGE_PREFIX}selected_persona`, settings.value.selectedPersonaId)
+    } else {
+      localStorage.removeItem(`${STORAGE_PREFIX}selected_persona`)
+    }
+  } catch {
+    // Ignore storage write failures and keep in-memory settings.
+  }
+}
+
+export function useLocalSettings() {
+  const loadSettings = () => {
+    settings.value = loadSettingsFromStorage()
   }
 
   const updateSetting = <K extends keyof LocalSettings>(key: K, value: LocalSettings[K]) => {
@@ -53,10 +63,15 @@ export function useLocalSettings() {
   }
 
   const clearSettings = () => {
+    settings.value = { ...defaultSettings }
+
     try {
-      settings.value = { ...defaultSettings }
-    } catch (error) {
-      console.error('Failed to clear settings from localStorage:', error)
+      localStorage.removeItem(`${STORAGE_PREFIX}ai_processor`)
+      localStorage.removeItem(`${STORAGE_PREFIX}backup_processor`)
+      localStorage.removeItem(`${STORAGE_PREFIX}last_character`)
+      localStorage.removeItem(`${STORAGE_PREFIX}selected_persona`)
+    } catch {
+      // Ignore storage clear failures.
     }
   }
 
@@ -68,42 +83,17 @@ export function useLocalSettings() {
   }
 }
 
-// Initialize settings and set up watchers once at module level
 let initialized = false
 if (!initialized) {
-  // Watch for changes and auto-save
-  watch(settings, () => {
-    try {
-      localStorage.removeItem(`{STORAGE_PREFIX}last_character`)
-      localStorage.setItem(`${STORAGE_PREFIX}ai_processor`, settings.value.aiProcessor)
-      localStorage.setItem(`${STORAGE_PREFIX}backup_processor`, settings.value.backupProcessor)
+  settings.value = loadSettingsFromStorage()
 
-      if (settings.value.lastSelectedCharacter) {
-        localStorage.setItem(
-          `${STORAGE_PREFIX}last_character`,
-          settings.value.lastSelectedCharacter
-        )
-      }
-    } catch (error) {
-      console.error('Failed to save settings to localStorage:', error)
-    }
-  }, { deep: true })
-
-  // Load settings on initialization
-  try {
-    const aiProcessor = localStorage.getItem(`${STORAGE_PREFIX}ai_processor`)
-    const backupProcessor = localStorage.getItem(`${STORAGE_PREFIX}backup_processor`)
-    const lastSelectedCharacter = localStorage.getItem(`${STORAGE_PREFIX}last_character`)
-
-    settings.value = {
-      aiProcessor: aiProcessor || defaultSettings.aiProcessor,
-      backupProcessor: backupProcessor || defaultSettings.backupProcessor,
-      lastSelectedCharacter: lastSelectedCharacter || undefined,
-    }
-  } catch (error) {
-    console.warn('Failed to load settings from localStorage, using defaults:', error)
-    settings.value = { ...defaultSettings }
-  }
+  watch(
+    settings,
+    () => {
+      persistSettings()
+    },
+    { deep: true }
+  )
 
   initialized = true
 }

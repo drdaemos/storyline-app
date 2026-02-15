@@ -122,6 +122,113 @@ class TestFastAPIEndpoints:
             assert "last_message_time" in session
             assert "last_character_response" in session
 
+    @patch("src.fastapi_server.session_repository")
+    @patch("src.fastapi_server.scenario_registry")
+    @patch("src.fastapi_server.ConversationMemory")
+    @patch("src.fastapi_server.character_loader")
+    def test_list_character_sessions_filtered(
+        self,
+        mock_loader,
+        mock_memory_cls,
+        mock_scenario_registry,
+        mock_session_repo,
+        client,
+        mock_character,
+    ):
+        """Test listing only sessions linked to a specific character."""
+        mock_loader.get_character_info.return_value = mock_character
+        mock_scenario_registry.get_scenario_ids_for_character.return_value = {"sc-1"}
+        mock_scenario_registry.get_scenario.side_effect = lambda scenario_id, _user_id: (
+            {"scenario_data": {"summary": "Linked Scenario"}} if scenario_id == "sc-1" else None
+        )
+
+        mock_memory = mock_memory_cls.return_value
+        mock_memory.get_session_details.side_effect = lambda session_id, _user_id: (
+            {
+                "session_id": session_id,
+                "message_count": 4,
+                "first_message_time": "2025-01-10T09:30:00",
+                "last_message_time": "2025-01-10T10:00:00",
+            }
+            if session_id == "sess-1"
+            else None
+        )
+        mock_memory.get_recent_messages.side_effect = lambda session_id, _user_id, limit=1: [
+            {"content": f"response-{session_id}"}
+        ]
+        mock_session_repo.get_user_sessions.return_value = [
+            {
+                "id": "sess-1",
+                "scenario_id": "sc-1",
+                "turn_counter": 3,
+                "updated_at": "2025-01-10T10:00:00",
+            }
+        ]
+
+        response = client.get("/api/characters/char-1/sessions")
+        assert response.status_code == 200
+
+        sessions = response.json()
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "sess-1"
+        assert sessions[0]["scenario_name"] == "Linked Scenario"
+        assert sessions[0]["turn_count"] == 3
+        mock_session_repo.get_user_sessions.assert_called_once_with(
+            user_id="anonymous",
+            status=None,
+            limit=20,
+            offset=0,
+            scenario_ids={"sc-1"},
+        )
+
+    @patch("src.fastapi_server.session_repository")
+    @patch("src.fastapi_server.scenario_registry")
+    @patch("src.fastapi_server.ConversationMemory")
+    @patch("src.fastapi_server.character_loader")
+    def test_list_character_sessions_forwards_pagination_and_status(
+        self,
+        mock_loader,
+        mock_memory_cls,
+        mock_scenario_registry,
+        mock_session_repo,
+        client,
+        mock_character,
+    ):
+        """Test that status/limit/offset query params are forwarded to repository filtering."""
+        mock_loader.get_character_info.return_value = mock_character
+        mock_scenario_registry.get_scenario_ids_for_character.return_value = {"sc-1"}
+        mock_scenario_registry.get_scenario.return_value = {"scenario_data": {"summary": "Linked Scenario"}}
+        mock_memory = mock_memory_cls.return_value
+        mock_memory.get_session_details.return_value = None
+        mock_memory.get_recent_messages.return_value = []
+        mock_session_repo.get_user_sessions.return_value = []
+
+        response = client.get("/api/characters/char-1/sessions?status=active&limit=5&offset=2")
+        assert response.status_code == 200
+        mock_session_repo.get_user_sessions.assert_called_once_with(
+            user_id="anonymous",
+            status="active",
+            limit=5,
+            offset=2,
+            scenario_ids={"sc-1"},
+        )
+
+    @patch("src.fastapi_server.character_loader")
+    def test_list_character_sessions_invalid_status(self, mock_loader, client, mock_character):
+        """Test character-scoped sessions with invalid status query value."""
+        mock_loader.get_character_info.return_value = mock_character
+
+        response = client.get("/api/characters/char-1/sessions?status=archived")
+        assert response.status_code == 400
+
+    @patch("src.fastapi_server.character_loader")
+    def test_list_character_sessions_not_found(self, mock_loader, client):
+        """Test character-scoped sessions for non-existent character."""
+        mock_loader.get_character_info.return_value = None
+
+        response = client.get("/api/characters/non-existent/sessions")
+        assert response.status_code == 404
+
     def test_clear_nonexistent_session(self, client):
         """Test clearing a session that doesn't exist."""
         response = client.delete("/api/sessions/nonexistent-session")

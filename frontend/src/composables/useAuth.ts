@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { useAuth as useClerkAuth } from '@clerk/vue'
 
 /**
@@ -5,6 +6,21 @@ import { useAuth as useClerkAuth } from '@clerk/vue'
  * Provides access to the current user's JWT token for API requests.
  */
 export function useAuth() {
+  const authBypass = ['true', '1', 'yes'].includes(
+    String(import.meta.env.VITE_AUTH_BYPASS || '').toLowerCase()
+  )
+
+  if (authBypass) {
+    const isSignedIn = ref(true)
+    const isLoaded = ref(true)
+
+    return {
+      getAuthToken: async (): Promise<string | null> => null,
+      isSignedIn,
+      isLoaded,
+    }
+  }
+
   const { getToken, isSignedIn, isLoaded } = useClerkAuth()
 
   /**

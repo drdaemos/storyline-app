@@ -101,7 +101,7 @@ const parsedContent = computed(() => {
 const messageParts = computed(() => {
   return [
     {
-      type: 'text',
+      type: 'text' as const,
       text: parsedContent.value.visible,
     },
   ]

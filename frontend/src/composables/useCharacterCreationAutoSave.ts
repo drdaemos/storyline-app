@@ -1,51 +1,54 @@
 import { ref, watch, type Ref } from 'vue'
-import type { Character, ChatMessage } from '@/types'
+import type { ChatMessage } from '@/types'
 
 const STORAGE_KEY_CHARACTER = 'character-creation-draft'
 const STORAGE_KEY_MESSAGES = 'character-creation-messages'
 
-export function useCharacterCreationAutoSave(
-  characterData: Partial<Character>,
+type AutoSaveStatus = 'saved' | 'saving' | 'idle'
+
+export function useCharacterCreationAutoSave<T extends Record<string, unknown>>(
+  formData: T,
   messages: Ref<ChatMessage[]>,
   storageKeyPrefix?: string
 ) {
-  // Allow custom storage keys for different use cases (e.g., scenario creation)
   const dataKey = storageKeyPrefix ? `${storageKeyPrefix}-draft` : STORAGE_KEY_CHARACTER
   const messagesKey = storageKeyPrefix ? `${storageKeyPrefix}-messages` : STORAGE_KEY_MESSAGES
 
-  const autoSaveStatus = ref<'saved' | 'idle'>('idle')
+  const autoSaveStatus = ref<AutoSaveStatus>('idle')
 
   const saveToLocalStorage = () => {
     try {
-      localStorage.setItem(dataKey, JSON.stringify(characterData))
+      autoSaveStatus.value = 'saving'
+      localStorage.setItem(dataKey, JSON.stringify(formData))
       localStorage.setItem(messagesKey, JSON.stringify(messages.value))
       autoSaveStatus.value = 'saved'
-    } catch (err) {
-      console.error('Failed to save to localStorage:', err)
+    } catch {
+      autoSaveStatus.value = 'idle'
     }
   }
 
   const loadFromLocalStorage = () => {
     try {
-      const savedCharacter = localStorage.getItem(dataKey)
+      const savedData = localStorage.getItem(dataKey)
       const savedMessages = localStorage.getItem(messagesKey)
 
-      if (savedCharacter) {
-        const parsed = JSON.parse(savedCharacter)
-        Object.assign(characterData, parsed)
+      if (savedData) {
+        const parsed = JSON.parse(savedData) as Partial<T>
+        Object.assign(formData, parsed)
       }
 
       if (savedMessages) {
-        const parsed = JSON.parse(savedMessages)
-        messages.value = parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
+        const parsed = JSON.parse(savedMessages) as Array<
+          Omit<ChatMessage, 'timestamp'> & { timestamp: string }
+        >
+        messages.value = parsed.map((message) => ({
+          ...message,
+          timestamp: new Date(message.timestamp),
         }))
       }
 
-      return !!(savedCharacter || savedMessages)
-    } catch (err) {
-      console.error('Failed to load from localStorage:', err)
+      return !!(savedData || savedMessages)
+    } catch {
       return false
     }
   }
@@ -54,24 +57,31 @@ export function useCharacterCreationAutoSave(
     try {
       localStorage.removeItem(dataKey)
       localStorage.removeItem(messagesKey)
-    } catch (err) {
-      console.error('Failed to clear localStorage:', err)
+    } catch {
+      // Ignore localStorage clearing failures.
     }
   }
 
-  // Auto-save watchers - save on every change
-  watch(() => ({ ...characterData }), () => {
-    saveToLocalStorage()
-  }, { deep: true })
+  watch(
+    () => ({ ...formData }),
+    () => {
+      saveToLocalStorage()
+    },
+    { deep: true }
+  )
 
-  watch(messages, () => {
-    saveToLocalStorage()
-  }, { deep: true })
+  watch(
+    messages,
+    () => {
+      saveToLocalStorage()
+    },
+    { deep: true }
+  )
 
   return {
     autoSaveStatus,
     saveToLocalStorage,
     loadFromLocalStorage,
-    clearLocalStorage
+    clearLocalStorage,
   }
 }

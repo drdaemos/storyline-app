@@ -10,8 +10,8 @@
     <template #footer>
       <div class="space-y-1 w-full">
         <p class="text-md font-semibold">{{ characterSummary?.name }}</p>
-        <p v-if="characterSummary?.role" class="text-sm text-gray-600 dark:text-gray-400">
-          {{ characterSummary.role }}
+        <p v-if="characterSummary?.tagline" class="text-sm text-gray-600 dark:text-gray-400">
+          {{ characterSummary.tagline }}
         </p>
       </div>
     </template>

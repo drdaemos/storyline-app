@@ -135,7 +135,15 @@ import type { SessionInfo, ScenarioSummary } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
-const { getCharacterInfo, getSessions, listScenariosForCharacter, deleteScenario, startSessionWithScenario, loading, error } = useApi()
+const {
+  getCharacterInfo,
+  getSessions,
+  listScenariosForCharacter,
+  deleteScenario,
+  startSessionWithScenario,
+  loading,
+  error,
+} = useApi()
 const { settings } = useLocalSettings()
 
 const characterId = ref(route.params.characterId as string)
