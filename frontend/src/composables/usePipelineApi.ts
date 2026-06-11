@@ -3,8 +3,10 @@ import { useAuth } from './useAuth'
 import type {
   CharacterDetailV2,
   CharacterSummaryV2,
+  ProcessorOptionsResponseV2,
   CreateRulesetInput,
   ListScenariosResponseV2,
+  RulesetDetailV2,
   RulesetSummaryV2,
   ScenarioDetailV2,
   SessionCharacterSummaryV2,
@@ -158,6 +160,10 @@ export function usePipelineApi() {
     return request<RulesetSummaryV2[]>('/api/rulesets')
   }
 
+  const getRuleset = async (rulesetId: string): Promise<RulesetDetailV2> => {
+    return request<RulesetDetailV2>(`/api/rulesets/${encodeURIComponent(rulesetId)}`)
+  }
+
   const createRuleset = async (
     input: CreateRulesetInput
   ): Promise<{ id: string; message: string }> => {
@@ -230,6 +236,10 @@ export function usePipelineApi() {
     })
   }
 
+  const listPromptProcessors = async (): Promise<ProcessorOptionsResponseV2> => {
+    return request<ProcessorOptionsResponseV2>('/api/prompt-processors')
+  }
+
   const startSession = async (payload: StartSessionRequestV2): Promise<StartSessionResponseV2> => {
     return request<StartSessionResponseV2>('/api/sessions/start', {
       method: 'POST',
@@ -250,6 +260,7 @@ export function usePipelineApi() {
     getSessionCharacters,
     deleteSession,
     listRulesets,
+    getRuleset,
     createRuleset,
     deleteRuleset,
     listWorldLore,
@@ -259,6 +270,7 @@ export function usePipelineApi() {
     listScenarios,
     getScenarioDetail,
     deleteScenario,
+    listPromptProcessors,
     startSession,
   }
 }

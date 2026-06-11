@@ -160,6 +160,30 @@ class TestRulesetService:
         assert "Kai" in state.emotional_state.per_relationship
         assert state.emotional_state.per_relationship["Kai"]["trust"] == 7  # default 5 + 2
 
+    def test_apply_reactive_effects(self) -> None:
+        service = RulesetService(_DummyRegistry())  # type: ignore[arg-type]
+        ruleset = _build_ruleset()
+        state = CharacterStateData(
+            drives={"energy": 5, "satiation": 4},
+            skills={"persuasion": 10},
+            emotional_state=EmotionalStateData(
+                global_state={"composure": 5},
+                per_relationship={},
+            ),
+        )
+
+        service.apply_reactive_effects(
+            state,
+            effects=[
+                {"drive": "energy", "change": -1},
+                {"drive": "composure", "change": -2},
+            ],
+            ruleset=ruleset,
+        )
+
+        assert state.drives["energy"] == 4
+        assert state.emotional_state.global_state["composure"] == 3
+
     def test_apply_offscreen_restore(self) -> None:
         service = RulesetService(_DummyRegistry())  # type: ignore[arg-type]
         ruleset = _build_ruleset()

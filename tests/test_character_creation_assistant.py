@@ -43,6 +43,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         response, updates = assistant.process_message(
             user_message="Create a character named Alice",
             current_character=PartialCharacter(),
+            ruleset_context=None,
             conversation_history=[],
         )
 
@@ -64,6 +65,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         response, updates = assistant.process_message(
             user_message="I want to create a character",
             current_character=PartialCharacter(),
+            ruleset_context=None,
             conversation_history=[],
         )
 
@@ -88,6 +90,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         assistant.process_message(
             user_message="Call them Bob",
             current_character=PartialCharacter(),
+            ruleset_context=None,
             conversation_history=conversation_history,
         )
 
@@ -114,6 +117,7 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         assistant.process_message(
             user_message="Add a backstory",
             current_character=current_character,
+            ruleset_context=None,
             conversation_history=[],
         )
 
@@ -122,6 +126,36 @@ I've created Alice, a brave adventurer with an interesting backstory!"""
         user_prompt = call_kwargs["user_prompt"]
         assert "Current character state:" in user_prompt
         assert '"name": "Bob"' in user_prompt
+
+    def test_process_message_with_ruleset_context(self, assistant, mock_processor):
+        """Test processing includes selected ruleset context in the prompt."""
+        from src.models.api_models import CharacterRulesetContext
+
+        mock_processor.respond_with_text.return_value = "Updated stats."
+
+        ruleset_context = CharacterRulesetContext(
+            id="rules-noir",
+            name="Noir Ledger Protocol",
+            rules_text="Focus on tension and trade-offs.",
+            state_schemas={
+                "drives": [{"name": "resolve", "range_min": 0, "range_max": 10, "default": 5}],
+                "skills": [{"name": "persuasion", "range_min": 0, "range_max": 20}],
+                "emotional_state": {"global_dims": [{"name": "composure"}], "per_relationship": []},
+            },
+        )
+
+        assistant.process_message(
+            user_message="Set baseline stat values",
+            current_character=PartialCharacter(),
+            ruleset_context=ruleset_context,
+            conversation_history=[],
+        )
+
+        call_kwargs = mock_processor.respond_with_text.call_args[1]
+        user_prompt = call_kwargs["user_prompt"]
+        assert "Selected ruleset context:" in user_prompt
+        assert '"id": "rules-noir"' in user_prompt
+        assert '"resolve"' in user_prompt
 
     def test_extract_character_updates_with_interests(self, assistant):
         """Test extracting updates with interests list."""
@@ -227,6 +261,7 @@ I've created the character for you."""
         assistant.process_message(
             user_message="Create a character",
             current_character=PartialCharacter(),
+            ruleset_context=None,
             conversation_history=[],
             streaming_callback=callback,
         )
@@ -248,6 +283,7 @@ I've created the character for you."""
         response, _ = assistant.process_message(
             user_message="Create a character",
             current_character=PartialCharacter(),
+            ruleset_context=None,
             conversation_history=[],
             streaming_callback=callback,
         )
@@ -320,3 +356,25 @@ I've created the character for you."""
         assert updates.personality == "Brave"
         assert updates.interests == []
         assert updates.dislikes == []
+
+    def test_extract_character_updates_normalizes_stat_aliases(self, assistant):
+        """Test that alias stat fields are normalized to canonical starting_* keys."""
+        ai_response = """<character_update>
+{
+  "skills": {"persuasion": 4},
+  "drives": {"confidence": 6},
+  "emotional_state": {"composure": 7}
+}
+</character_update>"""
+
+        current = PartialCharacter(
+            starting_skills={"persuasion": 0},
+            starting_drives={"confidence": 0},
+            starting_emotional_state={"global_state": {"composure": 0}, "per_relationship": {}},
+        )
+        updates = assistant._extract_character_updates(ai_response, current)
+
+        assert isinstance(updates, PartialCharacter)
+        assert updates.starting_skills["persuasion"] == 4
+        assert updates.starting_drives["confidence"] == 6
+        assert updates.starting_emotional_state["global_state"]["composure"] == 7

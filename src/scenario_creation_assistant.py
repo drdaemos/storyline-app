@@ -10,6 +10,7 @@ from .models.api_models import ChatMessageModel, PartialScenario, PersonaSummary
 from .models.character import Character
 from .models.message import GenericMessage
 from .models.prompt_processor import PromptProcessor
+from .models.simulation import Ruleset
 
 
 class ScenarioCreationAssistant:
@@ -34,9 +35,10 @@ class ScenarioCreationAssistant:
         self,
         user_message: str,
         current_scenario: PartialScenario,
-        character: Character,
+        characters: list[Character],
         persona: Character | None,
         available_personas: list[PersonaSummary],
+        ruleset: Ruleset | None,
         conversation_history: list[ChatMessageModel],
         streaming_callback: Callable[[str], None] | None = None,
     ) -> tuple[str, PartialScenario]:
@@ -46,9 +48,10 @@ class ScenarioCreationAssistant:
         Args:
             user_message: The user's message about the scenario
             current_scenario: Current partial scenario data
-            character: The AI character this scenario is for (read-only context)
+            characters: AI characters participating in this scenario (read-only context)
             persona: Optional currently selected persona character (read-only context)
             available_personas: List of available personas AI can suggest from
+            ruleset: Optional ruleset governing the simulation mechanics
             conversation_history: List of previous messages (ChatMessageModel objects)
             streaming_callback: Optional callback for streaming AI response chunks
 
@@ -62,7 +65,7 @@ class ScenarioCreationAssistant:
             for msg in conversation_history
         ]
         user_prompt = self._build_user_prompt(
-            user_message, current_scenario, character, persona, available_personas
+            user_message, current_scenario, characters, persona, available_personas, ruleset
         )
 
         # Get AI response with streaming support
@@ -218,9 +221,10 @@ Good: "I see this as a slow-burn confrontation - they've been avoiding this conv
         self,
         user_message: str,
         current_scenario: PartialScenario,
-        character: Character,
+        characters: list[Character],
         persona: Character | None,
         available_personas: list[PersonaSummary],
+        ruleset: Ruleset | None,
     ) -> str:
         """Build the user prompt with character context and current scenario state."""
         prompt_parts = []
@@ -228,7 +232,9 @@ Good: "I see this as a slow-burn confrontation - they've been avoiding this conv
         # Add character context (read-only)
         prompt_parts.append("## Character Context (for reference - do not modify)")
         prompt_parts.append("")
-        prompt_parts.append(character.to_prompt_card("AI Character", controller="AI", include_world_info=True))
+        for character in characters:
+            prompt_parts.append(character.to_prompt_card("AI Character", controller="AI", include_world_info=True))
+            prompt_parts.append("")
 
         # Add currently selected persona if any
         if persona:
@@ -251,6 +257,29 @@ Good: "I see this as a slow-burn confrontation - they've been avoiding this conv
             prompt_parts.append(
                 "*You can suggest one of these personas if it fits the scenario well. "
                 "Include `suggested_persona_id` in your update.*"
+            )
+
+        # Add ruleset context if available
+        if ruleset:
+            prompt_parts.append("")
+            prompt_parts.append("## Ruleset Context")
+            prompt_parts.append("")
+            prompt_parts.append(f"**{ruleset.name}** (id: `{ruleset.id}`)")
+            if ruleset.rules_text:
+                prompt_parts.append("")
+                prompt_parts.append(ruleset.rules_text)
+            if ruleset.state_schemas:
+                prompt_parts.append("")
+                prompt_parts.append("### State Schemas")
+                prompt_parts.append("")
+                prompt_parts.append("```json")
+                prompt_parts.append(ruleset.state_schemas.model_dump_json(indent=2))
+                prompt_parts.append("```")
+            prompt_parts.append("")
+            prompt_parts.append(
+                "*Use the ruleset drives, skills and emotional dimensions when crafting "
+                "character_goals and scenario tensions. Align the scenario stakes and hooks "
+                "with what the mechanical layer can express.*"
             )
 
         prompt_parts.append("")

@@ -41,7 +41,9 @@ class ObservationExtractor:
                 line += f" [stealth: {o['stealth_result']}]"
             outcome_lines.append(line)
 
-        user_message = f"""## Narration this turn
+        user_message = f"""Create observations from the narration.
+
+## Narration this turn
 {narration}
 
 ## Action outcomes

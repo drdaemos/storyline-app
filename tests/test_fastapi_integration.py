@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from src.fastapi_server import app
 from src.models.character import Character
+from src.models.prompt_processor_factory import ProcessorOptionDescriptor
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -69,6 +70,26 @@ class TestFastAPIEndpoints:
         assert "conversation_memory" in data
         assert data["conversation_memory"] in ["ok", "error"]
         assert data["status"] in ["healthy", "unhealthy"]
+
+    @patch("src.fastapi_server.PromptProcessorFactory")
+    def test_list_prompt_processors(self, mock_factory, client):
+        """Test prompt processor options endpoint."""
+        mock_factory.get_available_processor_options.return_value = [
+            ProcessorOptionDescriptor(id="google-flash", display_name="Gemini 3 Flash"),
+            ProcessorOptionDescriptor(id="gpt-5.2", display_name="GPT-5.2 Chat"),
+            ProcessorOptionDescriptor(id="claude-sonnet", display_name="Claude Sonnet 4.5"),
+        ]
+
+        response = client.get("/api/prompt-processors")
+        assert response.status_code == 200
+        assert response.json() == {
+            "processor_types": ["google-flash", "gpt-5.2", "claude-sonnet"],
+            "processor_options": [
+                {"id": "google-flash", "display_name": "Gemini 3 Flash"},
+                {"id": "gpt-5.2", "display_name": "GPT-5.2 Chat"},
+                {"id": "claude-sonnet", "display_name": "Claude Sonnet 4.5"},
+            ],
+        }
 
     @patch("src.fastapi_server.character_loader")
     def test_list_characters(self, mock_loader, client):

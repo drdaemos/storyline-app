@@ -134,7 +134,7 @@ class EventStreamService:
         character_id: str,
         current_tick: int,
         subject_filter: list[str] | None = None,
-        limit: int = 30,
+        limit: int = 10,
     ) -> str:
         """Assemble memory context for prompts. Delegates to repository."""
         return self.repository.assemble_memory(

@@ -9,8 +9,6 @@ import type {
   GenerateCharacterResponse,
   GenerateScenariosRequest,
   GenerateScenariosResponse,
-  StartSessionRequest,
-  StartSessionResponse,
   CharacterCreationRequest,
   ScenarioCreationRequest,
   PartialScenario,
@@ -200,15 +198,6 @@ export function useApi() {
     payload: GenerateScenariosRequest
   ): Promise<GenerateScenariosResponse> => {
     return makeRequest<GenerateScenariosResponse>('/api/scenarios/generate', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
-  }
-
-  const startSessionWithScenario = async (
-    payload: StartSessionRequest
-  ): Promise<StartSessionResponse> => {
-    return makeRequest<StartSessionResponse>('/api/sessions/start', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
@@ -541,7 +530,6 @@ export function useApi() {
     handleInteraction,
     generateScenarios,
     streamGenerateScenarios,
-    startSessionWithScenario,
     streamCharacterCreation,
     streamScenarioCreation,
     saveScenario,

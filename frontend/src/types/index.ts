@@ -10,6 +10,7 @@ export interface Character {
   backstory: string
   personality?: string
   appearance?: string
+  ruleset_id?: string
   relationships?: Record<string, string>
   key_locations?: string[]
   setting_description?: string
@@ -17,6 +18,9 @@ export interface Character {
   dislikes?: string[]
   desires?: string[]
   kinks?: string[]
+  starting_drives?: Record<string, number>
+  starting_skills?: Record<string, number>
+  starting_emotional_state?: Record<string, unknown>
 }
 
 export interface SessionInfo {
@@ -98,7 +102,6 @@ export interface Scenario {
   summary: string
   intro_message: string
   narrative_category: string
-  character_id?: string
   character_ids?: string[]
   persona_id?: string
   ruleset_id?: string
@@ -118,7 +121,6 @@ export interface PartialScenario {
   summary?: string
   intro_message?: string
   narrative_category?: string
-  character_id?: string
   character_ids?: string[]
   persona_id?: string
   ruleset_id?: string
@@ -144,7 +146,6 @@ export interface PersonaSummary {
 export interface ScenarioCreationRequest {
   user_message: string
   current_scenario: PartialScenario
-  character_name: string
   persona_id?: string | null
   available_personas?: PersonaSummary[]
   conversation_history?: Array<{
@@ -200,22 +201,16 @@ export interface GenerateScenariosResponse {
   scenarios: Scenario[]
 }
 
-export interface StartSessionRequest {
-  character_name: string
-  intro_message?: string
-  scenario_id?: string
-  persona_id?: string | null
-  processor_type?: string
-  backup_processor_type?: string
-}
-
-export interface StartSessionResponse {
-  session_id: string
-}
 
 export interface CharacterCreationRequest {
   user_message: string
   current_character: Partial<Character>
+  ruleset_context?: {
+    id: string
+    name?: string
+    rules_text?: string
+    state_schemas?: Record<string, unknown>
+  } | null
   conversation_history?: Array<{
     author: string
     content: string

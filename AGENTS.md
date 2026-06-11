@@ -52,6 +52,10 @@ For small scoped changes, run targeted tests first, then broaden if impact is wi
 - Keep domain logic out of API/CLI handlers.
 - Use service classes as boundaries between domain logic and interface layers.
 - Favor small, single-purpose classes/functions over multi-responsibility units.
+- For frontend/product work, treat UI/UX and stylistic direction as a maintained artifact:
+  - Track user-confirmed direction decisions in this file.
+  - Apply those decisions consistently to new and migrated screens.
+  - When direction changes, update this file in the same task so future work inherits the latest baseline.
 
 ## 5. Testing Rules
 
@@ -99,3 +103,18 @@ When user feedback reveals a missed issue after delivery, append a short learnin
 - What change prevented recurrence
 
 Keep notes concise and reusable.
+
+- Problem pattern: Assistant structured updates may use alias field names (`skills`, `drives`, `emotional_state`) that are dropped by strict canonical parsing, causing visible mismatch between assistant reply and form state.
+- What change prevented recurrence: Normalize assistant payload aliases to canonical `starting_*` fields in backend extraction and keep frontend schema-based key normalization + regression tests for alias updates.
+
+## 8. Product Vision and UI/UX Preferences (User-Confirmed)
+
+Track explicit UI/UX preferences here and apply them to new screens by default.
+
+- Navigation on tiles: avoid single CTA buttons whose only purpose is navigation (not just literal `Open` labels). Use clickable tile headings with clear affordance (e.g., underline on hover/focus) for navigation targets. If a tile has no other action besides navigation, make the whole tile clickable.
+- Navigation button styling: emphasis is allowed when it communicates real priority, but do not force emphasis by default. In peer action blocks (like "Create New"), keep navigation buttons visually equal.
+- Keep language product-facing. Avoid enterprise wording like `workspace`.
+- Creation surface should use a two-panel layout with AI assistance chat on one side.
+- Scenario creation supports multi-character selection via searchable tag-like multi-select. Do not use a lead-character field.
+- Play continuation options should be differentiated visually by icon and color; avoid extra type labels or legend blocks.
+- Typography baseline defaults: `Unbounded` for major headings, `Source Serif 4` for narrative text, and `Work Sans` for UI text.

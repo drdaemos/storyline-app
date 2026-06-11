@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -173,6 +174,26 @@ class StartSessionResponse(BaseModel):
     session_id: str = Field(..., description="The created session ID")
 
 
+class ProcessorOption(BaseModel):
+    """Single prompt processor option."""
+
+    id: str = Field(..., description="Canonical processor ID")
+    display_name: str = Field(..., description="User-facing processor label")
+
+
+class ProcessorOptionsResponse(BaseModel):
+    """Response model for available prompt processors."""
+
+    processor_types: list[str] = Field(
+        default_factory=list,
+        description="Available processor IDs from PromptProcessorFactory (legacy field)",
+    )
+    processor_options: list[ProcessorOption] = Field(
+        default_factory=list,
+        description="Available processor options with IDs and display names",
+    )
+
+
 class ChatMessageModel(BaseModel):
     """Model for a chat message in character creation."""
 
@@ -181,11 +202,34 @@ class ChatMessageModel(BaseModel):
     is_user: bool = Field(..., description="Whether this message is from the user")
 
 
+class CharacterRulesetContext(BaseModel):
+    """Ruleset context passed to character-creation assistant."""
+
+    id: str = Field(..., min_length=1, description="Ruleset ID")
+    name: str = Field(default="", description="Ruleset name")
+    rules_text: str = Field(default="", description="Ruleset text guidance")
+    state_schemas: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Ruleset state schema (drives/skills/emotional dimensions)",
+    )
+
+    def to_prompt_text(self) -> str:
+        return f"""Ruleset name: {self.name}
+Ruleset text:
+{self.rules_text}
+Ruleset per-character stat fields:
+{json.dumps(self.state_schemas, indent=2)}
+"""
+
+
 class CharacterCreationRequest(BaseModel):
     """Request model for interactive character creation with AI assistant."""
 
     user_message: str = Field(..., min_length=1, description="User's message describing the character")
-    current_character: PartialCharacter = Field(default_factory=dict, description="Current partial character data")
+    current_character: PartialCharacter = Field(default_factory=PartialCharacter, description="Current partial character data")
+    ruleset_context: CharacterRulesetContext = Field(
+        description="Selected ruleset context for generating stat-aware character updates",
+    )
     conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages")
     processor_type: str = Field(default="claude", description="AI processor type to use")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")
@@ -235,7 +279,6 @@ class ScenarioCreationRequest(BaseModel):
 
     user_message: str = Field(..., min_length=1, description="User's message about the scenario")
     current_scenario: PartialScenario = Field(default_factory=PartialScenario, description="Current partial scenario data")
-    character_name: str = Field(..., min_length=1, description="Name/ID of the AI character to build scenario for")
     persona_id: str | None = Field(None, description="Optional persona ID currently selected by user")
     available_personas: list[PersonaSummary] = Field(default_factory=list, description="List of available personas")
     conversation_history: list[ChatMessageModel] = Field(default_factory=list, description="Previous conversation messages")
@@ -346,7 +389,6 @@ class TurnRequest(BaseModel):
 
     session_id: str = Field(..., min_length=1, description="Session ID to execute turn in")
     user_input: str = Field(..., min_length=1, description="User's action/input text")
-    input_type: str | None = Field(None, description="Optional pre-classified input type (action, relocation, time_skip)")
     processor_type: str = Field(default="google", description="Large model processor type")
     mini_processor_type: str | None = Field(default=None, description="Mini model processor type")
     backup_processor_type: str | None = Field(None, description="Optional backup processor type")

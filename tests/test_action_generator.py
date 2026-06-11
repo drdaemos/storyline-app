@@ -1,6 +1,8 @@
-from src.models.simulation import ActionWithReasoning, CharacterAction
+from src.models.simulation import ActionWithReasoning, CharacterAction, Ruleset
 from src.pipeline.action_generator import ActionGenerator
 from tests.pipeline_test_utils import FakePromptProcessor
+
+_RULESET = Ruleset(name="test", rules_text="No special rules.")
 
 
 class TestActionGenerator:
@@ -29,6 +31,7 @@ class TestActionGenerator:
             time="22:00",
             characters_present=["Ren", "Mara"],
             user_action_description="You ask what happened.",
+            ruleset=_RULESET,
         )
 
         assert result.action.type == "dialogue"
@@ -51,6 +54,7 @@ class TestActionGenerator:
             time="22:00",
             characters_present=["Ren"],
             user_action_description="You wait.",
+            ruleset=_RULESET,
         )
 
         assert result.action.type == "action"

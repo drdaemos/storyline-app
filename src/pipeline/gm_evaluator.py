@@ -1,4 +1,4 @@
-"""Step 6.3: GM evaluation of actions for skill checks and drive effects."""
+"""Step 6.3a: GM challenge setup — evaluate actions for skill checks and overrides."""
 
 import logging
 
@@ -7,31 +7,35 @@ from src.models.simulation import GMActionEvaluation, GMEvaluationResult
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are the game master. You evaluate character actions to determine if skill checks are needed.
-
-## Rules
-{rules_text}
+SYSTEM_PROMPT = """You are the game master. You evaluate character actions to determine if they are possible within the scenario rules and whether any skill checks are required.
 
 ## Your job
 For each action this turn:
-1. Determine if the action is trivial/mundane (auto-succeeds) or uncertain/risky (needs a skill check).
-2. If a check is needed: identify which skill applies and set a difficulty class (DC).
+1. Determine the result override: auto_succeed for trivial/mundane actions, auto_fail for impossible actions, null for uncertain actions that need a roll.
+2. If result_override is null and the action needs a check: identify which skill applies and set a difficulty class (DC).
 3. If two characters act against each other: flag both as contested and identify the relevant skill for each side.
 
 ## Guidelines
-- Mundane actions auto-succeed: walking, talking, picking up objects, basic observations.
-- Checks are for: persuasion, deception, stealth, physical feats, anything with meaningful failure consequences.
+- Auto-succeed (`result_override: "auto_succeed"`): mundane actions — walking, talking, picking up objects, basic observations.
+- Auto-fail (`result_override: "auto_fail"`) applies when:
+  - The action is physically impossible given the world state (jumping a 50-meter gap, picking a lock without tools).
+  - The action requires cooperation from a target who clearly would not give it (kissing someone with 0 attraction and high composure, ordering around someone with no trust toward the actor).
+  - The action violates established world constraints or rules (using magic in a non-magic setting, accessing a locked area without means of entry).
+  - The effective difficulty would exceed 25 — there is no reasonable chance of success.
+- Auto-fail is NOT for actions that are merely difficult or unlikely. A DC 20 check is hard but possible. Reserve auto-fail for actions that should not go to dice at all.
+- When in doubt between a hard check and an auto-fail, prefer the hard check. Let the dice create surprises.
+- Checks (`result_override: null`): persuasion, deception, stealth, physical feats, anything with meaningful failure consequences.
 - DC reflects difficulty given the specific situation, not the character's skill level.
 - DC range: 5 (easy) to 25 (near-impossible). Most checks should be 8-18.
-- Physically impossible actions always fail — do not set a DC, instead set check_required to false and explain why.
 
-drive_effects: mechanical consequences of this action on the acting character's drives, applied only if the action succeeds. Most actions have no drive effects. Examples: eating → satiation +3, physical exertion → energy -1.
+departure: true if this action implies leaving the current location. Evaluated regardless of outcome, but departure only proceeds if the action is not auto-failed. If result_override is "auto_fail", departure must be false.
 
-departure: true if this action, on success, results in the character leaving the current location."""
+## Scenario Rules
+{rules_text}"""
 
 
 class GMEvaluator:
-    """Evaluates actions for skill checks using a large model."""
+    """Evaluates actions for skill checks using a large model (step 6.3a)."""
 
     def __init__(self, processor: PromptProcessor) -> None:
         self.processor = processor
@@ -45,8 +49,9 @@ class GMEvaluator:
         characters_present: list[str],
         skills_by_character: dict[str, dict[str, float]],
         drive_schema_summary: str,
+        relationship_stats_summary: str = "",
     ) -> GMEvaluationResult:
-        """Evaluate all actions for this turn."""
+        """Evaluate all actions for this turn (step 6.3a challenge setup)."""
         system = SYSTEM_PROMPT.format(rules_text=rules_text)
 
         # Build actions list
@@ -63,7 +68,9 @@ class GMEvaluator:
             skills_str = ", ".join(f"{k}: {v:.0f}" for k, v in skills.items())
             skill_lines.append(f"{name}: {skills_str}")
 
-        user_message = f"""## Actions this turn
+        user_message = f"""Evaluate the following character actions.
+
+## Actions this turn
 {chr(10).join(action_lines)}
 
 ## World state
@@ -76,6 +83,9 @@ Present: {', '.join(characters_present)}
 ## Drive schema
 {drive_schema_summary}"""
 
+        if relationship_stats_summary:
+            user_message += f"\n\n## Relevant relationship stats\n{relationship_stats_summary}"
+
         try:
             return self.processor.respond_with_model(
                 prompt=system,
@@ -84,12 +94,13 @@ Present: {', '.join(characters_present)}
                 reasoning=False,
             )
         except Exception as e:
-            logger.warning("GM evaluation failed: %s. Auto-succeeding all actions.", e)
+            logger.warning("GM challenge setup failed: %s. Auto-succeeding all actions.", e)
             return GMEvaluationResult(evaluations=[
                 GMActionEvaluation(
                     character=a.get("character", ""),
                     action_summary=a.get("description", ""),
                     reasoning="Auto-success fallback",
+                    result_override="auto_succeed",
                     check_required=False,
                 )
                 for a in actions

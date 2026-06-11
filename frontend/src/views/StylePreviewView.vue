@@ -15,7 +15,7 @@ import {
   UserRound,
   WandSparkles,
 } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Switch } from '@/components/ui/switch'
+import { usePromptProcessorOptions } from '@/composables/usePromptProcessorOptions'
 
 type ContinuationType = 'action' | 'dialogue' | 'relocation' | 'time_skip'
 
@@ -84,6 +85,13 @@ interface BlockLink {
   cta: string
 }
 
+interface FontOption {
+  id: string
+  label: string
+  stack: string
+  googleFamilyParam?: string
+}
+
 const continuationMeta: Record<ContinuationType, { icon: Component; className: string }> = {
   action: { icon: Sword, className: 'choice-pill-action' },
   dialogue: { icon: MessageSquareText, className: 'choice-pill-dialogue' },
@@ -115,7 +123,7 @@ const homeContinue: SessionCard[] = [
 const quickStartLinks: BlockLink[] = [
   { title: 'Start from Scenario', meta: 'Pick scenario and persona', cta: 'Start' },
   { title: 'Quick Skirmish', meta: 'Minimal setup, immediate turn', cta: 'Launch' },
-  { title: 'Resume Draft', meta: 'Continue unfinished world setup', cta: 'Open' },
+  { title: 'Resume Draft', meta: 'Continue unfinished world setup', cta: 'Continue' },
 ]
 
 const creationCards: BlockLink[] = [
@@ -232,10 +240,123 @@ const stateBadgeClass: Record<SessionState, string> = {
   complete: 'choice-pill-dialogue',
   archived: 'choice-pill-action',
 }
+
+const headingFontOptions: FontOption[] = [
+  { id: 'app-display', label: 'App Default (Unbounded)', stack: 'var(--font-display)' },
+  { id: 'unbounded', label: 'Unbounded *', stack: "'Unbounded', sans-serif", googleFamilyParam: 'Unbounded' },
+  { id: 'cinzel', label: 'Cinzel', stack: "'Cinzel', serif", googleFamilyParam: 'Cinzel' },
+  { id: 'cormorant-garamond', label: 'Cormorant Garamond *', stack: "'Cormorant Garamond', serif", googleFamilyParam: 'Cormorant+Garamond' },
+  { id: 'playfair-display', label: 'Playfair Display', stack: "'Playfair Display', serif", googleFamilyParam: 'Playfair+Display' },
+  { id: 'space-grotesk', label: 'Space Grotesk', stack: "'Space Grotesk', sans-serif", googleFamilyParam: 'Space+Grotesk' },
+  { id: 'bebas-neue', label: 'Bebas Neue', stack: "'Bebas Neue', sans-serif", googleFamilyParam: 'Bebas+Neue' },
+  { id: 'exo-2', label: 'Exo 2', stack: "'Exo 2', sans-serif", googleFamilyParam: 'Exo+2' },
+  { id: 'fjalla-one', label: 'Fjalla One', stack: "'Fjalla One', sans-serif", googleFamilyParam: 'Fjalla+One' },
+  { id: 'oswald', label: 'Oswald', stack: "'Oswald', sans-serif", googleFamilyParam: 'Oswald' },
+  { id: 'changa', label: 'Changa', stack: "'Changa', sans-serif", googleFamilyParam: 'Changa' },
+]
+
+const narrativeFontOptions: FontOption[] = [
+  { id: 'app-serif', label: 'App Default (Source Serif 4)', stack: 'var(--font-serif)' },
+  { id: 'source-serif-4', label: 'Source Serif 4 *', stack: "'Source Serif 4', serif", googleFamilyParam: 'Source+Serif+4' },
+  { id: 'arvo', label: 'Arvo *', stack: "'Arvo', serif", googleFamilyParam: 'Arvo' },
+  { id: 'literata', label: 'Literata', stack: "'Literata', serif", googleFamilyParam: 'Literata' },
+  { id: 'libre-baskerville', label: 'Libre Baskerville', stack: "'Libre Baskerville', serif", googleFamilyParam: 'Libre+Baskerville' },
+  { id: 'noto-serif', label: 'Noto Serif', stack: "'Noto Serif', serif", googleFamilyParam: 'Noto+Serif' },
+  { id: 'domine', label: 'Domine', stack: "'Domine', serif", googleFamilyParam: 'Domine' },
+  { id: 'bitter', label: 'Bitter', stack: "'Bitter', serif", googleFamilyParam: 'Bitter' },
+  { id: 'fraunces', label: 'Fraunces', stack: "'Fraunces', serif", googleFamilyParam: 'Fraunces' },
+  { id: 'bodoni-moda', label: 'Bodoni Moda', stack: "'Bodoni Moda', serif", googleFamilyParam: 'Bodoni+Moda' },
+  { id: 'old-standard-tt', label: 'Old Standard TT', stack: "'Old Standard TT', serif", googleFamilyParam: 'Old+Standard+TT' },
+  { id: 'lustria', label: 'Lustria', stack: "'Lustria', serif", googleFamilyParam: 'Lustria' },
+  { id: 'trirong', label: 'Trirong', stack: "'Trirong', serif", googleFamilyParam: 'Trirong' },
+]
+
+const uiFontOptions: FontOption[] = [
+  { id: 'app-sans', label: 'App Default (Work Sans)', stack: 'var(--font-sans)' },
+  { id: 'plus-jakarta-sans', label: 'Plus Jakarta Sans *', stack: "'Plus Jakarta Sans', sans-serif", googleFamilyParam: 'Plus+Jakarta+Sans' },
+  { id: 'work-sans', label: 'Work Sans *', stack: "'Work Sans', sans-serif", googleFamilyParam: 'Work+Sans' },
+  { id: 'poppins', label: 'Poppins *', stack: "'Poppins', sans-serif", googleFamilyParam: 'Poppins' },
+  { id: 'ibm-plex-sans', label: 'IBM Plex Sans', stack: "'IBM Plex Sans', sans-serif", googleFamilyParam: 'IBM+Plex+Sans' },
+  { id: 'public-sans', label: 'Public Sans', stack: "'Public Sans', sans-serif", googleFamilyParam: 'Public+Sans' },
+  { id: 'nunito-sans', label: 'Nunito Sans', stack: "'Nunito Sans', sans-serif", googleFamilyParam: 'Nunito+Sans' },
+  { id: 'dm-sans', label: 'DM Sans', stack: "'DM Sans', sans-serif", googleFamilyParam: 'DM+Sans' },
+  { id: 'atkinson-hyperlegible-next', label: 'Atkinson Hyperlegible Next', stack: "'Atkinson Hyperlegible Next', sans-serif", googleFamilyParam: 'Atkinson+Hyperlegible+Next' },
+  { id: 'barlow', label: 'Barlow', stack: "'Barlow', sans-serif", googleFamilyParam: 'Barlow' },
+  { id: 'red-hat-text', label: 'Red Hat Text', stack: "'Red Hat Text', sans-serif", googleFamilyParam: 'Red+Hat+Text' },
+  { id: 'asap', label: 'Asap', stack: "'Asap', sans-serif", googleFamilyParam: 'Asap' },
+  { id: 'mulish', label: 'Mulish', stack: "'Mulish', sans-serif", googleFamilyParam: 'Mulish' },
+  { id: 'kanit', label: 'Kanit', stack: "'Kanit', sans-serif", googleFamilyParam: 'Kanit' },
+  { id: 'albert-sans', label: 'Albert Sans', stack: "'Albert Sans', sans-serif", googleFamilyParam: 'Albert+Sans' },
+  { id: 'hanken-grotesk', label: 'Hanken Grotesk', stack: "'Hanken Grotesk', sans-serif", googleFamilyParam: 'Hanken+Grotesk' },
+  { id: 'm-plus-rounded-1c', label: 'M PLUS Rounded 1c', stack: "'M PLUS Rounded 1c', sans-serif", googleFamilyParam: 'M+PLUS+Rounded+1c' },
+  { id: 'chivo', label: 'Chivo', stack: "'Chivo', sans-serif", googleFamilyParam: 'Chivo' },
+]
+
+const selectedHeadingFont = ref('app-display')
+const selectedNarrativeFont = ref('app-serif')
+const selectedUiFont = ref('app-sans')
+
+const fontStackFor = (options: FontOption[], id: string, fallback: string) =>
+  options.find((option) => option.id === id)?.stack || fallback
+
+const selectedHeadingFontStack = computed(() =>
+  fontStackFor(headingFontOptions, selectedHeadingFont.value, 'var(--font-display)')
+)
+const selectedNarrativeFontStack = computed(() =>
+  fontStackFor(narrativeFontOptions, selectedNarrativeFont.value, 'var(--font-serif)')
+)
+const selectedUiFontStack = computed(() =>
+  fontStackFor(uiFontOptions, selectedUiFont.value, 'var(--font-sans)')
+)
+
+const styleLabFontVars = computed<Record<string, string>>(() => ({
+  '--stylelab-font-heading': selectedHeadingFontStack.value,
+  '--stylelab-font-narrative': selectedNarrativeFontStack.value,
+  '--stylelab-font-ui': selectedUiFontStack.value,
+}))
+const { refresh: refreshProcessorOptions, processorOptions } = usePromptProcessorOptions()
+const styleLabModelOptions = computed(() => processorOptions.value)
+
+const ensureStyleLabGoogleFonts = () => {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const families = [...headingFontOptions, ...narrativeFontOptions, ...uiFontOptions]
+    .map((option) => option.googleFamilyParam)
+    .filter((family): family is string => Boolean(family))
+
+  if (!families.length) {
+    return
+  }
+
+  const uniqueFamilies = [...new Set(families)]
+  const chunkSize = 8
+  for (let index = 0; index < uniqueFamilies.length; index += chunkSize) {
+    const chunk = uniqueFamilies.slice(index, index + chunkSize)
+    const linkId = `stylelab-google-fonts-${Math.floor(index / chunkSize)}`
+    if (document.getElementById(linkId)) {
+      continue
+    }
+
+    const link = document.createElement('link')
+    link.id = linkId
+    link.rel = 'stylesheet'
+    link.href = `https://fonts.googleapis.com/css2?${chunk
+      .map((family) => `family=${family}`)
+      .join('&')}&display=swap`
+    document.head.append(link)
+  }
+}
+
+onMounted(() => {
+  ensureStyleLabGoogleFonts()
+  void refreshProcessorOptions()
+})
 </script>
 
 <template>
-  <main class="narrative-app-shell min-h-screen pb-12">
+  <main class="style-lab-root narrative-app-shell min-h-screen pb-12" :style="styleLabFontVars">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <section class="surface-panel rounded-2xl p-6">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -255,6 +376,86 @@ const stateBadgeClass: Record<SessionState, string> = {
           Home, Hub, Sessions, Play, and Creation shown as cohesive interactive prototypes with shared styling,
           narrative tone, and clear app-like behavior.
         </p>
+
+        <div class="mt-5 rounded-xl border border-border/70 bg-background/70 p-4">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h2 class="text-base font-semibold">Typography Lab</h2>
+            <Badge variant="outline">Style Lab only</Badge>
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="space-y-1.5">
+              <label for="stylelab-heading-font" class="text-xs uppercase tracking-wide text-muted-foreground">Heading Font</label>
+              <Select v-model="selectedHeadingFont">
+                <SelectTrigger
+                  id="stylelab-heading-font"
+                  data-testid="heading-font-select"
+                  :style="{ fontFamily: selectedHeadingFontStack }"
+                >
+                  <SelectValue placeholder="Select heading font" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="option in headingFontOptions"
+                    :key="option.id"
+                    :value="option.id"
+                    :style="{ fontFamily: option.stack }"
+                  >
+                    {{ option.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-1.5">
+              <label for="stylelab-narrative-font" class="text-xs uppercase tracking-wide text-muted-foreground">Narrative Font</label>
+              <Select v-model="selectedNarrativeFont">
+                <SelectTrigger
+                  id="stylelab-narrative-font"
+                  data-testid="narrative-font-select"
+                  :style="{ fontFamily: selectedNarrativeFontStack }"
+                >
+                  <SelectValue placeholder="Select narrative font" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="option in narrativeFontOptions"
+                    :key="option.id"
+                    :value="option.id"
+                    :style="{ fontFamily: option.stack }"
+                  >
+                    {{ option.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-1.5">
+              <label for="stylelab-ui-font" class="text-xs uppercase tracking-wide text-muted-foreground">UI Font</label>
+              <Select v-model="selectedUiFont">
+                <SelectTrigger
+                  id="stylelab-ui-font"
+                  data-testid="ui-font-select"
+                  :style="{ fontFamily: selectedUiFontStack }"
+                >
+                  <SelectValue placeholder="Select UI font" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="option in uiFontOptions"
+                    :key="option.id"
+                    :value="option.id"
+                    :style="{ fontFamily: option.stack }"
+                  >
+                    {{ option.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-muted-foreground">
+            Defaults match current app typography. Switching selectors updates this page only.
+          </p>
+        </div>
       </section>
 
       <section class="surface-panel rounded-2xl p-4 sm:p-5">
@@ -302,22 +503,24 @@ const stateBadgeClass: Record<SessionState, string> = {
             <div class="grid gap-4 lg:grid-cols-[1.8fr_1fr]">
               <div class="space-y-4">
                 <div class="rounded-xl border border-border/70 bg-background/70 p-4">
-                  <div class="mb-3 flex items-center justify-between">
-                    <h3 class="text-base font-semibold">Continue Playing</h3>
-                    <Button variant="ghost" size="sm">See all sessions</Button>
-                  </div>
-                  <div class="grid gap-3 sm:grid-cols-2">
-                    <article
-                      v-for="session in homeContinue"
-                      :key="session.id"
-                      class="rounded-lg border border-border/65 bg-background/80 p-3"
-                    >
-                      <p class="text-sm font-medium">{{ session.title }}</p>
-                      <p class="mt-1 text-xs text-muted-foreground">{{ session.scenario }}</p>
-                      <div class="mt-3 flex items-center justify-between">
-                        <span :class="['rounded-full px-2 py-0.5 text-[11px]', stateBadgeClass[session.state]]">{{ session.progress }}</span>
-                        <Button variant="ghost" size="sm">Resume</Button>
-                      </div>
+                <div class="mb-3 flex items-center justify-between">
+                  <h3 class="text-base font-semibold">Continue Playing</h3>
+                  <Button variant="ghost" size="sm">See all sessions</Button>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <article
+                    v-for="session in homeContinue"
+                    :key="session.id"
+                    class="rounded-lg border border-border/65 bg-background/80 p-3"
+                  >
+                    <button type="button" class="text-left text-sm font-medium underline-offset-4 hover:underline focus-visible:underline">
+                      {{ session.title }}
+                    </button>
+                    <p class="mt-1 text-xs text-muted-foreground">{{ session.scenario }}</p>
+                    <div class="mt-3 flex items-center justify-between">
+                      <span :class="['rounded-full px-2 py-0.5 text-[11px]', stateBadgeClass[session.state]]">{{ session.progress }}</span>
+                      <Button variant="ghost" size="sm">Resume</Button>
+                    </div>
                     </article>
                   </div>
                 </div>
@@ -325,15 +528,18 @@ const stateBadgeClass: Record<SessionState, string> = {
                 <div class="rounded-xl border border-border/70 bg-background/70 p-4">
                   <h3 class="mb-3 text-base font-semibold">Start New</h3>
                   <div class="grid gap-2 sm:grid-cols-3">
-                    <div
+                    <button
                       v-for="item in quickStartLinks"
                       :key="item.title"
-                      class="rounded-lg border border-border/65 bg-background/80 px-3 py-2.5"
+                      type="button"
+                      class="group rounded-lg border border-border/65 bg-background/80 px-3 py-2.5 text-left transition-[background-color,box-shadow] hover:bg-background/95 hover:shadow-sm"
                     >
-                      <p class="text-sm">{{ item.title }}</p>
+                      <span class="text-sm underline-offset-4 group-hover:underline group-focus-visible:underline">
+                        {{ item.title }}
+                      </span>
                       <p class="text-xs text-muted-foreground">{{ item.meta }}</p>
-                      <Button variant="ghost" size="sm" class="mt-2">{{ item.cta }}</Button>
-                    </div>
+                      <span class="mt-2 inline-block text-xs text-foreground/80">{{ item.cta }}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -384,17 +590,20 @@ const stateBadgeClass: Record<SessionState, string> = {
               <div class="rounded-xl border border-border/70 bg-background/70 p-4">
                 <h3 class="mb-3 text-base font-semibold">Libraries</h3>
                 <div class="space-y-2">
-                  <div
+                  <button
                     v-for="entry in hubCollections"
                     :key="entry.title"
-                    class="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2"
+                    type="button"
+                    class="group flex w-full items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-left transition-[background-color,box-shadow] hover:bg-background/95 hover:shadow-sm"
                   >
                     <div>
-                      <p class="text-sm">{{ entry.title }}</p>
+                      <span class="text-sm underline-offset-4 group-hover:underline group-focus-visible:underline">
+                        {{ entry.title }}
+                      </span>
                       <p class="text-xs text-muted-foreground">{{ entry.meta }}</p>
                     </div>
-                    <Button variant="ghost" size="sm">{{ entry.cta }}</Button>
-                  </div>
+                    <span class="text-xs text-foreground/80">{{ entry.cta }}</span>
+                  </button>
                 </div>
               </div>
 
@@ -436,14 +645,15 @@ const stateBadgeClass: Record<SessionState, string> = {
                 class="rounded-xl border border-border/70 bg-background/70 p-4"
               >
                 <div class="mb-2 flex items-center justify-between">
-                  <p class="text-sm font-medium">{{ session.title }}</p>
+                  <button type="button" class="text-left text-sm font-medium underline-offset-4 hover:underline focus-visible:underline">
+                    {{ session.title }}
+                  </button>
                   <Badge :class="stateBadgeClass[session.state]">{{ session.state }}</Badge>
                 </div>
                 <p class="text-xs text-muted-foreground">{{ session.scenario }}</p>
                 <div class="mt-3 flex items-center justify-between">
                   <p class="text-xs text-muted-foreground">{{ session.progress }} · {{ session.updated }}</p>
                   <div class="flex gap-1">
-                    <Button variant="ghost" size="sm">Open</Button>
                     <Button variant="ghost" size="sm">Resume</Button>
                   </div>
                 </div>
@@ -534,8 +744,9 @@ const stateBadgeClass: Record<SessionState, string> = {
                             <Select>
                               <SelectTrigger id="primary-model"><SelectValue placeholder="Select model" /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="gpt-5.2">gpt-5.2</SelectItem>
-                                <SelectItem value="claude-sonnet">claude-sonnet</SelectItem>
+                                <SelectItem v-for="model in styleLabModelOptions" :key="`stylelab-large-${model.id}`" :value="model.id">
+                                  {{ model.displayName }}
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -544,8 +755,9 @@ const stateBadgeClass: Record<SessionState, string> = {
                             <Select>
                               <SelectTrigger id="backup-model"><SelectValue placeholder="Select model" /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="gpt-5-mini">gpt-5-mini</SelectItem>
-                                <SelectItem value="claude-haiku">claude-haiku</SelectItem>
+                                <SelectItem v-for="model in styleLabModelOptions" :key="`stylelab-mini-${model.id}`" :value="model.id">
+                                  {{ model.displayName }}
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -716,3 +928,22 @@ const stateBadgeClass: Record<SessionState, string> = {
     </div>
   </main>
 </template>
+
+<style scoped>
+.style-lab-root {
+  font-family: var(--stylelab-font-ui, var(--font-sans));
+}
+
+.style-lab-root :deep(h1),
+.style-lab-root :deep(h2),
+.style-lab-root :deep(h3),
+.style-lab-root :deep(h4),
+.style-lab-root :deep(.display-heading) {
+  font-family: var(--stylelab-font-heading, var(--font-display));
+}
+
+.style-lab-root :deep(.font-serif),
+.style-lab-root :deep(.stylelab-narrative) {
+  font-family: var(--stylelab-font-narrative, var(--font-serif));
+}
+</style>

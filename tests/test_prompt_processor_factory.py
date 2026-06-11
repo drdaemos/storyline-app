@@ -32,6 +32,52 @@ class TestPromptProcessorFactory:
 
         assert isinstance(processor_lower, type(processor_upper)) and isinstance(processor_lower, type(processor_mixed))
 
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_key"})
+    def test_alias_processor_creation(self) -> None:
+        """Test that compatibility aliases resolve to canonical processors."""
+        processor = PromptProcessorFactory.create_processor("google")
+        assert isinstance(processor, OpenRouterPromptProcessor)
+        assert processor.model == "google/gemini-3-flash-preview"
+
+    def test_get_available_processor_types(self) -> None:
+        """Test that available processor types expose the full canonical model list."""
+        assert PromptProcessorFactory.get_available_processor_types() == [
+            "claude-opus",
+            "claude-sonnet",
+            "claude-haiku",
+            "gpt-5.2",
+            "google-flash",
+            "google-pro",
+            "deepseek-v32",
+            "kimi",
+            "kimi-thinking",
+            "mistral",
+            "grok",
+            "glm",
+            "cohere",
+        ]
+
+    def test_get_available_processor_options(self) -> None:
+        """Test that available options include display names aligned with canonical IDs."""
+        assert [
+            (option.id, option.display_name)
+            for option in PromptProcessorFactory.get_available_processor_options()
+        ] == [
+            ("claude-opus", "Claude Opus 4.5"),
+            ("claude-sonnet", "Claude Sonnet 4.5"),
+            ("claude-haiku", "Claude Haiku 4.5"),
+            ("gpt-5.2", "GPT-5.2 Chat"),
+            ("google-flash", "Gemini 3 Flash"),
+            ("google-pro", "Gemini 3 Pro"),
+            ("deepseek-v32", "DeepSeek V3.2"),
+            ("kimi", "Kimi K2"),
+            ("kimi-thinking", "Kimi K2 Thinking"),
+            ("mistral", "Mistral Small Creative"),
+            ("grok", "Grok 4.1 Fast"),
+            ("glm", "GLM-4.7"),
+            ("cohere", "Cohere Command A"),
+        ]
+
     def test_unsupported_processor_type_raises_error(self) -> None:
         """Test that unsupported processor types raise ValueError."""
         with pytest.raises(ValueError, match="Unsupported processor type: unknown"):

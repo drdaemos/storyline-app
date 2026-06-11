@@ -3,15 +3,12 @@
 import logging
 
 from src.models.prompt_processor import PromptProcessor
-from src.models.simulation import ActionWithReasoning, CharacterAction
+from src.models.simulation import ActionWithReasoning, CharacterAction, Ruleset
 
 logger = logging.getLogger(__name__)
 
 # Enriched with character authenticity framework from the existing character_pipeline
-SYSTEM_PROMPT = """You are {character_name} in a simulation.
-
-## Who you are
-{character_card}
+SYSTEM_PROMPT = """You are simulating a character in the scenario. Think of it as some kind of table-top game or a visual novel. Your goal is to act reasonably based on your personality, intent, wishes.
 
 ## Rules
 - You take ONE action per turn: an action, a reaction to what just happened, or dialogue.
@@ -47,15 +44,18 @@ class ActionGenerator:
         time: str,
         characters_present: list[str],
         user_action_description: str,
+        ruleset: Ruleset,
         environmental_changes: str = "",
     ) -> ActionWithReasoning:
         """Generate an action for one NPC."""
-        system = SYSTEM_PROMPT.format(
-            character_name=character_name,
-            character_card=character_card,
-        )
+        system = SYSTEM_PROMPT.format(ruleset_text=ruleset.rules_text)
 
-        user_message = f"""## Your current state
+        user_message = f"""Generate the next action for NPC. Act as {character_name}.
+
+## Who you are
+{character_card}
+
+## Your current state
 Intent: {intent_goal or 'None — decide what to do'}
 Drives: {drives_summary}
 Emotional state: {emotional_state_summary}

@@ -155,24 +155,23 @@ onMounted(() => {
       </div>
 
       <div v-else-if="combinedEntries.length" class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <article
+        <RouterLink
           v-for="entry in combinedEntries"
           :key="`${entry.kind}-${entry.id}`"
-          class="rounded-xl border border-border/70 bg-background/70 p-3"
+          :to="`/characters/${entry.id}`"
+          class="group block rounded-xl border border-border/70 bg-background/70 p-4 transition-[background-color,box-shadow] hover:bg-background/90 hover:shadow-sm focus-visible:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold">{{ entry.name }}</p>
+            <h3 class="m-0 text-sm font-semibold underline-offset-4 group-hover:underline group-focus-visible:underline">
+              {{ entry.name }}
+            </h3>
             <Badge :class="entry.kind === 'persona' ? 'choice-pill-dialogue' : 'choice-pill-action'">
               {{ entry.kind }}
             </Badge>
           </div>
 
           <p class="mt-2 line-clamp-2 text-xs text-muted-foreground">{{ entry.tagline }}</p>
-
-          <Button variant="ghost" size="sm" class="mt-2" as-child>
-            <RouterLink :to="`/characters/${entry.id}`">Open</RouterLink>
-          </Button>
-        </article>
+        </RouterLink>
       </div>
 
       <div v-else class="mt-4 rounded-xl border border-dashed border-border/70 bg-background/60 p-5">

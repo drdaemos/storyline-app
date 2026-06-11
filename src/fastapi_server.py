@@ -35,6 +35,8 @@ from src.models.api_models import (
     HealthStatus,
     ListScenariosResponse,
     PartialScenario,
+    ProcessorOption,
+    ProcessorOptionsResponse,
     RulesetSummary,
     SaveScenarioRequest,
     SaveScenarioResponse,
@@ -52,7 +54,7 @@ from src.models.api_models import (
     TurnRequest,
     WorldLoreSummary,
 )
-from src.models.character import PartialCharacter
+from src.models.character import Character, PartialCharacter
 from src.models.prompt_processor_factory import PromptProcessorFactory
 from src.models.simulation import Ruleset
 from src.pipeline.session_initializer import SessionInitializer
@@ -116,6 +118,22 @@ async def health_check() -> HealthStatus:
 async def api_info() -> dict[str, str]:
     """API information endpoint."""
     return {"message": "Storyline API - Interactive Character Chat", "version": "0.2.0"}
+
+
+@app.get("/api/prompt-processors")
+async def list_prompt_processors(_user_id: UserIdDep) -> ProcessorOptionsResponse:
+    """List available prompt processor IDs for Large/Mini selection."""
+    try:
+        processor_options = PromptProcessorFactory.get_available_processor_options()
+        return ProcessorOptionsResponse(
+            processor_types=[option.id for option in processor_options],
+            processor_options=[
+                ProcessorOption(id=option.id, display_name=option.display_name)
+                for option in processor_options
+            ],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list prompt processors: {str(e)}") from e
 
 
 # ───────────────────────────── Characters ─────────────────────────────
@@ -252,6 +270,7 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
                             lambda: assistant.process_message(
                                 user_message=request.user_message,
                                 current_character=request.current_character,
+                                ruleset_context=request.ruleset_context,
                                 conversation_history=request.conversation_history,
                                 streaming_callback=streaming_callback,
                             ),
@@ -300,22 +319,35 @@ async def create_character_stream(request: CharacterCreationRequest, _user_id: U
 async def create_scenario_stream(request: ScenarioCreationRequest, user_id: UserIdDep) -> StreamingResponse:
     """Interactive scenario creation with AI assistant via Server-Sent Events."""
     try:
-        character = character_loader.load_character(request.character_name, user_id)
-        if not character:
-            raise HTTPException(status_code=404, detail=f"Character '{request.character_name}' not found")
+        current_scenario = request.current_scenario
+        character_ids = current_scenario.character_ids
+        if not character_ids:
+            raise HTTPException(status_code=422, detail="current_scenario.character_ids must contain at least one ID")
+
+        characters: list[Character] = []
+        for cid in character_ids:
+            char = character_loader.load_character(cid, user_id)
+            if not char:
+                raise HTTPException(status_code=404, detail=f"Character '{cid}' not found")
+            characters.append(char)
 
         persona = None
         if request.persona_id:
             persona = character_loader.load_character(request.persona_id, user_id)
 
-        processor = PromptProcessorFactory.create_processor(request.processor_type)
-        assistant = ScenarioCreationAssistant(prompt_processor=processor)
+        if not current_scenario.ruleset_id:
+            raise HTTPException(status_code=422, detail="current_scenario.ruleset_id is required")
 
-        current_scenario = request.current_scenario
-        if not current_scenario.character_ids:
-            current_scenario = current_scenario.model_copy(update={"character_ids": [request.character_name]})
+        ruleset_service = RulesetService(ruleset_registry)
+        ruleset = ruleset_service.load_ruleset(current_scenario.ruleset_id, user_id)
+        if not ruleset:
+            raise HTTPException(status_code=404, detail=f"Ruleset '{current_scenario.ruleset_id}' not found")
+
         if request.persona_id and not current_scenario.persona_id:
             current_scenario = current_scenario.model_copy(update={"persona_id": request.persona_id})
+
+        processor = PromptProcessorFactory.create_processor(request.processor_type)
+        assistant = ScenarioCreationAssistant(prompt_processor=processor)
 
         available_personas = request.available_personas
 
@@ -336,9 +368,10 @@ async def create_scenario_stream(request: ScenarioCreationRequest, user_id: User
                             lambda: assistant.process_message(
                                 user_message=request.user_message,
                                 current_scenario=current_scenario,
-                                character=character,
+                                characters=characters,
                                 persona=persona,
                                 available_personas=available_personas,
+                                ruleset=ruleset,
                                 conversation_history=request.conversation_history,
                                 streaming_callback=streaming_callback,
                             ),
@@ -1019,6 +1052,8 @@ async def execute_turn(request: TurnRequest, user_id: UserIdDep) -> StreamingRes
         if request.mini_processor_type:
             mini_processor = PromptProcessorFactory.create_processor(request.mini_processor_type)
 
+        scenario_id = session_db.get("scenario_id", "")
+
         pipeline = TurnPipeline(
             large_processor=large_processor,
             mini_processor=mini_processor,
@@ -1026,6 +1061,7 @@ async def execute_turn(request: TurnRequest, user_id: UserIdDep) -> StreamingRes
             ruleset_service=ruleset_service,
             event_stream=event_stream_service,
             character_loader=character_loader,
+            scenario_registry=scenario_registry,
         )
 
         async def generate_sse_response() -> AsyncGenerator[str, None]:
@@ -1038,7 +1074,7 @@ async def execute_turn(request: TurnRequest, user_id: UserIdDep) -> StreamingRes
                         for event in pipeline.execute_turn(
                             session_id=request.session_id,
                             user_input=request.user_input,
-                            input_type=request.input_type,
+                            scenario_id=scenario_id,
                             ruleset=ruleset,
                             user_id=user_id,
                         ):
@@ -1051,7 +1087,7 @@ async def execute_turn(request: TurnRequest, user_id: UserIdDep) -> StreamingRes
                         )
 
                 # Run pipeline in executor
-                asyncio.create_task(loop.run_in_executor(None, run_pipeline))
+                asyncio.ensure_future(loop.run_in_executor(None, run_pipeline))
 
                 # Stream events
                 while True:

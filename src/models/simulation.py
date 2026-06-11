@@ -224,23 +224,50 @@ class DriveEffect(BaseModel):
 
 
 class GMActionEvaluation(BaseModel):
-    """GM evaluation for a single action."""
+    """GM challenge setup evaluation for a single action (step 6.3a)."""
 
     character: str = Field(..., description="Character name")
     action_summary: str = Field(default="", description="Brief restatement")
-    reasoning: str = Field(default="", description="Why check/no check")
+    reasoning: str = Field(default="", description="Why check/no check/override")
+    result_override: Literal["auto_succeed", "auto_fail"] | None = Field(
+        default=None,
+        description="Override dice: auto_succeed for mundane, auto_fail for impossible, null for roll",
+    )
     check_required: bool = Field(default=False)
     skill: str | None = Field(default=None)
     dc: int | None = Field(default=None)
     contested_with: str | None = Field(default=None)
-    drive_effects: list[DriveEffect] = Field(default_factory=list)
     departure: bool = Field(default=False)
 
 
 class GMEvaluationResult(BaseModel):
-    """Full GM evaluation output."""
+    """Full GM challenge setup output (step 6.3a)."""
 
     evaluations: list[GMActionEvaluation] = Field(default_factory=list)
+
+
+class ReactiveEffect(BaseModel):
+    """An effect on another character caused by an action's outcome."""
+
+    character: str = Field(..., description="Target character affected")
+    drive: str = Field(..., description="Drive or stat name")
+    change: float = Field(..., description="Change amount")
+
+
+class GMConsequenceAction(BaseModel):
+    """GM consequence resolution for a single action (step 6.3b)."""
+
+    character: str = Field(..., description="Acting character name")
+    action_ref: str = Field(default="", description="Reference to the action")
+    drive_effects: list[DriveEffect] = Field(default_factory=list)
+    reactive_effects: list[ReactiveEffect] = Field(default_factory=list)
+    reasoning: str = Field(default="", description="Why these consequences")
+
+
+class GMConsequenceResult(BaseModel):
+    """Full GM consequence resolution output (step 6.3b)."""
+
+    consequences: list[GMConsequenceAction] = Field(default_factory=list)
 
 
 class ActionOutcome(BaseModel):
@@ -248,7 +275,7 @@ class ActionOutcome(BaseModel):
 
     character: str = Field(...)
     action_summary: str = Field(default="")
-    result: Literal["success", "failure"] = Field(...)
+    result: Literal["success", "failure", "auto_succeed", "auto_fail"] = Field(...)
     roll_details: str | None = Field(default=None, description="e.g. '14 vs DC 13'")
     gm_evaluation: GMActionEvaluation | None = Field(default=None, description="Original GM evaluation")
 

@@ -70,7 +70,7 @@ Input classification: skipped (this is clearly an in-location action).
 }
 ```
 
-### 6.3 GM Evaluation
+### 6.3a GM Challenge Setup
 
 Input: all three actions (Alex's coffee + Marta cooking + Ren's apology).
 
@@ -81,33 +81,33 @@ Input: all three actions (Alex's coffee + Marta cooking + Ren's apology).
       "character": "Alex",
       "action_summary": "Pour coffee and sit at table",
       "reasoning": "Mundane domestic action, no uncertainty.",
+      "result_override": "auto_succeed",
       "check_required": false,
       "skill": null,
       "dc": null,
       "contested_with": null,
-      "drive_effects": [],
       "departure": false
     },
     {
       "character": "Marta",
       "action_summary": "Get eggs and butter from fridge, start cooking",
-      "reasoning": "Routine kitchen activity, auto-succeeds.",
+      "reasoning": "Routine kitchen activity.",
+      "result_override": "auto_succeed",
       "check_required": false,
       "skill": null,
       "dc": null,
       "contested_with": null,
-      "drive_effects": [{ "drive": "satiation", "change": 2 }],
       "departure": false
     },
     {
       "character": "Ren",
       "action_summary": "Apologize to Marta for waking everyone",
-      "reasoning": "This is a sincere apology to someone who's annoyed. Whether it lands well depends on delivery. Persuasion check, moderate difficulty given Marta's current resentment.",
+      "reasoning": "Sincere apology to someone who's annoyed. Whether it lands well depends on delivery. Persuasion check, moderate difficulty given Marta's current resentment.",
+      "result_override": null,
       "check_required": true,
       "skill": "persuasion",
       "dc": 13,
       "contested_with": null,
-      "drive_effects": [],
       "departure": false
     }
   ]
@@ -116,16 +116,48 @@ Input: all three actions (Alex's coffee + Marta cooking + Ren's apology).
 
 ### 6.4 Dice Resolution
 
-- Alex: auto-succeed
-- Marta: auto-succeed, drive effect queued (satiation +2)
+- Alex: auto_succeed (result_override)
+- Marta: auto_succeed (result_override)
 - Ren: persuasion check. Ren's persuasion = 2. Roll: 1d20 + 2 = 14. DC 13. **Success.**
 
 ```
 outcomes: [
-  { character: "Alex", action: "Pour coffee and sit", result: "success", roll: null },
-  { character: "Marta", action: "Cook eggs", result: "success", roll: null },
+  { character: "Alex", action: "Pour coffee and sit", result: "auto_succeed", roll: null },
+  { character: "Marta", action: "Cook eggs", result: "auto_succeed", roll: null },
   { character: "Ren", action: "Apologize to Marta", result: "success", roll: "14 vs DC 13" }
 ]
+```
+
+### 6.3b GM Consequence Resolution
+
+Input: all outcomes with resolved results.
+
+```json
+{
+  "consequences": [
+    {
+      "character": "Alex",
+      "action_ref": "Pour coffee and sit at table",
+      "drive_effects": [],
+      "reactive_effects": [],
+      "reasoning": "Mundane action, no consequences."
+    },
+    {
+      "character": "Marta",
+      "action_ref": "Get eggs and butter from fridge, start cooking",
+      "drive_effects": [{ "drive": "satiation", "change": 2 }],
+      "reactive_effects": [],
+      "reasoning": "Cooking produces food — satiation increases."
+    },
+    {
+      "character": "Ren",
+      "action_ref": "Apologize to Marta for waking everyone",
+      "drive_effects": [],
+      "reactive_effects": [],
+      "reasoning": "Successful apology has no mechanical drive effect. Emotional impact handled in character processing."
+    }
+  ]
+}
 ```
 
 ### 6.5 Narration
@@ -175,7 +207,7 @@ Engine assigns IDs: obs-50, obs-51, obs-52.
 ### 6.7 State Update, Character Processing & Observation Distribution
 
 **Programmatic updates** (run first):
-- Marta: satiation 3 → 5 (drive effect +2 from cooking)
+- Drive effects from 6.3b applied: Marta satiation 3 → 5 (drive effect +2 from cooking). No reactive effects this turn.
 - All drives: decay applied (satiation -0.5/turn, energy -0.5/turn)
 - Marta after decay: satiation 4.5, energy 5.5
 - Ren after decay: satiation 3.5, energy 2.5
@@ -288,7 +320,7 @@ Alex selects: `"Ask Ren what happened last night"`
 }
 ```
 
-### 6.3 GM Evaluation
+### 6.3a GM Challenge Setup
 
 ```json
 {
@@ -297,33 +329,33 @@ Alex selects: `"Ask Ren what happened last night"`
       "character": "Alex",
       "action_summary": "Ask Ren what happened last night",
       "reasoning": "Casual question to a roommate, no check needed.",
+      "result_override": "auto_succeed",
       "check_required": false,
       "skill": null,
       "dc": null,
       "contested_with": null,
-      "drive_effects": [],
       "departure": false
     },
     {
       "character": "Marta",
       "action_summary": "Plate eggs and bring to table, only for herself",
       "reasoning": "Domestic action. The deliberate exclusion of Ren is social but not a check — she's just not offering.",
+      "result_override": "auto_succeed",
       "check_required": false,
       "skill": null,
       "dc": null,
       "contested_with": null,
-      "drive_effects": [{ "drive": "satiation", "change": 3 }],
       "departure": false
     },
     {
       "character": "Ren",
       "action_summary": "Explain last night to Alex honestly",
       "reasoning": "Straightforward honest account. No deception, no difficulty.",
+      "result_override": "auto_succeed",
       "check_required": false,
       "skill": null,
       "dc": null,
       "contested_with": null,
-      "drive_effects": [],
       "departure": false
     }
   ]
@@ -332,7 +364,37 @@ Alex selects: `"Ask Ren what happened last night"`
 
 ### 6.4 Dice Resolution
 
-All auto-succeed. Marta: satiation drive effect +3 queued.
+All auto_succeed (result_override).
+
+### 6.3b GM Consequence Resolution
+
+```json
+{
+  "consequences": [
+    {
+      "character": "Alex",
+      "action_ref": "Ask Ren what happened last night",
+      "drive_effects": [],
+      "reactive_effects": [],
+      "reasoning": "Casual question, no mechanical consequence."
+    },
+    {
+      "character": "Marta",
+      "action_ref": "Plate eggs and bring to table, only for herself",
+      "drive_effects": [{ "drive": "satiation", "change": 3 }],
+      "reactive_effects": [],
+      "reasoning": "Eating a full plate of eggs restores satiation."
+    },
+    {
+      "character": "Ren",
+      "action_ref": "Explain last night to Alex honestly",
+      "drive_effects": [],
+      "reactive_effects": [],
+      "reasoning": "Honest explanation has no mechanical drive effect."
+    }
+  ]
+}
+```
 
 ### 6.5 Narration
 
@@ -368,8 +430,8 @@ Alex's question omitted — it's the trigger for Ren's answer, but the observati
 ### 6.7 State Update, Character Processing & Observation Distribution
 
 **Programmatic:**
-- Marta: satiation 4.5 → 7.5 (drive effect +3), then decay → 7.0, energy 5.5 → 5.0
-- Ren: drives decay. satiation 3.5 → 3.0, energy 2.5 → 2.0
+- Drive effects from 6.3b applied: Marta satiation 4.5 → 7.5 (drive effect +3 from eating). No reactive effects this turn.
+- All drives decay: Marta satiation 7.5 → 7.0, energy 5.5 → 5.0. Ren satiation 3.5 → 3.0, energy 2.5 → 2.0
 - Time: 8:16 → 8:17 AM
 - obs-53, obs-54 distributed to Marta and Ren.
 
@@ -465,34 +527,35 @@ Ren:
 ## Data Flow Summary
 
 ```
-6.1 user_input ──────────────────────────────────────────┐
-                                                         ↓
-6.2 [per NPC] ──→ actions ──────────────────────────────→ 6.3 GM
-                                                         ↓
-                                              evaluations (checks, DCs,
-                                              drive_effects, departures)
-                                                         ↓
-                                                  6.4 dice resolution
-                                                         ↓
-                                                      outcomes
-                                                         ↓
-6.5 narration ←── outcomes + world state + history       │
-    ↓ (streamed to user)                                 │
-    ↓                                                    │
-6.6 observation extraction ←── narration + outcomes      │
-    ↓                                                    │
-    shared observations (distributed by engine)          │
-    ↓                                                    │
-6.7 programmatic: drive effects, decay, time, departures │
-    ↓                                                    │
-6.7 [per NPC] character processing ←── observations      │
-    ↓                                                    │
-    state_diffs + optional reflection                     │
-    ↓ (engine applies diffs, stores reflection)           │
-    ↓                                                    │
-6.8 intent lifecycle ←── reflection (if generated)       │
-    ↓                                                    │
-6.9 continuation options ──→ presented to user           │
-                                                         ↓
-                                                    6.10 loop → 6.1
+6.1 user input
+    ↓
+6.2 [per NPC] → actions → 6.3a GM challenge setup
+    ↓
+    evaluations: result_override, checks, DCs, departures (NO drive_effects)
+    ↓
+6.4 dice resolution
+    ↓
+    outcomes (success/failure/auto_succeed/auto_fail)
+    ↓
+6.3b GM consequence resolution ← outcomes + world state
+    ↓
+    drive_effects, reactive_effects per action
+    ↓
+6.5 narration ← outcomes + consequences + world state + history
+    ↓ (streamed to user)
+6.6 observation extraction ← narration + outcomes
+    ↓
+    shared observations (engine distributes)
+    ↓
+6.7 programmatic: drive_effects, reactive_effects, decay, time, departures
+    ↓
+6.7 [per NPC] character processing ← this NPC's observations
+    ↓
+    state_diffs + optional reflection
+    ↓
+6.8 intent lifecycle ← reflection subject vs intent subject
+    ↓
+6.9 continuation options → presented to user
+    ↓
+6.10 loop → 6.1
 ```

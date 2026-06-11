@@ -171,9 +171,14 @@ onMounted(loadSessions)
           class="rounded-xl border border-border/70 bg-background/70 p-4"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="line-clamp-1 text-sm font-semibold">
-              {{ session.scenario_name || 'Untitled Scenario' }}
-            </p>
+            <h3 class="m-0">
+              <RouterLink
+                :to="`/sessions/${session.session_id}`"
+                class="line-clamp-1 text-sm font-semibold underline-offset-4 transition hover:underline focus-visible:underline"
+              >
+                {{ session.scenario_name || 'Untitled Scenario' }}
+              </RouterLink>
+            </h3>
             <Badge :class="stateClass[inferSessionState(session)]">{{ inferSessionState(session) }}</Badge>
           </div>
 
@@ -188,9 +193,6 @@ onMounted(loadSessions)
           <div class="mt-3 flex gap-2">
             <Button size="sm" class="flex-1" as-child>
               <RouterLink :to="`/play/${session.session_id}`">Resume</RouterLink>
-            </Button>
-            <Button size="sm" variant="ghost" as-child>
-              <RouterLink :to="`/sessions/${session.session_id}`">Details</RouterLink>
             </Button>
 
             <Dialog>

@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { BookOpenText, Plus, Tags } from 'lucide-vue-next'
+import { BookOpenText, Plus, Sparkles, Tags } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import ModelSettingsDialog from '@/components/app/ModelSettingsDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useLocalSettings } from '@/composables/useLocalSettings'
 import { usePipelineApi } from '@/composables/usePipelineApi'
 
 const router = useRouter()
 const { createWorldLore, listWorldLoreTags } = usePipelineApi()
+const { settings } = useLocalSettings()
 
 const loadingTags = ref(true)
 const saving = ref(false)
@@ -170,9 +173,18 @@ onMounted(async () => {
       </article>
 
       <aside class="surface-panel rounded-2xl p-6 lg:sticky lg:top-24 lg:h-fit">
-        <div class="mb-3 flex items-center gap-2">
-          <Tags class="size-4" />
-          <h2 class="text-xl font-semibold">Tag Palette</h2>
+        <div class="mb-3 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <Tags class="size-4" />
+            <h2 class="text-xl font-semibold">Tag Palette</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <Badge variant="outline">
+              <Sparkles class="mr-1 size-3.5" />
+              {{ settings.aiProcessor }}
+            </Badge>
+            <ModelSettingsDialog />
+          </div>
         </div>
 
         <div v-if="loadingTags" class="rounded-xl border border-border/70 bg-background/70 p-3 text-sm text-muted-foreground">

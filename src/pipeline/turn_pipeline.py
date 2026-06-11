@@ -5,12 +5,14 @@ from collections.abc import Iterator
 from typing import Any
 
 from src.character_loader import CharacterLoader
+from src.memory.scenario_registry import ScenarioRegistry
 from src.models.prompt_processor import PromptProcessor
 from src.models.simulation import (
     ActionOutcome,
     CharacterProcessingResult,
     CharacterStateData,
     GMActionEvaluation,
+    GMConsequenceAction,
     Observation,
     Ruleset,
     WorldState,
@@ -18,8 +20,8 @@ from src.models.simulation import (
 from src.pipeline.action_generator import ActionGenerator
 from src.pipeline.character_processor import CharacterProcessor
 from src.pipeline.continuation_generator import ContinuationGenerator
+from src.pipeline.gm_consequence_resolver import GMConsequenceResolver
 from src.pipeline.gm_evaluator import GMEvaluator
-from src.pipeline.input_classifier import InputClassifier
 from src.pipeline.intent_manager import IntentManager
 from src.pipeline.narrator import Narrator
 from src.pipeline.observation_extractor import ObservationExtractor
@@ -35,7 +37,7 @@ class TurnPipeline:
     """Orchestrates all pipeline steps for a single turn.
 
     Uses two processor tiers:
-    - large_processor: GM evaluation, narration
+    - large_processor: GM challenge setup (6.3a), GM consequence resolution (6.3b), narration
     - mini_processor: all other steps (action gen, observation extraction, etc.)
     """
 
@@ -47,16 +49,17 @@ class TurnPipeline:
         ruleset_service: RulesetService,
         event_stream: EventStreamService,
         character_loader: CharacterLoader,
+        scenario_registry: ScenarioRegistry,
         dice_resolver: DiceResolver | None = None,
     ) -> None:
         self.session_state = session_state
         self.ruleset_service = ruleset_service
         self.event_stream = event_stream
         self.char_loader = character_loader
+        self.scenario_registry = scenario_registry
         self.dice = dice_resolver or DiceResolver()
 
         # Pipeline steps — mini model
-        self.input_classifier = InputClassifier(mini_processor)
         self.action_generator = ActionGenerator(mini_processor)
         self.observation_extractor = ObservationExtractor(mini_processor)
         self.character_processor = CharacterProcessor(mini_processor)
@@ -65,13 +68,14 @@ class TurnPipeline:
 
         # Pipeline steps — large model
         self.gm_evaluator = GMEvaluator(large_processor)
+        self.gm_consequence_resolver = GMConsequenceResolver(large_processor)
         self.narrator = Narrator(large_processor)
 
     def execute_turn(
         self,
         session_id: str,
         user_input: str,
-        input_type: str | None = None,
+        scenario_id: str,
         ruleset: Ruleset | None = None,
         user_id: str = "anonymous",
     ) -> Iterator[dict[str, Any]]:
@@ -87,7 +91,7 @@ class TurnPipeline:
         """
         try:
             yield from self._execute_turn_inner(
-                session_id, user_input, input_type, ruleset, user_id
+                session_id, user_input, scenario_id, ruleset, user_id
             )
         except Exception as e:
             logger.exception("Turn pipeline error")
@@ -97,7 +101,7 @@ class TurnPipeline:
         self,
         session_id: str,
         user_input: str,
-        input_type: str | None,
+        scenario_id: str,
         ruleset: Ruleset | None,
         user_id: str,
     ) -> Iterator[dict[str, Any]]:
@@ -105,6 +109,10 @@ class TurnPipeline:
         world_state = self.session_state.get_world_state(session_id, user_id)
         if not world_state:
             yield {"type": "error", "message": "Session not found"}
+            return
+        
+        if not ruleset:
+            yield {"type": "error", "message": "Ruleset not found"}
             return
 
         tick = self.session_state.get_turn_counter(session_id, user_id)
@@ -115,24 +123,21 @@ class TurnPipeline:
         # Save user message
         yield {"type": "status", "step": "processing_input"}
 
-        # --- Step 6.1: Input Classification ---
-        if input_type:
-            classified_type = input_type
-            action_text = user_input
-        else:
-            classification = self.input_classifier.execute(
-                user_input=user_input,
-                known_locations=self._get_known_locations(world_state),
-                current_location=world_state.location,
-                current_time=world_state.time,
-            )
-            classified_type = classification.type
-            action_text = classification.action_text or user_input
+        # --- Step 6.1: Input Classification (skipped — only "action" supported) ---
+        action_text = user_input
 
-        # TODO: handle relocation and time_skip types
-        if classified_type != "action":
-            yield {"type": "error", "message": f"Input type '{classified_type}' not yet supported"}
+        # Resolve persona from scenario
+        scenario_data = self.scenario_registry.get_scenario(scenario_id, user_id)
+        persona_id: str | None = scenario_data["scenario_data"].get("persona_id") if scenario_data else None
+        if not persona_id:
+            yield {"type": "error", "message": "No persona character configured for this scenario"}
             return
+
+        persona_info = self.char_loader.get_character_info(persona_id, user_id)
+        if not persona_info:
+            yield {"type": "error", "message": f"Persona character '{persona_id}' not found"}
+            return
+        persona_name = persona_info.name
 
         # --- Step 6.2: NPC Action Generation ---
         yield {"type": "status", "step": "generating_actions"}
@@ -141,14 +146,17 @@ class TurnPipeline:
 
         # User action
         user_action = {
-            "character": "You",
+            "character": persona_name,
             "type": "action",
             "description": action_text,
         }
         all_actions.append(user_action)
 
-        # Generate NPC actions
+        # Generate NPC actions (skip persona — their action comes from user input)
         for char_id in present_ids:
+            if char_id == persona_id:
+                continue
+
             char_state = all_states.get(char_id)
             if not char_state:
                 continue
@@ -174,6 +182,7 @@ class TurnPipeline:
                 time=world_state.time,
                 characters_present=self._present_names(present_ids, all_states, user_id),
                 user_action_description=action_text,
+                ruleset=ruleset
             )
 
             all_actions.append({
@@ -183,11 +192,12 @@ class TurnPipeline:
                 "target": result.action.target or "",
             })
 
-        # --- Step 6.3: GM Evaluation ---
+        # --- Step 6.3a: GM Challenge Setup ---
         yield {"type": "status", "step": "evaluating_actions"}
 
         skills_by_char = self._build_skills_map(present_ids, all_states, user_id)
         drive_schema_summary = self._format_drive_schema(ruleset) if ruleset else ""
+        relationship_stats_summary = self._format_relationship_stats(present_ids, all_states, user_id)
 
         gm_result = self.gm_evaluator.execute(
             actions=all_actions,
@@ -197,6 +207,7 @@ class TurnPipeline:
             characters_present=self._present_names(present_ids, all_states, user_id),
             skills_by_character=skills_by_char,
             drive_schema_summary=drive_schema_summary,
+            relationship_stats_summary=relationship_stats_summary,
         )
 
         # --- Step 6.4: Dice Resolution (programmatic) ---
@@ -204,27 +215,8 @@ class TurnPipeline:
 
         outcomes = self._resolve_dice(gm_result.evaluations, all_states, present_ids, user_id)
 
-        # Apply drive effects for successful actions
-        if ruleset:
-            for outcome in outcomes:
-                if outcome.result == "success" and outcome.gm_evaluation:
-                    eval_data = outcome.gm_evaluation
-                    if eval_data.drive_effects:
-                        char_id = self._name_to_id(outcome.character, present_ids, all_states, user_id)
-                        if char_id and char_id in all_states:
-                            effects = [{"drive": e.drive, "change": e.change} for e in eval_data.drive_effects]
-                            self.ruleset_service.apply_drive_effects(
-                                all_states[char_id], effects, ruleset
-                            )
-
-        # Apply drive decay for all present characters
-        if ruleset:
-            for char_id in present_ids:
-                if char_id in all_states:
-                    self.ruleset_service.apply_drive_decay(all_states[char_id], ruleset)
-
-        # --- Step 6.5: Narration (streamed) ---
-        yield {"type": "status", "step": "narrating"}
+        # --- Step 6.3b: GM Consequence Resolution ---
+        yield {"type": "status", "step": "resolving_consequences"}
 
         outcome_dicts = [
             {
@@ -235,6 +227,51 @@ class TurnPipeline:
             }
             for o in outcomes
         ]
+
+        consequence_result = self.gm_consequence_resolver.execute(
+            outcomes=outcome_dicts,
+            rules_text=ruleset.rules_text if ruleset else "",
+            location=world_state.location,
+            time=world_state.time,
+            characters_present=self._present_names(present_ids, all_states, user_id),
+            drive_schema_summary=drive_schema_summary,
+        )
+
+        # Build consequence lookup by character
+        consequence_map: dict[str, GMConsequenceAction] = {}
+        for cons in consequence_result.consequences:
+            consequence_map[cons.character] = cons
+
+        # Apply drive_effects from 6.3b
+        if ruleset:
+            for cons in consequence_result.consequences:
+                if cons.drive_effects:
+                    char_id = self._name_to_id(cons.character, present_ids, all_states, user_id)
+                    if char_id and char_id in all_states:
+                        effects = [{"drive": e.drive, "change": e.change} for e in cons.drive_effects]
+                        self.ruleset_service.apply_drive_effects(
+                            all_states[char_id], effects, ruleset
+                        )
+
+            # Apply reactive_effects from 6.3b
+            for cons in consequence_result.consequences:
+                for re in cons.reactive_effects:
+                    target_id = self._name_to_id(re.character, present_ids, all_states, user_id)
+                    if target_id and target_id in all_states:
+                        self.ruleset_service.apply_reactive_effects(
+                            all_states[target_id],
+                            [{"drive": re.drive, "change": re.change}],
+                            ruleset,
+                        )
+
+        # Apply drive decay for all present characters
+        if ruleset:
+            for char_id in present_ids:
+                if char_id in all_states:
+                    self.ruleset_service.apply_drive_decay(all_states[char_id], ruleset)
+
+        # --- Step 6.5: Narration (streamed) ---
+        yield {"type": "status", "step": "narrating"}
 
         narration_chunks: list[str] = []
         for chunk in self.narrator.execute_stream(
@@ -278,6 +315,14 @@ class TurnPipeline:
         for char_id in present_ids:
             char_state = all_states.get(char_id)
             if not char_state:
+                continue
+
+            # Persona is played by the user — skip observations, reflection,
+            # intent lifecycle, and departure checks.  Only clamp & save.
+            if char_id == persona_id:
+                if ruleset:
+                    self.ruleset_service.clamp_all(char_state, ruleset)
+                self.session_state.save_character_state(session_id, char_id, char_state)
                 continue
 
             char_info = self.char_loader.get_character_info(char_id, user_id)
@@ -328,9 +373,9 @@ class TurnPipeline:
                 user_id=user_id,
             )
 
-            # Handle departures
+            # Handle departures (succeed or auto_succeed, not auto_fail)
             for outcome in outcomes:
-                if outcome.character == char_info.name and outcome.result == "success":
+                if outcome.character == char_info.name and outcome.result in ("success", "auto_succeed"):
                     if outcome.gm_evaluation and outcome.gm_evaluation.departure:
                         char_state.is_present = False
                         self.session_state.mark_departure(
@@ -348,19 +393,10 @@ class TurnPipeline:
         yield {"type": "status", "step": "generating_options"}
 
         # Get user persona info for continuation
-        persona_brief = ""
-        persona_drives = ""
-        persona_emotional = ""
-        # Find persona from scenario (not an NPC)
-        for cid in list(all_states.keys()):
-            state = all_states.get(cid)
-            if state and cid not in present_ids:
-                persona_info = self.char_loader.get_character_info(cid, user_id)
-                if persona_info:
-                    persona_brief = persona_info.to_prompt_card()
-                    persona_drives = self._format_drives(state)
-                    persona_emotional = self._format_emotional(state)
-                    break
+        persona_brief = persona_info.to_prompt_card()
+        persona_state = all_states.get(persona_id)
+        persona_drives = self._format_drives(persona_state) if persona_state else ""
+        persona_emotional = self._format_emotional(persona_state) if persona_state else ""
 
         cont_result = self.continuation_generator.execute(
             location=world_state.location,
@@ -436,6 +472,7 @@ class TurnPipeline:
                 session_id, char_id, tick, limit=10
             )
             completion = self.intent_manager.check_completion(
+                character_name=char_info_name,
                 active_intent_goal=intent.goal,
                 success_condition_description=intent.success_condition.description or "",
                 recent_events=recent_events,
@@ -493,11 +530,21 @@ class TurnPipeline:
         contested_pairs: set[str] = set()
 
         for evaluation in evaluations:
-            if not evaluation.check_required:
+            # Handle result_override: auto_succeed or auto_fail
+            if evaluation.result_override == "auto_fail":
                 outcomes.append(ActionOutcome(
                     character=evaluation.character,
                     action_summary=evaluation.action_summary,
-                    result="success",
+                    result="auto_fail",
+                    gm_evaluation=evaluation,
+                ))
+                continue
+
+            if evaluation.result_override == "auto_succeed" or not evaluation.check_required:
+                outcomes.append(ActionOutcome(
+                    character=evaluation.character,
+                    action_summary=evaluation.action_summary,
+                    result="auto_succeed" if evaluation.result_override == "auto_succeed" else "success",
                     gm_evaluation=evaluation,
                 ))
                 continue
@@ -674,6 +721,23 @@ class TurnPipeline:
             if state and char_info:
                 result[char_info.name] = dict(state.skills)
         return result
+
+    def _format_relationship_stats(
+        self,
+        present_ids: list[str],
+        all_states: dict[str, CharacterStateData],
+        user_id: str,
+    ) -> str:
+        """Format relationship stats for all present characters (for GM context)."""
+        lines = []
+        for cid in present_ids:
+            state = all_states.get(cid)
+            char_info = self.char_loader.get_character_info(cid, user_id)
+            if state and char_info and state.emotional_state.per_relationship:
+                for target, dims in state.emotional_state.per_relationship.items():
+                    dim_str = ", ".join(f"{k}: {v:.0f}" for k, v in dims.items())
+                    lines.append(f"{char_info.name} toward {target}: {dim_str}")
+        return "\n".join(lines) if lines else ""
 
     def _get_known_locations(self, world_state: WorldState) -> list[str]:
         # TODO: populate from world lore / location history

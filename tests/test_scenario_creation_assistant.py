@@ -6,6 +6,7 @@ import pytest
 
 from src.models.api_models import ChatMessageModel, PartialScenario, PersonaSummary
 from src.models.character import Character
+from src.models.simulation import Ruleset, RulesetStateSchemas, DriveSchema, SkillSchema
 from src.scenario_creation_assistant import ScenarioCreationAssistant
 
 
@@ -75,9 +76,10 @@ class TestScenarioCreationAssistant:
         response, updated_scenario = assistant.process_message(
             user_message="I want a dramatic scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -98,9 +100,10 @@ class TestScenarioCreationAssistant:
         response, updated_scenario = assistant.process_message(
             user_message="Create a mystery scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
             streaming_callback=callback,
         )
@@ -130,9 +133,10 @@ What do you think?"""
         response, updated_scenario = assistant.process_message(
             user_message="Make it mysterious",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -160,9 +164,10 @@ What do you think?"""
         _, updated_scenario = assistant.process_message(
             user_message="Add some plot hooks",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -187,9 +192,10 @@ What do you think?"""
         _, updated_scenario = assistant.process_message(
             user_message="Add character goals",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -208,9 +214,10 @@ What do you think?"""
         _, updated_scenario = assistant.process_message(
             user_message="What do you think?",
             current_scenario=initial_scenario,
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -249,9 +256,10 @@ What do you think?"""
         assistant.process_message(
             user_message="Continue",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=history,
         )
 
@@ -266,9 +274,10 @@ What do you think?"""
         assistant.process_message(
             user_message="Create a scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -285,9 +294,10 @@ What do you think?"""
         assistant.process_message(
             user_message="Create a scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=mock_persona,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -308,9 +318,10 @@ What do you think?"""
         assistant.process_message(
             user_message="Update the scenario",
             current_scenario=current_scenario,
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -335,9 +346,10 @@ What do you think?"""
         _, updated_scenario = assistant.process_message(
             user_message="Update",
             current_scenario=initial_scenario,
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -363,9 +375,10 @@ What do you think?"""
         _, updated_scenario = assistant.process_message(
             user_message="Change the location",
             current_scenario=current_scenario,
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -388,9 +401,10 @@ What do you think?"""
         assistant.process_message(
             user_message="Create a scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=available_personas,
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -426,9 +440,10 @@ What do you think?"""
         _, updated_scenario = assistant.process_message(
             user_message="Create a mystery scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=available_personas,
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -450,9 +465,10 @@ What do you think?"""
         assistant.process_message(
             user_message="Create a scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=available_personas,
+            ruleset=None,
             conversation_history=[],
         )
 
@@ -470,11 +486,67 @@ What do you think?"""
         assistant.process_message(
             user_message="Create a scenario",
             current_scenario=PartialScenario(),
-            character=mock_character,
+            characters=[mock_character],
             persona=None,
             available_personas=[],
+            ruleset=None,
             conversation_history=[],
         )
 
         # System prompt should NOT include persona suggestion instructions
         assert "Persona Suggestions" not in processor.last_prompt
+
+    def test_multiple_characters_in_prompt(self, mock_character: Character) -> None:
+        """Test that all characters appear in the prompt when multiple are provided."""
+        processor = MockPromptProcessor(response="Response")
+        assistant = ScenarioCreationAssistant(prompt_processor=processor)
+
+        second_character = Character(
+            name="Second NPC",
+            tagline="A mysterious stranger",
+            backstory="Nobody knows where they came from.",
+            personality="enigmatic, quiet",
+        )
+
+        assistant.process_message(
+            user_message="Create a multi-character scenario",
+            current_scenario=PartialScenario(),
+            characters=[mock_character, second_character],
+            persona=None,
+            available_personas=[],
+            ruleset=None,
+            conversation_history=[],
+        )
+
+        assert "Test Character" in processor.last_user_prompt
+        assert "Second NPC" in processor.last_user_prompt
+
+    def test_ruleset_context_in_prompt(self, mock_character: Character) -> None:
+        """Test that ruleset context appears in the prompt when provided."""
+        processor = MockPromptProcessor(response="Response")
+        assistant = ScenarioCreationAssistant(prompt_processor=processor)
+
+        ruleset = Ruleset(
+            id="rs-1",
+            name="Noir Mechanics",
+            rules_text="Gritty noir simulation with decay-heavy drives.",
+            state_schemas=RulesetStateSchemas(
+                drives=[DriveSchema(name="resolve", default=6)],
+                skills=[SkillSchema(name="persuasion")],
+            ),
+        )
+
+        assistant.process_message(
+            user_message="Draft a tense scenario",
+            current_scenario=PartialScenario(),
+            characters=[mock_character],
+            persona=None,
+            available_personas=[],
+            ruleset=ruleset,
+            conversation_history=[],
+        )
+
+        assert "Noir Mechanics" in processor.last_user_prompt
+        assert "Gritty noir simulation" in processor.last_user_prompt
+        assert "resolve" in processor.last_user_prompt
+        assert "persuasion" in processor.last_user_prompt

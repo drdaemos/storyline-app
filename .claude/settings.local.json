@@ -13,7 +13,11 @@
       "Bash(if [ -f \"$test_file\" ])",
       "Bash(else)",
       "Bash(fi)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(npm run:*)",
+      "Bash(sqlite3:*)",
+      "Bash(uv run alembic:*)",
+      "Bash(uv run python -c \"\nfrom src.memory.database_config import DatabaseConfig\ndc = DatabaseConfig\\(\\)\nwith dc.create_session\\(\\) as db:\n    try:\n        db.execute\\(__import__\\(''sqlalchemy''\\).text\\(''ALTER TABLE character_states DROP COLUMN is_persona''\\)\\)\n        db.commit\\(\\)\n        print\\(''Dropped is_persona column''\\)\n    except Exception as e:\n        print\\(f''Column may not exist or SQLite limitation: {e}''\\)\n\")"
     ],
     "deny": [],
     "ask": []

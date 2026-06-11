@@ -68,7 +68,6 @@
       :sessions="sessions"
       :character-name="characterId"
       @select-session="navigateToChat"
-      @open-scenario-modal="openScenarioModal"
       @session-deleted="handleSessionDeleted"
     />
 
@@ -116,21 +115,16 @@
     </div>
   </div>
 
-  <!-- Scenario Selection Modal -->
-  <ScenarioSelectionModal
-    :show="showScenarioModal"
-    :character-name="characterId"
-    @close="closeScenarioModal"
-  />
+
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
+import { usePipelineApi } from '@/composables/usePipelineApi'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import SessionList from '@/components/SessionList.vue'
-import ScenarioSelectionModal from '@/components/ScenarioSelectionModal.vue'
 import type { SessionInfo, ScenarioSummary } from '@/types'
 
 const router = useRouter()
@@ -140,17 +134,16 @@ const {
   getSessions,
   listScenariosForCharacter,
   deleteScenario,
-  startSessionWithScenario,
   loading,
   error,
 } = useApi()
+const { startSession } = usePipelineApi()
 const { settings } = useLocalSettings()
 
 const characterId = ref(route.params.characterId as string)
 const characterInfo = ref<Record<string, string> | null>(null)
 const sessions = ref<SessionInfo[]>([])
 const savedScenarios = ref<ScenarioSummary[]>([])
-const showScenarioModal = ref(false)
 
 const loadCharacterData = async () => {
   try {
@@ -186,13 +179,6 @@ const navigateToChat = (sessionId: string) => {
   })
 }
 
-const openScenarioModal = () => {
-  showScenarioModal.value = true
-}
-
-const closeScenarioModal = () => {
-  showScenarioModal.value = false
-}
 
 const handleSessionDeleted = (sessionId: string) => {
   sessions.value = sessions.value.filter((session) => session.session_id !== sessionId)
@@ -200,19 +186,15 @@ const handleSessionDeleted = (sessionId: string) => {
 
 const navigateToCreateScenario = () => {
   router.push({
-    name: 'create-scenario',
-    params: {
-      characterId: characterId.value,
-    },
+    name: 'scenario-create-modern',
+    query: { character: characterId.value },
   })
 }
 
 const startSessionWithSavedScenario = async (scenarioId: string) => {
   try {
-    const response = await startSessionWithScenario({
-      character_name: characterId.value,
+    const response = await startSession({
       scenario_id: scenarioId,
-      persona_id: settings.value.selectedPersonaId || null,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })

@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WorldLoreCreateView from './WorldLoreCreateView.vue'
 
@@ -17,6 +18,12 @@ vi.mock('@/composables/usePipelineApi', () => ({
   usePipelineApi: () => ({
     createWorldLore,
     listWorldLoreTags,
+  }),
+}))
+
+vi.mock('@/composables/useLocalSettings', () => ({
+  useLocalSettings: () => ({
+    settings: ref({ aiProcessor: 'google-flash', backupProcessor: 'deepseek-v32' }),
   }),
 }))
 
@@ -41,12 +48,26 @@ const uiStubs = {
     template:
       '<textarea v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
+  ModelSettingsDialog: {
+    template: '<button data-testid="model-settings-trigger"></button>',
+  },
 }
 
 describe('WorldLoreCreateView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     listWorldLoreTags.mockResolvedValue(['district', 'faction'])
+  })
+
+  it('shows model settings trigger in sidebar', async () => {
+    const wrapper = mount(WorldLoreCreateView, {
+      global: {
+        stubs: uiStubs,
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.find('[data-testid="model-settings-trigger"]').exists()).toBe(true)
   })
 
   it('creates world lore with parsed tags and redirects', async () => {

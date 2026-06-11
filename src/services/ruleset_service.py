@@ -209,6 +209,50 @@ class RulesetService:
 
         return state
 
+    def apply_reactive_effects(
+        self,
+        target_state: CharacterStateData,
+        effects: list[dict[str, Any]],
+        ruleset: Ruleset,
+    ) -> CharacterStateData:
+        """Apply reactive effects from GM consequence resolution (step 6.3b).
+
+        These are cross-character effects — e.g., intimidation causing target's composure -1.
+        Effects target drives or emotional state dimensions.
+
+        Args:
+            target_state: State of the character being affected
+            effects: List of {drive: str, change: float}
+            ruleset: Ruleset for range bounds
+
+        Returns:
+            Updated state
+        """
+        drive_map = {d.name: d for d in ruleset.state_schemas.drives}
+        global_dim_map = {d.name: d for d in ruleset.state_schemas.emotional_state.global_dims}
+
+        for effect in effects:
+            stat_name = effect.get("drive", "")
+            change = float(effect.get("change", 0))
+
+            # Try drives first
+            if stat_name in drive_map and stat_name in target_state.drives:
+                schema = drive_map[stat_name]
+                new_val = target_state.drives[stat_name] + change
+                new_val = max(float(schema.range_min), min(float(schema.range_max), new_val))
+                target_state.drives[stat_name] = new_val
+                continue
+
+            # Try global emotional dimensions
+            if stat_name in global_dim_map:
+                schema = global_dim_map[stat_name]
+                current = target_state.emotional_state.global_state.get(stat_name, float(schema.default))
+                new_val = current + change
+                new_val = max(float(schema.range_min), min(float(schema.range_max), new_val))
+                target_state.emotional_state.global_state[stat_name] = new_val
+
+        return target_state
+
     def apply_offscreen_restore(
         self,
         state: CharacterStateData,

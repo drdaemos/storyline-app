@@ -6,7 +6,7 @@ import ScenarioCreateView from './ScenarioCreateView.vue'
 const push = vi.fn()
 const streamScenarioCreation = vi.fn()
 const saveScenario = vi.fn()
-const startSessionWithScenario = vi.fn()
+const startSession = vi.fn()
 
 const listCharacters = vi.fn()
 const listPersonas = vi.fn()
@@ -25,7 +25,6 @@ vi.mock('@/composables/useApi', () => ({
   useApi: () => ({
     streamScenarioCreation,
     saveScenario,
-    startSessionWithScenario,
   }),
 }))
 
@@ -35,6 +34,7 @@ vi.mock('@/composables/usePipelineApi', () => ({
     listPersonas,
     listRulesets,
     listWorldLore,
+    startSession,
   }),
 }))
 
@@ -95,6 +95,9 @@ const uiStubs = {
   SelectValue: {
     template: '<div><slot /></div>',
   },
+  ModelSettingsDialog: {
+    template: '<button data-testid="model-settings-trigger"></button>',
+  },
 }
 
 describe('ScenarioCreateView', () => {
@@ -114,6 +117,17 @@ describe('ScenarioCreateView', () => {
     ])
   })
 
+  it('shows model settings trigger in assistant panel', async () => {
+    const wrapper = mount(ScenarioCreateView, {
+      global: {
+        stubs: uiStubs,
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.find('[data-testid="model-settings-trigger"]').exists()).toBe(true)
+  })
+
   it('applies assistant stream updates to scenario form fields', async () => {
     streamScenarioCreation.mockImplementation(async (_payload, onMessage, onUpdate, onComplete) => {
       onMessage('Assistant reply')
@@ -125,7 +139,7 @@ describe('ScenarioCreateView', () => {
     })
 
     saveScenario.mockResolvedValue({ scenario_id: 'sc-1' })
-    startSessionWithScenario.mockResolvedValue({ session_id: 'sess-1' })
+    startSession.mockResolvedValue({ session_id: 'sess-1' })
 
     const wrapper = mount(ScenarioCreateView, {
       global: {
@@ -144,12 +158,13 @@ describe('ScenarioCreateView', () => {
     expect((wrapper.get('#scenario-summary').element as HTMLInputElement).value).toBe(
       'Nightfall Ledger'
     )
+    expect(wrapper.text()).toContain('Structured update applied')
   })
 
   it('saves and starts session then navigates to play', async () => {
     streamScenarioCreation.mockResolvedValue(undefined)
     saveScenario.mockResolvedValue({ scenario_id: 'sc-9' })
-    startSessionWithScenario.mockResolvedValue({ session_id: 'sess-9' })
+    startSession.mockResolvedValue({ session_id: 'sess-9' })
 
     const wrapper = mount(ScenarioCreateView, {
       global: {
@@ -173,7 +188,7 @@ describe('ScenarioCreateView', () => {
         }),
       })
     )
-    expect(startSessionWithScenario).toHaveBeenCalledWith(
+    expect(startSession).toHaveBeenCalledWith(
       expect.objectContaining({
         scenario_id: 'sc-9',
       })
@@ -184,7 +199,7 @@ describe('ScenarioCreateView', () => {
   it('supports multi-character selection in scenario payload', async () => {
     streamScenarioCreation.mockResolvedValue(undefined)
     saveScenario.mockResolvedValue({ scenario_id: 'sc-10' })
-    startSessionWithScenario.mockResolvedValue({ session_id: 'sess-10' })
+    startSession.mockResolvedValue({ session_id: 'sess-10' })
 
     const wrapper = mount(ScenarioCreateView, {
       global: {
@@ -206,7 +221,6 @@ describe('ScenarioCreateView', () => {
       expect.objectContaining({
         scenario: expect.objectContaining({
           character_ids: ['char-1', 'char-2'],
-          character_id: 'char-1',
         }),
       })
     )

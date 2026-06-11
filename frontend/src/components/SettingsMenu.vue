@@ -50,27 +50,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { SelectItem } from '@nuxt/ui'
 import { useLocalSettings } from '@/composables/useLocalSettings'
+import { usePromptProcessorOptions } from '@/composables/usePromptProcessorOptions'
 
 const open = ref(false)
 
 const { settings, clearSettings } = useLocalSettings()
+const { refresh: refreshProcessorOptions, getOptionsWithCurrentValues } = usePromptProcessorOptions()
 
-const processorOptions = ref<SelectItem[]>([
-  { label: 'Claude Haiku 4.5 ($5/M)', id: 'claude-haiku' },
-  { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
-  { label: 'Claude Opus 4.5 ($25/M)', id: 'claude-opus' },
-  { label: 'GPT-5.2 Chat ($14/M)', id: 'gpt-5.2' },
-  { label: 'Gemini 3 Flash ($3/M)', id: 'google-flash' },
-  { label: 'Gemini 3 Pro ($12/M)', id: 'google-pro' },
-  { label: 'DeepSeek V3.2 ($1.68/M)', id: 'deepseek-v32' },
-  { label: 'Kimi K2 ($1.90/M)', id: 'kimi' },
-  { label: 'Kimi K2 Thinking ($2.50/M)', id: 'kimi-thinking' },
-  { label: 'Mistral Small Creative ($0.30/M)', id: 'mistral' },
-  { label: 'Grok 4.1 Fast ($0.50/M)', id: 'grok' },
-  { label: 'GLM-4.7 ($2.20/M)', id: 'glm' },
-  { label: 'Cohere Command A ($10/M)', id: 'cohere' },
-])
+const processorOptions = computed<SelectItem[]>(() =>
+  getOptionsWithCurrentValues([settings.value.aiProcessor, settings.value.backupProcessor]).map(
+    (model) => ({
+      id: model.id,
+      label: model.displayName,
+    })
+  )
+)
+
+watch(open, async (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+  await refreshProcessorOptions()
+})
 </script>

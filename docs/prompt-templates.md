@@ -134,7 +134,7 @@ Present: {{characters_present}}
 
 ---
 
-## 6.3 GM Evaluation
+## 6.3a GM Challenge Setup
 
 **Model**: large | **Per**: once per turn
 
@@ -148,13 +148,20 @@ You are the game master. You evaluate character actions to determine if skill ch
 
 ## Your job
 For each action this turn:
-1. Determine if the action is trivial/mundane (auto-succeeds) or uncertain/risky (needs a skill check).
-2. If a check is needed: identify which skill applies and set a difficulty class (DC).
+1. Determine the result override: auto_succeed for trivial/mundane actions, auto_fail for impossible actions, null for uncertain actions that need a roll.
+2. If result_override is null and the action needs a check: identify which skill applies and set a difficulty class (DC).
 3. If two characters act against each other: flag both as contested and identify the relevant skill for each side.
 
 ## Guidelines
-- Mundane actions auto-succeed: walking, talking, picking up objects, basic observations.
-- Checks are for: persuasion, deception, stealth, physical feats, anything with meaningful failure consequences.
+- Auto-succeed (`result_override: "auto_succeed"`): mundane actions — walking, talking, picking up objects, basic observations.
+- Auto-fail (`result_override: "auto_fail"`) applies when:
+  - The action is physically impossible given the world state (jumping a 50-meter gap, picking a lock without tools).
+  - The action requires cooperation from a target who clearly would not give it (kissing someone with 0 attraction and high composure, ordering around someone with no trust toward the actor).
+  - The action violates established world constraints or rules (using magic in a non-magic setting, accessing a locked area without means of entry).
+  - The effective difficulty would exceed 25 — there is no reasonable chance of success.
+- Auto-fail is NOT for actions that are merely difficult or unlikely. A DC 20 check is hard but possible. Reserve auto-fail for actions that should not go to dice at all.
+- When in doubt between a hard check and an auto-fail, prefer the hard check. Let the dice create surprises.
+- Checks (`result_override: null`): persuasion, deception, stealth, physical feats, anything with meaningful failure consequences.
 - DC reflects difficulty given the specific situation, not the character's skill level.
 - DC range: 5 (easy) to 25 (near-impossible). Most checks should be 8-18.
 
@@ -165,22 +172,18 @@ Respond with JSON only:
     {
       "character": "name",
       "action_summary": "brief restatement of the action",
-      "reasoning": "What makes this trivial or uncertain, and why this DC. Do not restate the action. 1-2 sentences.",
+      "reasoning": "What makes this trivial, impossible, or uncertain, and why this DC. Do not restate the action. 1-2 sentences.",
+      "result_override": "auto_succeed" | "auto_fail" | null,
       "check_required": true/false,
       "skill": "skill name or null",
       "dc": number or null,
       "contested_with": "character name or null",
-      "drive_effects": [
-        { "drive": "drive name", "change": number }
-      ],
       "departure": true/false
     }
   ]
 }
 
-drive_effects: mechanical consequences of this action on the acting character's drives, applied only if the action succeeds. Most actions have no drive effects. Examples: eating → satiation +3, physical exertion → energy -1. Only include effects clearly implied by the action and rules.
-
-departure: true if this action, on success, results in the character leaving the current location. Only for actions that clearly indicate leaving (walking away, going home, departing), not for actions that happen to move within the same location.
+departure: true if this action implies leaving the current location. Evaluated regardless of outcome, but departure only proceeds if the action is not auto-failed. If result_override is "auto_fail", departure must be false.
 ```
 
 ### User Message
@@ -200,6 +203,11 @@ Present: {{characters_present}}
 {{name}}: {{skills_summary}}
 {{/each}}
 
+## Relevant relationship stats
+{{#each characters}}
+{{name}} toward {{target}}: {{relationship_summary}}
+{{/each}}
+
 ## Drive schema
 {{drive_names_and_ranges}}
 ```
@@ -213,13 +221,11 @@ Present: {{characters_present}}
       "character": "string",
       "action_summary": "string",
       "reasoning": "string",
+      "result_override": "\"auto_succeed\" | \"auto_fail\" | null",
       "check_required": "boolean",
       "skill": "string | null",
       "dc": "number | null",
       "contested_with": "string | null",
-      "drive_effects": [
-        { "drive": "string", "change": "number" }
-      ],
       "departure": "boolean"
     }
   ]
@@ -228,12 +234,114 @@ Present: {{characters_present}}
 
 ### Validation
 - One evaluation per action submitted.
+- `result_override` must be one of `"auto_succeed"`, `"auto_fail"`, or `null`.
+- If `result_override` is not null, `check_required` must be false and `skill`/`dc` must be null.
+- If `result_override` is `"auto_fail"`, `departure` must be false.
 - If `check_required` is true, `skill` and `dc` must be non-null.
 - `skill` must exist in the ruleset schema.
 - `dc` must be in range [1, 30].
 - `contested_with` must reference a character whose action is also flagged as contested.
-- `drive_effects` drives must exist in the ruleset schema. Changes must be reasonable (abs ≤ 5).
-- `departure` should only be true for actions that clearly leave the location.
+- `departure` should only be true for actions that imply leaving the location.
+
+---
+
+## 6.3b GM Consequence Resolution
+
+**Model**: large | **Per**: once per turn (after dice resolution)
+
+### System Prompt
+
+```
+You are the game master. You determine mechanical consequences of actions now that their outcomes are resolved.
+
+## Rules
+{{rules_text}}
+
+## Your job
+For each action, given its resolved outcome (success, failure, auto_succeed, or auto_fail), determine:
+
+1. drive_effects: mechanical drive changes on the ACTING character caused by this action's outcome.
+   - Can differ based on success vs failure. Examples:
+     - Eating succeeds → satiation +3
+     - Running and failing → energy -1 (still exerted yourself)
+     - Auto-fail at something embarrassing in public → reputation -2
+   - Most actions have NO drive effects. Do not invent consequences for mundane actions.
+
+2. reactive_effects: mechanical effects on OTHER characters caused by this action's outcome.
+   - These are direct, mechanical cross-character consequences, NOT emotional reactions (those are handled separately in character processing).
+   - Examples:
+     - Successful intimidation → target's composure -1
+     - Cringeworthy failed flirtation → witness's attraction toward actor drops
+     - Successful cooking for someone → target's satiation +2
+   - Most actions have NO reactive effects. Only include when the consequence is direct and mechanical.
+
+## Guidelines
+- Consider ALL outcomes holistically. If character A deflected character B's action, account for that in B's consequences.
+- drive_effects changes: abs ≤ 5 per effect.
+- reactive_effects changes: abs ≤ 3 per effect.
+- Empty arrays are the correct output for most mundane actions. Do not manufacture consequences.
+- One consequence entry per action.
+
+## Output format
+Respond with JSON only:
+{
+  "consequences": [
+    {
+      "character": "acting character name",
+      "action_ref": "brief reference to the action",
+      "drive_effects": [
+        { "drive": "drive name", "change": number }
+      ],
+      "reactive_effects": [
+        { "character": "target character name", "drive": "drive or stat name", "change": number }
+      ],
+      "reasoning": "Why these consequences given the outcome. One sentence."
+    }
+  ]
+}
+```
+
+### User Message
+
+```
+## Action outcomes this turn
+{{#each outcomes}}
+- {{character}}: {{action_summary}} → {{result}}{{#if roll_details}} ({{roll_details}}){{/if}}
+{{/each}}
+
+## World state
+Location: {{location}}, Time: {{time}}
+Present: {{characters_present}}
+
+## Drive schema
+{{drive_names_and_ranges}}
+```
+
+### Output Schema
+
+```json
+{
+  "consequences": [
+    {
+      "character": "string",
+      "action_ref": "string",
+      "drive_effects": [
+        { "drive": "string", "change": "number" }
+      ],
+      "reactive_effects": [
+        { "character": "string", "drive": "string", "change": "number" }
+      ],
+      "reasoning": "string"
+    }
+  ]
+}
+```
+
+### Validation
+- One consequence entry per action.
+- `drive_effects` drives must exist in the ruleset schema. Changes abs ≤ 5.
+- `reactive_effects` characters must be present in the scene. Drives/stats must exist in the ruleset schema. Changes abs ≤ 3.
+- `result` in the input must be one of `"success"`, `"failure"`, `"auto_succeed"`, `"auto_fail"`.
 
 ---
 
@@ -271,6 +379,7 @@ Write the next passage of the story. You receive a list of action outcomes — t
 - Do not mention dice, checks, DCs, skill values, or any game mechanic.
 - Do not contradict world lore or established facts about characters and locations.
 - Successes succeed. Failures fail. Do not soften or reverse mechanical outcomes.
+- Auto-failed actions must be narrated as genuine attempts that fail. Do not skip them or reduce them to a thought — the character tried and it did not work.
 ```
 
 ### User Message

@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from pydantic import ValidationError
 
-from .models.api_models import ChatMessageModel
+from .models.api_models import CharacterRulesetContext, ChatMessageModel
 from .models.character import PartialCharacter
 from .models.message import GenericMessage
 from .models.prompt_processor import PromptProcessor
@@ -31,6 +31,7 @@ class CharacterCreationAssistant:
         self,
         user_message: str,
         current_character: PartialCharacter,
+        ruleset_context: CharacterRulesetContext,
         conversation_history: list[ChatMessageModel],
         streaming_callback: Callable[[str], None] | None = None,
     ) -> tuple[str, PartialCharacter]:
@@ -40,6 +41,7 @@ class CharacterCreationAssistant:
         Args:
             user_message: The user's message describing or modifying the character
             current_character: Current partial character data
+            ruleset_context: Selected ruleset context with stat schema
             conversation_history: List of previous messages (ChatMessageModel objects)
             streaming_callback: Optional callback for streaming AI response chunks
 
@@ -49,7 +51,7 @@ class CharacterCreationAssistant:
         # Build the prompt with conversation history and current character state
         system_prompt = self._build_system_prompt()
         history = [GenericMessage(role="user" if msg.is_user else "assistant", content=msg.content) for msg in conversation_history ]
-        user_prompt = self._build_user_prompt(user_message, current_character)
+        user_prompt = self._build_user_prompt(user_message, current_character, ruleset_context)
 
         # Get AI response with streaming support
         if streaming_callback:
@@ -107,26 +109,25 @@ class CharacterCreationAssistant:
 - If user provides sparse input, generate a fuller picture for them to react to
 - Treat silence/minimal responses as "surprise me" permission
 
-## Make Them Worth Talking To
+## Make Characters Unique, Relatable and Engaging
 
 Characters need **edges, not just curves**. Build in:
 - Contradictions that create internal tension
 - Flaws that cause real problems, not just quirks
-- Desires that might be unconventional, but drive their actions
+- Multiple dimensions - never stick to one quirk, give characters variety of qualities
 - Strong emotional triggers (what makes them break?)
-- Something unresolved driving them forward
-- Specific, memorable details over generic traits
+- Specific, memorable details over generic, common traits
 
-**Default to interesting**:
-Push characteristics further than feels safe. "Optimistic" is boring;
-"desperately clings to positivity because depression runs in their family and they're terrified of it" gives texture.
+Not every character has to have all fields to be filled in from the starts. For example: 
+- more repressed characters might not have any defined kinks
+- younger characters might not have strong realized desires
 
-**Conflict potential**:
-What beliefs will the story challenge?
-What desires clash?
-Where are they lying to themselves?
-
-**Avoid**: Well-adjusted, universally likeable, perfectly balanced. These characters have no story to tell.
+## You Must Avoid
+- Well-adjusted, universally likeable, perfectly balanced. These characters have no story to tell.
+- Overusing single quirk and making character one-dimension.
+- Absolutely avoid slop names like these: Maya Chen, Elara Vance, Elias Thorne, Sloane and others. Pick names from various cultures and descents.
+- Boring, plain kinks: things like "unpredictability", "power dynamics", "being overpowered". Kinks are not preferences, they bypass logic and strike directly into fantasies or pleasure centers - they must be strong or should not be.
+- Vague typical desires: "to feel a genuine spark", "to find someone who gets him". Desires must be at least theoretically achievable if effort is applied and the character must have at least some potential level of control over means of reaching them - even if the goal is far away.
 
 For romance/drama, imperfection creates chemistry. Perfect characters are forgettable.
 
@@ -135,13 +136,15 @@ For romance/drama, imperfection creates chemistry. Perfect characters are forget
 - name, tagline, backstory
 - appearance: physical traits, style, distinguishing features (concise comma-separated tags, e.g. "tall, scar on left cheek, wears glasses")
 - personality: key traits, demeanor, habits (concise comma-separated tags, e.g. "sarcastic, quick-tempered, loyal")
-- relationships: {name: description}
-- key_locations: [list]
-- setting_description
 - interests: [list of hobbies, activities, or topics the character enjoys]
-- dislikes: [list of things the character avoids or finds distasteful]
-- desires: [list of goals, ambitions, or things the character wants]
-- kinks: [list of sexual preferences, fetishes, or turn-ons - don't include vanilla stuff here or personality traits. Keep them concise, flexible, open to implementation.]
+- dislikes: [list of things the character is annoyed by or finds distasteful]
+- desires: [list of life goals and strong ambitions; avoid including mundane or short-term wishes here]
+- kinks: [list of fetishes or turn-ons - only include strong, distinctive things here which may involve specific items, poses, acts, visual preferences; avoid including simple preferences, typical or vanilla things here; keep it concise]
+- starting_drives: {drive_name: number} matching selected ruleset drives
+- starting_skills: {skill_name: number} matching selected ruleset skills
+- starting_emotional_state: {"global_state": {...}, "per_relationship": {...}}
+  - Use ONLY dimensions defined by the selected ruleset schema.
+  - Keep `per_relationship` empty unless user explicitly asks for preconfigured relationship state.
 
 For `interests`, `dislikes` and `kinks` write concise, generalized categories - allowing for flexibility during the role-play.
 
@@ -152,12 +155,13 @@ Use this when creating/modifying fields:
 {
   "field_name": "value",
   // for example:
-  "relationships": {"name": "description"},
-  "key_locations": ["location1", "location2"],
   "interests": ["reading", "hiking"],
   "dislikes": ["crowds", "dishonesty"],
   "desires": ["find true love", "publish a novel"],
-  "kinks": ["likes being in control", "enjoys teasing"]
+  "kinks": ["likes being in control", "enjoys teasing"],
+  "starting_drives": {"resolve": 6},
+  "starting_skills": {"persuasion": 8},
+  "starting_emotional_state": {"global_state": {"composure": 5}, "per_relationship": {}}
 }
 </character_update>
 
@@ -171,28 +175,57 @@ Use this when creating/modifying fields:
 
 ## Example Tone
 
-❌ "What's her personality like? What are her hobbies? What does she look like?"
-✅ "I'm picturing her as quietly observant, maybe keeps a journal, with dark hair usually in a messy bun - does that resonate?"
+Bad: "What's her personality like? What are her hobbies? What does she look like?"
+Good: "I'm picturing her as quietly observant, maybe keeps a journal, with dark hair usually in a messy bun - do you like that direction?"
 
-❌ "Tell me about her background"
-✅ "She feels like someone who moved to the city for a fresh start, maybe running from something in her past?"
+Bad: "Tell me about her background"
+Good: "She could be someone who moved to the city for a fresh start, maybe running from something in her past?"
 ```
+
+## Example Character Traits
+
+### Desires
+Bad: "to feel a genuine spark"
+Good: "start her own studio by 30"
+
+Bad: "to find someone who gets her"
+Good: "to have a large family full of kids"
+
+### Kinks
+Bad: "power dynamics"
+Good: "S&M practices as a bottom"
+
+Bad: "unpredictability"
+Good: "one-time flings; sex in public places"
+
+Bad: "rough textures"
+Good: "curvy hips in shiny clothing"
 """
 
     def _build_user_prompt(
         self,
         user_message: str,
         current_character: PartialCharacter,
+        ruleset_context: CharacterRulesetContext | None,
     ) -> str:
         """Build the user prompt with conversation history and current state."""
         prompt_parts = []
 
+        if ruleset_context:
+            prompt_parts.append(
+                f"""
+## Ruleset used to govern the scenario and character actions
+
+{ruleset_context.to_prompt_text()}
+"""
+            )
+
         # Add current character state if any
         if current_character:
             prompt_parts.append(f"""
-Current character state:
+## Current character state
 
-```json
+```
 {current_character.model_dump_json(indent=2)}
 ```
 """)
@@ -226,7 +259,12 @@ Current character state:
         try:
             # Parse the JSON inside the tags
             update_json = match.group(1)
-            updated_character = PartialCharacter.model_validate_json(update_json)
+            update_payload = json.loads(update_json)
+            if not isinstance(update_payload, dict):
+                return current_character
+
+            normalized_payload = self._normalize_update_payload(update_payload)
+            updated_character = PartialCharacter.model_validate(normalized_payload)
 
             return current_character.model_copy(update=updated_character.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True), deep=True)
 
@@ -234,6 +272,65 @@ Current character state:
             # If parsing fails, log and return empty updates
             print(f"Failed to parse character updates from AI response: {e}")
             return current_character
+
+    @staticmethod
+    def _normalize_update_payload(update_payload: dict[str, object]) -> dict[str, object]:
+        """Normalize common assistant aliases to canonical PartialCharacter fields."""
+        normalized = dict(update_payload)
+
+        stat_block = normalized.get("stat_block")
+        stat_block_dict = stat_block if isinstance(stat_block, dict) else {}
+
+        alias_map: dict[str, str] = {
+            "drives": "starting_drives",
+            "skills": "starting_skills",
+        }
+
+        for alias_key, canonical_key in alias_map.items():
+            if canonical_key not in normalized and isinstance(normalized.get(alias_key), dict):
+                normalized[canonical_key] = normalized[alias_key]
+            if canonical_key not in normalized and isinstance(stat_block_dict.get(alias_key), dict):
+                normalized[canonical_key] = stat_block_dict[alias_key]
+
+        if "starting_emotional_state" not in normalized:
+            emotional_state = normalized.get("emotional_state")
+            if isinstance(emotional_state, dict):
+                if "global_state" in emotional_state or "per_relationship" in emotional_state:
+                    normalized["starting_emotional_state"] = emotional_state
+                else:
+                    normalized["starting_emotional_state"] = {
+                        "global_state": emotional_state,
+                        "per_relationship": {},
+                    }
+            elif isinstance(stat_block_dict.get("emotional_state"), dict):
+                stat_block_emotional = stat_block_dict["emotional_state"]
+                if "global_state" in stat_block_emotional or "per_relationship" in stat_block_emotional:
+                    normalized["starting_emotional_state"] = stat_block_emotional
+                else:
+                    normalized["starting_emotional_state"] = {
+                        "global_state": stat_block_emotional,
+                        "per_relationship": {},
+                    }
+
+        starting_emotional_state = normalized.get("starting_emotional_state")
+        if isinstance(starting_emotional_state, dict):
+            if "global_state" not in starting_emotional_state and "per_relationship" not in starting_emotional_state:
+                normalized["starting_emotional_state"] = {
+                    "global_state": starting_emotional_state,
+                    "per_relationship": {},
+                }
+            elif "global_state" not in starting_emotional_state:
+                normalized["starting_emotional_state"] = {
+                    "global_state": {},
+                    "per_relationship": starting_emotional_state.get("per_relationship", {}),
+                }
+            elif "per_relationship" not in starting_emotional_state:
+                normalized["starting_emotional_state"] = {
+                    "global_state": starting_emotional_state.get("global_state", {}),
+                    "per_relationship": {},
+                }
+
+        return normalized
 
     def clean_response_text(self, ai_response: str) -> str:
         """

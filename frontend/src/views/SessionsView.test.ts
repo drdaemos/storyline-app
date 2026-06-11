@@ -37,6 +37,6 @@ describe('SessionsView', () => {
     expect(wrapper.text()).toContain('Session Library')
     expect(wrapper.text()).toContain('Nightfall Ledger')
     expect(wrapper.text()).toContain('Resume')
-    expect(wrapper.text()).toContain('Details')
+    expect(wrapper.text()).not.toContain('Details')
   })
 })

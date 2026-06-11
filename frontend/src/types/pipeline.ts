@@ -30,6 +30,42 @@ export interface RulesetSummaryV2 {
   created_at: string
 }
 
+export interface DriveSchemaV2 {
+  name: string
+  range_min: number
+  range_max: number
+  default: number
+  decay_rate: number
+}
+
+export interface SkillSchemaV2 {
+  name: string
+  range_min: number
+  range_max: number
+}
+
+export interface EmotionalDimSchemaV2 {
+  name: string
+  range_min: number
+  range_max: number
+  default: number
+}
+
+export interface RulesetDetailV2 {
+  id: string
+  name: string
+  rules_text: string
+  state_schemas: {
+    drives: DriveSchemaV2[]
+    skills: SkillSchemaV2[]
+    emotional_state: {
+      global_dims: EmotionalDimSchemaV2[]
+      per_relationship: EmotionalDimSchemaV2[]
+    }
+  }
+  config: Record<string, unknown>
+}
+
 export interface WorldLoreSummaryV2 {
   id: string
   name: string
@@ -104,6 +140,16 @@ export interface TurnStreamEventV2 {
   turn?: number
 }
 
+export interface ProcessorOptionV2 {
+  id: string
+  display_name: string
+}
+
+export interface ProcessorOptionsResponseV2 {
+  processor_types: string[]
+  processor_options?: ProcessorOptionV2[]
+}
+
 export interface StartSessionRequestV2 {
   scenario_id: string
   processor_type?: string
@@ -145,6 +191,7 @@ export interface CharacterDetailV2 {
   desires: string[]
   kinks: string[]
   is_persona: boolean
+  ruleset_id?: string
   starting_drives: Record<string, number>
   starting_skills: Record<string, number>
   starting_emotional_state: Record<string, unknown>

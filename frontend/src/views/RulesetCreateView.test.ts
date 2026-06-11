@@ -46,6 +46,17 @@ describe('RulesetCreateView', () => {
     vi.clearAllMocks()
   })
 
+  it('renders a single save action', () => {
+    const wrapper = mount(RulesetCreateView, {
+      global: {
+        stubs: uiStubs,
+      },
+    })
+
+    const saveButtons = wrapper.findAll('button').filter((button) => button.text().trim() === 'Save Ruleset')
+    expect(saveButtons).toHaveLength(1)
+  })
+
   it('creates ruleset and redirects to ruleset library', async () => {
     createRuleset.mockResolvedValue({ id: 'rules-1', message: 'ok' })
 

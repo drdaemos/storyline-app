@@ -169,9 +169,6 @@ const saveRuleset = async () => {
       <article class="surface-panel rounded-2xl p-6">
         <div class="mb-4 flex items-center justify-between gap-2">
           <h2 class="text-xl font-semibold">Ruleset Surface</h2>
-          <Button data-testid="save-ruleset" :disabled="saving" @click="saveRuleset">
-            Save Ruleset
-          </Button>
         </div>
 
         <div class="mb-4 inline-flex items-center gap-1 rounded-lg border border-border/70 bg-background/70 p-1">
@@ -236,7 +233,7 @@ const saveRuleset = async () => {
           <Button variant="ghost" as-child>
             <RouterLink to="/library/rulesets">Back to Rulesets</RouterLink>
           </Button>
-          <Button :disabled="saving" @click="saveRuleset">Save Ruleset</Button>
+          <Button data-testid="save-ruleset" :disabled="saving" @click="saveRuleset">Save Ruleset</Button>
         </div>
       </article>
 

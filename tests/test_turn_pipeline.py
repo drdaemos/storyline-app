@@ -7,6 +7,7 @@ from src.character_loader import CharacterLoader
 from src.memory.character_registry import CharacterRegistry
 from src.memory.character_state_repository import CharacterStateRepository
 from src.memory.event_repository import EventRepository
+from src.memory.scenario_registry import ScenarioRegistry
 from src.memory.session_repository import SessionRepository
 from src.models.simulation import (
     ActionWithReasoning,
@@ -18,8 +19,9 @@ from src.models.simulation import (
     DriveEffect,
     EmotionalStateData,
     GMActionEvaluation,
+    GMConsequenceAction,
+    GMConsequenceResult,
     GMEvaluationResult,
-    InputClassification,
     Intent,
     IntentCompletionCheck,
     Observation,
@@ -73,6 +75,7 @@ class TestTurnPipeline:
         event_repo = EventRepository(memory_dir=temp_dir)
         character_registry = CharacterRegistry(memory_dir=temp_dir)
         character_loader = CharacterLoader(memory_dir=temp_dir)
+        scenario_reg = ScenarioRegistry(memory_dir=temp_dir)
 
         session_state = SessionStateService(session_repo, char_state_repo)
         event_stream = EventStreamService(event_repo)
@@ -90,13 +93,21 @@ class TestTurnPipeline:
         character_registry.save_character(
             "persona-1",
             {
-                "name": "You",
+                "name": "Kira",
                 "tagline": "Witness",
                 "backstory": "Tangled in the case.",
                 "personality": "Cautious.",
                 "appearance": "Rain-soaked jacket.",
             },
             is_persona=True,
+        )
+
+        scenario_reg.save_scenario(
+            scenario_id="scenario-1",
+            scenario_data={"persona_id": "persona-1", "character_ids": ["npc-1"]},
+            user_id="anonymous",
+            ruleset_id="test-ruleset",
+            character_ids=["npc-1"],
         )
 
         session_id = session_repo.create_session(
@@ -126,7 +137,6 @@ class TestTurnPipeline:
                 drives={"energy": 5},
                 skills={},
                 emotional_state=EmotionalStateData(global_state={"composure": 4}),
-                is_present=False,
             ),
         )
 
@@ -134,11 +144,13 @@ class TestTurnPipeline:
             "session_state": session_state,
             "event_stream": event_stream,
             "character_loader": character_loader,
+            "scenario_registry": scenario_reg,
             "session_id": session_id,
         }
 
         character_loader.registry.close()
         character_registry.close()
+        scenario_reg.close()
         session_repo.close()
         char_state_repo.close()
         event_repo.close()
@@ -149,6 +161,7 @@ class TestTurnPipeline:
         mini: FakePromptProcessor,
         *,
         gm_evaluations: list[GMActionEvaluation] | None = None,
+        gm_consequences: list[GMConsequenceAction] | None = None,
         narration_chunks: list[str] | None = None,
     ) -> None:
         """Queue the minimum LLM responses for a full pipeline pass."""
@@ -156,16 +169,23 @@ class TestTurnPipeline:
         mini.model_responses.append(
             ActionWithReasoning(
                 reasoning="Ren presses the point.",
-                action=CharacterAction(type="dialogue", description='Ren says, "Start talking."', target="You"),
+                action=CharacterAction(type="dialogue", description='Ren says, "Start talking."', target="Kira"),
             )
         )
-        # Step 6.3: GM evaluation (large)
+        # Step 6.3a: GM challenge setup (large)
         if gm_evaluations is None:
             gm_evaluations = [
-                GMActionEvaluation(character="You", action_summary="You ask what happened", check_required=False),
-                GMActionEvaluation(character="Ren", action_summary='Ren says, "Start talking."', check_required=False),
+                GMActionEvaluation(character="Kira", action_summary="Kira asks what happened", result_override="auto_succeed", check_required=False),
+                GMActionEvaluation(character="Ren", action_summary='Ren says, "Start talking."', result_override="auto_succeed", check_required=False),
             ]
         large.model_responses.append(GMEvaluationResult(evaluations=gm_evaluations))
+        # Step 6.3b: GM consequence resolution (large)
+        if gm_consequences is None:
+            gm_consequences = [
+                GMConsequenceAction(character="Kira", action_ref="Kira asks what happened"),
+                GMConsequenceAction(character="Ren", action_ref='Ren says, "Start talking."'),
+            ]
+        large.model_responses.append(GMConsequenceResult(consequences=gm_consequences))
         # Step 6.5: narration (large, streamed)
         large.stream_responses.append(narration_chunks or ["Ren leans over the table. ", "Rain rattles the windows."])
         # Step 6.6: observations (mini)
@@ -200,13 +220,15 @@ class TestTurnPipeline:
             ruleset_service=RulesetService(_DummyRulesetRegistry(ruleset)),  # type: ignore[arg-type]
             event_stream=state_env["event_stream"],
             character_loader=state_env["character_loader"],
+            scenario_registry=state_env["scenario_registry"],
         )
 
         events = list(
             pipeline.execute_turn(
                 session_id=state_env["session_id"],
+                scenario_id="scenario-1",
                 user_input="I ask what he means.",
-                input_type="action",
+
                 ruleset=ruleset,
                 user_id="anonymous",
             )
@@ -249,20 +271,28 @@ class TestTurnPipeline:
                 action=CharacterAction(type="action", description="Ren tries to intimidate the witness."),
             )
         )
-        # GM eval with a skill check (DC 5 with skill=6 → almost always succeeds)
+        # GM eval (6.3a) with a skill check (DC 5 with skill=6 → almost always succeeds)
         large.model_responses.append(
             GMEvaluationResult(
                 evaluations=[
-                    GMActionEvaluation(character="You", action_summary="You stare back", check_required=False),
+                    GMActionEvaluation(character="Kira", action_summary="You stare back", result_override="auto_succeed", check_required=False),
                     GMActionEvaluation(
                         character="Ren",
                         action_summary="Ren tries to intimidate",
+                        result_override=None,
                         check_required=True,
                         skill="persuasion",
                         dc=5,
                     ),
                 ]
             )
+        )
+        # GM consequence resolution (6.3b)
+        large.model_responses.append(
+            GMConsequenceResult(consequences=[
+                GMConsequenceAction(character="Kira", action_ref="You stare back"),
+                GMConsequenceAction(character="Ren", action_ref="Ren tries to intimidate"),
+            ])
         )
         # Narration
         large.stream_responses.append(["Ren's voice drops low."])
@@ -285,14 +315,16 @@ class TestTurnPipeline:
             ruleset_service=RulesetService(_DummyRulesetRegistry(ruleset)),  # type: ignore[arg-type]
             event_stream=state_env["event_stream"],
             character_loader=state_env["character_loader"],
+            scenario_registry=state_env["scenario_registry"],
             dice_resolver=dice,
         )
 
         events = list(
             pipeline.execute_turn(
                 session_id=state_env["session_id"],
+                scenario_id="scenario-1",
                 user_input="I stare at Ren.",
-                input_type="action",
+
                 ruleset=ruleset,
                 user_id="anonymous",
             )
@@ -306,7 +338,7 @@ class TestTurnPipeline:
         assert len(narration_events) == 1
 
     def test_drive_effects_applied_on_success(self, state_env: dict) -> None:
-        """Test that GM drive_effects are applied when the action succeeds."""
+        """Test that GM consequence drive_effects are applied (from step 6.3b)."""
         ruleset = _build_ruleset()
         large = FakePromptProcessor()
         mini = FakePromptProcessor()
@@ -318,19 +350,30 @@ class TestTurnPipeline:
                 action=CharacterAction(type="dialogue", description="Ren confronts."),
             )
         )
-        # GM eval: auto-success with drive_effects
+        # GM eval (6.3a): auto-success, no drive_effects here (moved to 6.3b)
         large.model_responses.append(
             GMEvaluationResult(
                 evaluations=[
-                    GMActionEvaluation(character="You", action_summary="You respond", check_required=False),
+                    GMActionEvaluation(character="Kira", action_summary="You respond", result_override="auto_succeed", check_required=False),
                     GMActionEvaluation(
                         character="Ren",
                         action_summary="Ren confronts",
+                        result_override="auto_succeed",
                         check_required=False,
-                        drive_effects=[DriveEffect(drive="energy", change=-2)],
                     ),
                 ]
             )
+        )
+        # GM consequence resolution (6.3b): drive_effects now come from here
+        large.model_responses.append(
+            GMConsequenceResult(consequences=[
+                GMConsequenceAction(character="Kira", action_ref="You respond"),
+                GMConsequenceAction(
+                    character="Ren",
+                    action_ref="Ren confronts",
+                    drive_effects=[DriveEffect(drive="energy", change=-2)],
+                ),
+            ])
         )
         large.stream_responses.append(["Ren's hands tremble."])
         mini.model_responses.append(ObservationExtractionResult(observations=[]))
@@ -345,13 +388,15 @@ class TestTurnPipeline:
             ruleset_service=RulesetService(_DummyRulesetRegistry(ruleset)),  # type: ignore[arg-type]
             event_stream=state_env["event_stream"],
             character_loader=state_env["character_loader"],
+            scenario_registry=state_env["scenario_registry"],
         )
 
         events = list(
             pipeline.execute_turn(
                 session_id=state_env["session_id"],
+                scenario_id="scenario-1",
                 user_input="I provoke Ren.",
-                input_type="action",
+
                 ruleset=ruleset,
                 user_id="anonymous",
             )
@@ -377,19 +422,27 @@ class TestTurnPipeline:
                 action=CharacterAction(type="action", description="Ren walks out."),
             )
         )
-        # GM eval: auto-success with departure flag
+        # GM eval (6.3a): auto-success with departure flag
         large.model_responses.append(
             GMEvaluationResult(
                 evaluations=[
-                    GMActionEvaluation(character="You", action_summary="You watch", check_required=False),
+                    GMActionEvaluation(character="Kira", action_summary="You watch", result_override="auto_succeed", check_required=False),
                     GMActionEvaluation(
                         character="Ren",
                         action_summary="Ren walks out",
+                        result_override="auto_succeed",
                         check_required=False,
                         departure=True,
                     ),
                 ]
             )
+        )
+        # GM consequence resolution (6.3b)
+        large.model_responses.append(
+            GMConsequenceResult(consequences=[
+                GMConsequenceAction(character="Kira", action_ref="You watch"),
+                GMConsequenceAction(character="Ren", action_ref="Ren walks out"),
+            ])
         )
         large.stream_responses.append(["Ren pushes through the door."])
         mini.model_responses.append(ObservationExtractionResult(observations=[]))
@@ -404,13 +457,15 @@ class TestTurnPipeline:
             ruleset_service=RulesetService(_DummyRulesetRegistry(ruleset)),  # type: ignore[arg-type]
             event_stream=state_env["event_stream"],
             character_loader=state_env["character_loader"],
+            scenario_registry=state_env["scenario_registry"],
         )
 
         events = list(
             pipeline.execute_turn(
                 session_id=state_env["session_id"],
+                scenario_id="scenario-1",
                 user_input="I let him go.",
-                input_type="action",
+
                 ruleset=ruleset,
                 user_id="anonymous",
             )
@@ -436,10 +491,17 @@ class TestTurnPipeline:
         large.model_responses.append(
             GMEvaluationResult(
                 evaluations=[
-                    GMActionEvaluation(character="You", action_summary="You stay quiet", check_required=False),
-                    GMActionEvaluation(character="Ren", action_summary="Ren narrows his eyes", check_required=False),
+                    GMActionEvaluation(character="Kira", action_summary="You stay quiet", result_override="auto_succeed", check_required=False),
+                    GMActionEvaluation(character="Ren", action_summary="Ren narrows his eyes", result_override="auto_succeed", check_required=False),
                 ]
             )
+        )
+        # GM consequence resolution (6.3b)
+        large.model_responses.append(
+            GMConsequenceResult(consequences=[
+                GMConsequenceAction(character="Kira", action_ref="You stay quiet"),
+                GMConsequenceAction(character="Ren", action_ref="Ren narrows his eyes"),
+            ])
         )
         large.raise_on_stream = RuntimeError("stream failure")
 
@@ -450,13 +512,15 @@ class TestTurnPipeline:
             ruleset_service=RulesetService(_DummyRulesetRegistry(ruleset)),  # type: ignore[arg-type]
             event_stream=state_env["event_stream"],
             character_loader=state_env["character_loader"],
+            scenario_registry=state_env["scenario_registry"],
         )
 
         events = list(
             pipeline.execute_turn(
                 session_id=state_env["session_id"],
+                scenario_id="scenario-1",
                 user_input="I stay silent.",
-                input_type="action",
+
                 ruleset=ruleset,
                 user_id="anonymous",
             )
@@ -465,30 +529,3 @@ class TestTurnPipeline:
         assert events[-1]["type"] == "error"
         assert "stream failure" in events[-1]["message"]
 
-    def test_non_action_input_type_returns_error(self, state_env: dict) -> None:
-        ruleset = _build_ruleset()
-        large = FakePromptProcessor()
-        mini = FakePromptProcessor()
-        mini.model_responses.append(InputClassification(type="time_skip", parsed_target=None, action_text=None))
-
-        pipeline = TurnPipeline(
-            large_processor=large,
-            mini_processor=mini,
-            session_state=state_env["session_state"],
-            ruleset_service=RulesetService(_DummyRulesetRegistry(ruleset)),  # type: ignore[arg-type]
-            event_stream=state_env["event_stream"],
-            character_loader=state_env["character_loader"],
-        )
-
-        events = list(
-            pipeline.execute_turn(
-                session_id=state_env["session_id"],
-                user_input="Wait until dawn.",
-                input_type=None,
-                ruleset=ruleset,
-                user_id="anonymous",
-            )
-        )
-
-        assert events[-1]["type"] == "error"
-        assert "not yet supported" in events[-1]["message"]

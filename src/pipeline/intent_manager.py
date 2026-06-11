@@ -11,20 +11,14 @@ from src.models.simulation import (
 
 logger = logging.getLogger(__name__)
 
-REEVALUATION_SYSTEM_PROMPT = """You are {character_name}. You just had a new realization. Decide whether it changes what you want to do.
-
-## Who you are
-{character_card_brief}
+REEVALUATION_SYSTEM_PROMPT = """You are simulating a character in a play - think of it as a table-top game or a visual novel. You just had a new realization. Decide whether it changes what you need to do.
 
 ## Rules
 - Characters are committed. They don't abandon goals on a whim.
 - Change the intent only if the new realization directly contradicts it, makes it impossible, or reveals something that shifts priorities.
 - If the intent is still valid, keep it."""
 
-GENERATION_SYSTEM_PROMPT = """You are {character_name}. Decide what you want to do right now.
-
-## Who you are
-{character_card}
+GENERATION_SYSTEM_PROMPT = """You are simulating a character in a play - think of it as a table-top game or a visual novel. Decide what your character will prioritize right now within given circumstances.
 
 ## Rules
 - Pick ONE concrete, actionable goal that makes sense given your personality, current state, and situation.
@@ -63,7 +57,12 @@ class IntentManager:
             character_card_brief=character_card_brief,
         )
 
-        user_message = f"""## Your current intent
+        user_message = f"""Re-evaluate your next goal as the character: {character_name}.
+
+## Who you are
+{character_card_brief}
+
+## Your current intent
 {active_intent_goal}
 Success condition: {active_intent_success_condition}
 
@@ -102,7 +101,12 @@ Emotional state: {emotional_state_summary}"""
             character_card=character_card,
         )
 
-        user_message = f"""## Your current state
+        user_message = f"""Decide on the next goal for the character: {character_name}.
+
+## Who you are
+{character_card}
+        
+## Your current state
 Drives: {drives_summary}
 Emotional state: {emotional_state_summary}
 
@@ -135,12 +139,15 @@ Present: {', '.join(characters_present)}"""
 
     def check_completion(
         self,
+        character_name: str,
         active_intent_goal: str,
         success_condition_description: str,
         recent_events: str,
     ) -> IntentCompletionCheck:
         """Step 6.8c: Check if a narrative intent has been completed."""
-        user_message = f"""## Goal
+        user_message = f"""Decide if your current goal has been fulfilled as the character: {character_name}.
+
+## Current goal
 {active_intent_goal}
 
 ## Success condition

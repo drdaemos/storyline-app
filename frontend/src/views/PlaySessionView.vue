@@ -7,14 +7,14 @@ import {
   SendHorizontal,
   SlidersHorizontal,
   Sword,
-  UserRound,
 } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -35,12 +35,15 @@ import {
 import { useAuth } from '@/composables/useAuth'
 import { useLocalSettings } from '@/composables/useLocalSettings'
 import { usePipelineApi } from '@/composables/usePipelineApi'
+import { usePromptProcessorOptions } from '@/composables/usePromptProcessorOptions'
 import type {
   ContinuationOptionV2,
+  SessionDetailsV2,
   SessionCharacterSummaryV2,
   SessionStateResponseV2,
   TurnStreamEventV2,
 } from '@/types/pipeline'
+import { renderAssistantMessageHtml, renderPlainTextHtml } from '@/utils/assistantMessageFormatting'
 
 interface TurnLogEntry {
   id: string
@@ -53,19 +56,22 @@ const sessionId = computed(() => String(route.params.sessionId || ''))
 
 const { getAuthToken } = useAuth()
 const { settings, updateSetting } = useLocalSettings()
-const { getSessionCharacters, getSessionState } = usePipelineApi()
+const { getSessionCharacters, getSessionDetails, getSessionState } = usePipelineApi()
+const { refresh: refreshProcessorOptions, getOptionsWithCurrentValues } = usePromptProcessorOptions()
 
 const loading = ref(true)
 const submitting = ref(false)
 const loadError = ref<string | null>(null)
 const streamStep = ref<string>('')
 const userInput = ref('')
+const modelSettingsOpen = ref(false)
 const turns = ref<TurnLogEntry[]>([])
 const options = ref<ContinuationOptionV2[]>([])
 const state = ref<SessionStateResponseV2 | null>(null)
 const characters = ref<SessionCharacterSummaryV2[]>([])
-
-const modelOptions = ['google-flash', 'gpt-5.2', 'claude-sonnet', 'deepseek-v32']
+const modelOptions = computed(() =>
+  getOptionsWithCurrentValues([settings.value.aiProcessor, settings.value.backupProcessor])
+)
 
 const mapChoiceClass = (type: ContinuationOptionV2['type']) => {
   if (type === 'dialogue') {
@@ -108,24 +114,55 @@ const toTurnInputType = (
   return undefined
 }
 
+const applyTurnHistory = (stateResult: SessionStateResponseV2, detailsResult: SessionDetailsV2) => {
+  const narrationHistory = stateResult.narration_history
+  const recentUserInputs = detailsResult.last_messages
+    .filter((message) => message.role === 'user')
+    .map((message) => message.content)
+    .slice(-narrationHistory.length)
+
+  const unmatchedCount = Math.max(0, narrationHistory.length - recentUserInputs.length)
+  let userInputIndex = recentUserInputs.length - 1
+  const mappedTurns: TurnLogEntry[] = []
+  for (let index = narrationHistory.length - 1; index >= 0; index -= 1) {
+    const mappedInput =
+      userInputIndex >= 0
+        ? recentUserInputs[userInputIndex--]
+        : index === 0 && unmatchedCount > 0
+          ? 'Session intro'
+          : `Turn ${index}`
+    mappedTurns.push({
+      id: `history-${index}`,
+      input: mappedInput,
+      narration: narrationHistory[index],
+    })
+  }
+  turns.value = mappedTurns.reverse()
+}
+
+const applySessionSnapshot = (
+  stateResult: SessionStateResponseV2,
+  characterResult: SessionCharacterSummaryV2[],
+  detailsResult: SessionDetailsV2
+) => {
+  state.value = stateResult
+  characters.value = characterResult
+  applyTurnHistory(stateResult, detailsResult)
+}
+
+
+
 const loadSession = async () => {
   loading.value = true
   loadError.value = null
 
   try {
-    const [stateResult, characterResult] = await Promise.all([
+    const [stateResult, characterResult, detailsResult] = await Promise.all([
       getSessionState(sessionId.value),
       getSessionCharacters(sessionId.value),
+      getSessionDetails(sessionId.value),
     ])
-
-    state.value = stateResult
-    characters.value = characterResult
-
-    turns.value = stateResult.narration_history.map((narration, index) => ({
-      id: `history-${index}`,
-      input: index === 0 ? 'Session intro' : `Turn ${index}`,
-      narration,
-    }))
+    applySessionSnapshot(stateResult, characterResult, detailsResult)
   } catch {
     loadError.value = 'Failed to load play session.'
   } finally {
@@ -135,12 +172,12 @@ const loadSession = async () => {
 
 const refreshState = async () => {
   try {
-    const [stateResult, characterResult] = await Promise.all([
+    const [stateResult, characterResult, detailsResult] = await Promise.all([
       getSessionState(sessionId.value),
       getSessionCharacters(sessionId.value),
+      getSessionDetails(sessionId.value),
     ])
-    state.value = stateResult
-    characters.value = characterResult
+    applySessionSnapshot(stateResult, characterResult, detailsResult)
   } catch {
     // Keep play flow running even if state refresh fails.
   }
@@ -165,6 +202,45 @@ const parseSseChunk = (rawEvent: string): TurnStreamEventV2 | null => {
   }
 }
 
+const applyStreamEvent = (event: TurnStreamEventV2, turnIndex: number) => {
+  const turnEntry = turns.value[turnIndex]
+  if (!turnEntry) {
+    return
+  }
+
+  if (event.type === 'status' && event.step) {
+    streamStep.value = event.step
+  }
+
+  if (event.type === 'narration_chunk' && typeof event.text === 'string') {
+    turnEntry.narration += event.text
+  }
+
+  if (event.type === 'narration_complete' && typeof event.text === 'string') {
+    turnEntry.narration = event.text
+  }
+
+  if ((event.type === 'continuation_options' || event.type === 'options') && event.options) {
+    options.value = event.options
+  }
+
+  if (event.type === 'error') {
+    loadError.value = event.message || 'Turn execution failed.'
+  }
+}
+
+const handleSseLine = (line: string, turnIndex: number) => {
+  const trimmedLine = line.trim()
+  if (!trimmedLine.startsWith('data:')) {
+    return
+  }
+  const event = parseSseChunk(trimmedLine)
+  if (!event) {
+    return
+  }
+  applyStreamEvent(event, turnIndex)
+}
+
 const runTurn = async (content: string, inputType?: 'action' | 'relocation' | 'time_skip') => {
   if (!content.trim() || submitting.value) {
     return
@@ -175,12 +251,11 @@ const runTurn = async (content: string, inputType?: 'action' | 'relocation' | 't
   streamStep.value = ''
   options.value = []
 
-  const turnEntry: TurnLogEntry = {
+  const turnIndex = turns.value.push({
     id: `turn-${Date.now()}`,
     input: content.trim(),
     narration: '',
-  }
-  turns.value.push(turnEntry)
+  }) - 1
 
   try {
     const token = await getAuthToken()
@@ -194,21 +269,12 @@ const runTurn = async (content: string, inputType?: 'action' | 'relocation' | 't
       headers.Authorization = `Bearer ${token}`
     }
 
-    const bodyPayload: {
-      session_id: string
-      user_input: string
-      processor_type: string
-      mini_processor_type: string
-      input_type?: 'action' | 'relocation' | 'time_skip'
-    } = {
+    const bodyPayload = {
       session_id: sessionId.value,
       user_input: content.trim(),
       processor_type: settings.value.aiProcessor,
       mini_processor_type: settings.value.backupProcessor,
-    }
-
-    if (inputType) {
-      bodyPayload.input_type = inputType
+      ...(inputType ? { input_type: inputType } : {}),
     }
 
     const response = await fetch('/api/turn', {
@@ -227,40 +293,27 @@ const runTurn = async (content: string, inputType?: 'action' | 'relocation' | 't
 
     while (true) {
       const { done, value } = await reader.read()
+      if (value) {
+        buffer += decoder.decode(value, { stream: true })
+      }
+
+      if (done) {
+        buffer += decoder.decode()
+      }
+
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        handleSseLine(line, turnIndex)
+      }
+
       if (done) {
         break
       }
-
-      buffer += decoder.decode(value, { stream: true })
-      const chunks = buffer.split('\n\n')
-      buffer = chunks.pop() || ''
-
-      for (const chunk of chunks) {
-        const event = parseSseChunk(chunk)
-        if (!event) {
-          continue
-        }
-
-        if (event.type === 'status' && event.step) {
-          streamStep.value = event.step
-        }
-
-        if (event.type === 'narration_chunk' && typeof event.text === 'string') {
-          turnEntry.narration += event.text
-        }
-
-        if (event.type === 'narration_complete' && typeof event.text === 'string') {
-          turnEntry.narration = event.text
-        }
-
-        if ((event.type === 'continuation_options' || event.type === 'options') && event.options) {
-          options.value = event.options
-        }
-
-        if (event.type === 'error') {
-          loadError.value = event.message || 'Turn execution failed.'
-        }
-      }
+    }
+    if (buffer.trim()) {
+      handleSseLine(buffer, turnIndex)
     }
 
     await refreshState()
@@ -281,20 +334,26 @@ const useOption = async (option: ContinuationOptionV2) => {
   await runTurn(option.description, toTurnInputType(option.type))
 }
 
-onMounted(loadSession)
+onMounted(async () => {
+  await loadSession()
+})
+
+watch(modelSettingsOpen, async (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+  await refreshProcessorOptions()
+})
 </script>
 
 <template>
-  <main class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+  <main class="mx-auto flex min-h-[calc(100vh-4.5rem)] w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
     <section class="surface-panel rounded-2xl p-6">
       <div class="mb-3 flex items-center gap-2">
         <Badge variant="outline">Play</Badge>
         <Badge class="choice-pill-dialogue">Session {{ sessionId }}</Badge>
       </div>
       <h1 class="display-heading text-3xl leading-tight sm:text-4xl">Turn Feed</h1>
-      <p class="mt-3 max-w-3xl text-sm text-muted-foreground sm:text-base">
-        Visual-novel + MUD style play flow with typed continuation options and command input.
-      </p>
     </section>
 
     <section v-if="loadError" class="surface-panel rounded-2xl p-5">
@@ -304,31 +363,36 @@ onMounted(loadSession)
 
     <section v-else-if="loading" class="surface-panel h-80 rounded-2xl" />
 
-    <section v-else class="surface-panel rounded-2xl p-6">
-      <div class="grid gap-6 lg:grid-cols-[2.1fr_1fr]">
-        <div>
+    <section v-else class="surface-panel rounded-2xl p-6 lg:flex-1 lg:min-h-0">
+      <div class="grid gap-6 lg:h-full lg:min-h-0 lg:grid-cols-[2.1fr_1fr]">
+        <div class="lg:flex lg:min-h-0 lg:flex-col">
           <div class="mb-3 flex items-center justify-between gap-2">
             <p class="text-lg font-semibold">Session Turns</p>
             <p class="text-xs text-muted-foreground">{{ state?.turn_counter ?? 0 }} turns</p>
           </div>
 
-          <ScrollArea class="h-[430px] rounded-xl border border-border/70 bg-background/65 px-4 py-3">
+          <ScrollArea class="h-[430px] rounded-xl border border-border/70 bg-background/65 px-4 py-3 lg:h-auto lg:min-h-0 lg:flex-1">
             <article
-              v-for="turn in turns"
+              v-for="(turn, index) in turns"
               :key="turn.id"
               class="mb-5 border-b border-border/50 pb-5 last:mb-0 last:border-b-0 last:pb-0"
             >
-              <div class="mb-2 flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
-                <span class="inline-flex items-center gap-1.5">
-                  <UserRound class="size-3.5" />
-                  You
-                </span>
+              <div class="mb-2 text-[13px] font-semibold uppercase tracking-[0.18em] text-foreground/80">
+                Turn {{ index + 1 }}
               </div>
 
-              <p class="mb-2 text-sm font-medium">{{ turn.input }}</p>
-              <p class="mb-2 font-serif text-[1.03rem] leading-relaxed text-foreground/90">
-                {{ turn.narration || '...' }}
+              <p class="text-sm font-medium">
+                <span class="mr-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Action:</span>
+                <span v-html="renderPlainTextHtml(turn.input)" />
               </p>
+
+              <div class="mt-3">
+                <p class="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Narration</p>
+                <p
+                  class="font-serif text-[1.03rem] leading-relaxed text-foreground/90"
+                  v-html="turn.narration ? renderAssistantMessageHtml(turn.narration) : renderPlainTextHtml('...')"
+                />
+              </div>
             </article>
           </ScrollArea>
 
@@ -348,7 +412,7 @@ onMounted(loadSession)
                 Act
               </Button>
 
-              <Dialog>
+              <Dialog v-model:open="modelSettingsOpen">
                 <DialogTrigger as-child>
                   <Button variant="outline" size="icon" aria-label="Model settings">
                     <SlidersHorizontal class="size-4" />
@@ -357,39 +421,41 @@ onMounted(loadSession)
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Model Settings</DialogTitle>
-                    <DialogDescription>Choose primary and fallback model for turns.</DialogDescription>
+                    <DialogDescription>
+                      Choose Large and Mini processors for upcoming turns.
+                    </DialogDescription>
                   </DialogHeader>
 
                   <div class="space-y-3">
                     <div class="space-y-1.5">
-                      <label for="primary-model" class="text-sm">Primary model</label>
+                      <label for="large-model" class="text-sm">Large model</label>
                       <Select
                         :model-value="settings.aiProcessor"
                         @update:model-value="(value) => updateSetting('aiProcessor', String(value))"
                       >
-                        <SelectTrigger id="primary-model">
+                        <SelectTrigger id="large-model">
                           <SelectValue placeholder="Select model" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem v-for="model in modelOptions" :key="model" :value="model">
-                            {{ model }}
+                          <SelectItem v-for="model in modelOptions" :key="model.id" :value="model.id">
+                            {{ model.displayName }}
                           </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div class="space-y-1.5">
-                      <label for="fallback-model" class="text-sm">Fallback model</label>
+                      <label for="mini-model" class="text-sm">Mini model</label>
                       <Select
                         :model-value="settings.backupProcessor"
                         @update:model-value="(value) => updateSetting('backupProcessor', String(value))"
                       >
-                        <SelectTrigger id="fallback-model">
+                        <SelectTrigger id="mini-model">
                           <SelectValue placeholder="Select model" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem v-for="model in modelOptions" :key="`${model}-fallback`" :value="model">
-                            {{ model }}
+                          <SelectItem v-for="model in modelOptions" :key="`${model.id}-mini`" :value="model.id">
+                            {{ model.displayName }}
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -397,7 +463,9 @@ onMounted(loadSession)
                   </div>
 
                   <DialogFooter>
-                    <Button variant="outline">Close</Button>
+                    <DialogClose as-child>
+                      <Button variant="outline" type="button">Close</Button>
+                    </DialogClose>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -421,7 +489,7 @@ onMounted(loadSession)
           </div>
         </div>
 
-        <aside class="rounded-xl border border-border/70 bg-background/60 p-4">
+        <aside class="rounded-xl border border-border/70 bg-background/60 p-4 lg:min-h-0 lg:overflow-auto">
           <h2 class="mb-3 text-base font-semibold">State Rail</h2>
           <div class="space-y-3 text-sm">
             <div>

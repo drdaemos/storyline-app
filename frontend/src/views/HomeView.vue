@@ -183,7 +183,14 @@ onMounted(loadDashboard)
           :key="session.session_id"
           class="rounded-xl border border-border/70 bg-background/70 p-3"
         >
-          <p class="line-clamp-1 text-sm font-semibold">{{ session.scenario_name || 'Untitled Scenario' }}</p>
+          <h3 class="m-0">
+            <RouterLink
+              :to="`/sessions/${session.session_id}`"
+              class="line-clamp-1 text-sm font-semibold underline-offset-4 transition hover:underline focus-visible:underline"
+            >
+              {{ session.scenario_name || 'Untitled Scenario' }}
+            </RouterLink>
+          </h3>
           <p class="mt-1 line-clamp-2 text-xs text-muted-foreground">
             {{ session.last_character_response || 'No narration yet.' }}
           </p>
@@ -200,9 +207,6 @@ onMounted(loadDashboard)
                 <Play class="mr-1 size-3.5" />
                 Resume
               </RouterLink>
-            </Button>
-            <Button size="sm" variant="ghost" as-child>
-              <RouterLink :to="`/sessions/${session.session_id}`">Details</RouterLink>
             </Button>
           </div>
         </article>
@@ -226,17 +230,17 @@ onMounted(loadDashboard)
           <CardDescription>Paths into the new pipeline without top-level Play navigation.</CardDescription>
         </CardHeader>
         <CardContent class="grid gap-2 sm:grid-cols-3">
-          <article
+          <RouterLink
             v-for="option in startOptions"
             :key="option.title"
-            class="rounded-xl border border-border/65 bg-background/70 px-3 py-3"
+            :to="option.route"
+            class="group block rounded-xl border border-border/65 bg-background/70 p-4 transition-[background-color,box-shadow] hover:bg-background/90 hover:shadow-sm focus-visible:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
           >
-            <p class="text-sm font-medium">{{ option.title }}</p>
+            <h3 class="m-0 text-sm font-medium underline-offset-4 group-hover:underline group-focus-visible:underline">
+              {{ option.title }}
+            </h3>
             <p class="mt-1 text-xs text-muted-foreground">{{ option.description }}</p>
-            <Button variant="ghost" size="sm" class="mt-2" as-child>
-              <RouterLink :to="option.route">Open</RouterLink>
-            </Button>
-          </article>
+          </RouterLink>
         </CardContent>
       </Card>
 
@@ -246,13 +250,13 @@ onMounted(loadDashboard)
           <CardDescription>Compose worlds from independent entities and launch sessions.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button class="w-full" as-child>
+          <Button variant="outline" class="w-full" as-child>
             <RouterLink to="/hub">
               <FolderKanban class="mr-2 size-4" />
               Open Hub
             </RouterLink>
           </Button>
-          <Button variant="ghost" class="mt-2 w-full" as-child>
+          <Button variant="outline" class="mt-2 w-full" as-child>
             <RouterLink to="/library/scenarios">
               <Sparkles class="mr-2 size-4" />
               Browse Scenarios
@@ -268,13 +272,16 @@ onMounted(loadDashboard)
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <article
+        <RouterLink
           v-for="block in assetBlocks"
           :key="block.title"
-          class="rounded-xl border border-border/70 bg-background/70 p-3"
+          :to="block.route"
+          class="group block rounded-xl border border-border/70 bg-background/70 p-4 transition-[background-color,box-shadow] hover:bg-background/90 hover:shadow-sm focus-visible:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold">{{ block.title }}</p>
+            <h3 class="m-0 text-sm font-semibold underline-offset-4 group-hover:underline group-focus-visible:underline">
+              {{ block.title }}
+            </h3>
             <Badge variant="outline">{{ block.count }}</Badge>
           </div>
           <ul class="mt-2 space-y-1">
@@ -286,10 +293,7 @@ onMounted(loadDashboard)
               {{ line }}
             </li>
           </ul>
-          <Button variant="ghost" size="sm" class="mt-2" as-child>
-            <RouterLink :to="block.route">Open</RouterLink>
-          </Button>
-        </article>
+        </RouterLink>
       </div>
     </section>
   </main>

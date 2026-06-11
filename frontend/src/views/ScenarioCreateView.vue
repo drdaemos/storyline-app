@@ -11,6 +11,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import ModelSettingsDialog from '@/components/app/ModelSettingsDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +30,11 @@ import { useLocalSettings } from '@/composables/useLocalSettings'
 import { usePipelineApi } from '@/composables/usePipelineApi'
 import type { ChatMessage, PartialScenario, Scenario, ScenarioCreationRequest } from '@/types'
 import type { CharacterSummaryV2, RulesetSummaryV2, WorldLoreSummaryV2 } from '@/types/pipeline'
+import {
+  hasPendingSpecialXmlTag,
+  renderAssistantMessageHtml,
+  renderPlainTextHtml,
+} from '@/utils/assistantMessageFormatting'
 
 interface ScenarioFormState {
   summary: string
@@ -41,13 +47,14 @@ interface ScenarioFormState {
   plot_hooks: string[]
   potential_directions: string[]
 }
+const STRUCTURED_UPDATE_ANCHOR = '[[STRUCTURED_UPDATE_ANCHOR]]'
 
 const route = useRoute()
 const router = useRouter()
 
 const { settings } = useLocalSettings()
-const { streamScenarioCreation, saveScenario, startSessionWithScenario } = useApi()
-const { listCharacters, listPersonas, listRulesets, listWorldLore } = usePipelineApi()
+const { streamScenarioCreation, saveScenario } = useApi()
+const { listCharacters, listPersonas, listRulesets, listWorldLore, startSession } = usePipelineApi()
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -58,6 +65,8 @@ const isThinking = ref(false)
 const userInput = ref('')
 const messages = ref<ChatMessage[]>([])
 const chatEndRef = ref<HTMLElement | null>(null)
+const specialUpdateState = ref<'idle' | 'processing' | 'done'>('idle')
+const activeAssistantMessageIndex = ref<number | null>(null)
 
 const characters = ref<CharacterSummaryV2[]>([])
 const personas = ref<CharacterSummaryV2[]>([])
@@ -97,7 +106,6 @@ const availablePersonas = computed(() => {
   }))
 })
 
-const selectedPrimaryCharacterId = computed(() => selectedCharacterIds.value[0] || '')
 const selectedCharacterNames = computed(() => {
   const map = new Map(characters.value.map((character) => [character.id, character.name]))
   return selectedCharacterIds.value.map((id) => map.get(id) || id)
@@ -212,17 +220,40 @@ const extractScenarioUpdates = (
         // Ignore malformed scenario update payloads.
       }
 
-      return ''
+      return ` ${STRUCTURED_UPDATE_ANCHOR} `
     }
   )
 
   const pendingOpenTagIndex = withoutCompleteBlocks.indexOf('<scenario_update>')
-  const cleanMessage =
-    pendingOpenTagIndex >= 0
-      ? withoutCompleteBlocks.slice(0, pendingOpenTagIndex).trim()
-      : withoutCompleteBlocks.trim()
+  const cleanMessage = pendingOpenTagIndex >= 0
+    ? `${withoutCompleteBlocks.slice(0, pendingOpenTagIndex).trimEnd()} ${STRUCTURED_UPDATE_ANCHOR}`.trim()
+    : withoutCompleteBlocks.trim()
 
   return { cleanMessage, updates }
+}
+
+const renderAssistantContentWithUpdateState = (content: string, index: number): string => {
+  const isActiveMessage = index === activeAssistantMessageIndex.value
+  const statusText =
+    !isActiveMessage || specialUpdateState.value === 'idle'
+      ? ''
+      : specialUpdateState.value === 'processing'
+        ? '⟳ Applying structured update...'
+        : '✓ Structured update applied'
+
+  let nextContent = content
+
+  if (statusText) {
+    if (nextContent.includes(STRUCTURED_UPDATE_ANCHOR)) {
+      nextContent = nextContent.split(STRUCTURED_UPDATE_ANCHOR).join(statusText)
+    } else {
+      nextContent = `${nextContent}${nextContent ? '\n' : ''}${statusText}`
+    }
+  } else if (nextContent.includes(STRUCTURED_UPDATE_ANCHOR)) {
+    nextContent = nextContent.split(STRUCTURED_UPDATE_ANCHOR).join('')
+  }
+
+  return renderAssistantMessageHtml(nextContent.trim())
 }
 
 watch(
@@ -304,6 +335,8 @@ const submitAssistantPrompt = async () => {
   userInput.value = ''
   error.value = null
   isThinking.value = true
+  specialUpdateState.value = 'idle'
+  activeAssistantMessageIndex.value = null
 
   const assistantMessageIndex = messages.value.length
   let rawAssistantContent = ''
@@ -313,13 +346,11 @@ const submitAssistantPrompt = async () => {
       user_message: prompt,
       current_scenario: {
         ...form,
-        character_id: selectedPrimaryCharacterId.value,
         character_ids: [...selectedCharacterIds.value],
         persona_id: selectedPersonaId.value !== 'none' ? selectedPersonaId.value : '',
         ruleset_id: selectedRulesetId.value !== 'none' ? selectedRulesetId.value : '',
         lore_ids: [...selectedLoreIds.value],
       },
-      character_name: selectedPrimaryCharacterId.value,
       persona_id: selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
       available_personas: availablePersonas.value,
       conversation_history: messages.value.map((message) => ({
@@ -345,6 +376,7 @@ const submitAssistantPrompt = async () => {
             timestamp: new Date(),
           })
         }
+        activeAssistantMessageIndex.value = assistantMessageIndex
 
         messages.value[assistantMessageIndex].content = cleanMessage
 
@@ -358,9 +390,25 @@ const submitAssistantPrompt = async () => {
           })
         }
 
+        const hasPendingTag = hasPendingSpecialXmlTag(rawAssistantContent, ['scenario_update'])
+        if (hasPendingTag) {
+          specialUpdateState.value = 'processing'
+        } else if (updates.length > 0) {
+          specialUpdateState.value = 'done'
+        }
         isThinking.value = false
       },
       (updates: PartialScenario) => {
+        if (!messages.value[assistantMessageIndex]) {
+          messages.value.push({
+            author: 'Assistant',
+            content: '',
+            isUser: false,
+            timestamp: new Date(),
+          })
+        }
+        activeAssistantMessageIndex.value = assistantMessageIndex
+
         Object.assign(form, {
           ...updates,
           plot_hooks: Array.isArray(updates.plot_hooks) ? updates.plot_hooks : form.plot_hooks,
@@ -368,19 +416,25 @@ const submitAssistantPrompt = async () => {
             ? updates.potential_directions
             : form.potential_directions,
         })
+        specialUpdateState.value = 'done'
       },
       () => {
-        if (!messages.value[assistantMessageIndex]?.content) {
+        if (!messages.value[assistantMessageIndex]?.content && specialUpdateState.value === 'idle') {
           messages.value.splice(assistantMessageIndex, 1)
+        }
+        if (specialUpdateState.value === 'processing') {
+          specialUpdateState.value = 'done'
         }
         isThinking.value = false
       },
       (errorMessage: string) => {
+        specialUpdateState.value = 'idle'
         error.value = errorMessage
         isThinking.value = false
       }
     )
   } catch {
+    specialUpdateState.value = 'idle'
     error.value = 'Failed to process assistant request.'
     isThinking.value = false
   }
@@ -391,7 +445,6 @@ const buildScenarioPayload = (): Scenario => {
     summary: form.summary.trim(),
     intro_message: form.intro_message.trim(),
     narrative_category: form.narrative_category.trim(),
-    character_id: selectedPrimaryCharacterId.value,
     character_ids: [...selectedCharacterIds.value],
     persona_id: selectedPersonaId.value !== 'none' ? selectedPersonaId.value : undefined,
     ruleset_id: selectedRulesetId.value !== 'none' ? selectedRulesetId.value : '',
@@ -441,10 +494,8 @@ const saveAndStart = async () => {
 
   saving.value = true
   try {
-    const response = await startSessionWithScenario({
-      character_name: selectedPrimaryCharacterId.value,
+    const response = await startSession({
       scenario_id: scenarioId,
-      persona_id: selectedPersonaId.value !== 'none' ? selectedPersonaId.value : null,
       processor_type: settings.value.aiProcessor,
       backup_processor_type: settings.value.backupProcessor,
     })
@@ -735,10 +786,13 @@ const saveAndStart = async () => {
       <aside class="surface-panel rounded-2xl p-6 lg:sticky lg:top-24 lg:h-fit">
         <div class="mb-3 flex items-center justify-between gap-2">
           <h2 class="text-xl font-semibold">AI Assistant</h2>
-          <Badge variant="outline">
-            <Sparkles class="mr-1 size-3.5" />
-            {{ settings.aiProcessor }}
-          </Badge>
+          <div class="flex items-center gap-2">
+            <Badge variant="outline">
+              <Sparkles class="mr-1 size-3.5" />
+              {{ settings.aiProcessor }}
+            </Badge>
+            <ModelSettingsDialog />
+          </div>
         </div>
 
         <p class="mb-3 text-sm text-muted-foreground">
@@ -774,9 +828,10 @@ const saveAndStart = async () => {
                   ? 'ml-6 bg-primary text-primary-foreground'
                   : 'mr-6 bg-secondary text-secondary-foreground',
               ]"
-            >
-              {{ message.content }}
-            </div>
+              v-html="message.isUser
+                ? renderPlainTextHtml(message.content)
+                : renderAssistantContentWithUpdateState(message.content, index)"
+            />
           </div>
 
           <div ref="chatEndRef" />

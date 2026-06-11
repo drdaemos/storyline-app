@@ -127,13 +127,13 @@ onMounted(loadHub)
           <CardDescription>Jump straight into entity creation flows.</CardDescription>
         </CardHeader>
         <CardContent class="grid gap-2 sm:grid-cols-2">
-          <Button as-child>
+          <Button variant="outline" as-child>
             <RouterLink to="/characters/new">
               <UserRound class="mr-2 size-4" />
               Character
             </RouterLink>
           </Button>
-          <Button variant="secondary" as-child>
+          <Button variant="outline" as-child>
             <RouterLink to="/personas/new">
               <Users class="mr-2 size-4" />
               Persona
@@ -160,13 +160,13 @@ onMounted(loadHub)
           <CardDescription>Assemble characters, personas, rulesets, and lore.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button class="w-full" as-child>
+          <Button variant="outline" class="w-full" as-child>
             <RouterLink to="/scenarios/new">
               <WandSparkles class="mr-2 size-4" />
               Open Scenario Composer
             </RouterLink>
           </Button>
-          <Button variant="ghost" class="mt-2 w-full" as-child>
+          <Button variant="outline" class="mt-2 w-full" as-child>
             <RouterLink to="/library/scenarios">
               <PlusCircle class="mr-2 size-4" />
               Manage Scenario Library
@@ -189,20 +189,20 @@ onMounted(loadHub)
       </div>
 
       <div v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <article
+        <RouterLink
           v-for="item in collections"
           :key="item.title"
-          class="rounded-xl border border-border/70 bg-background/70 p-3"
+          :to="item.route"
+          class="group block rounded-xl border border-border/70 bg-background/70 p-4 transition-[background-color,box-shadow] hover:bg-background/90 hover:shadow-sm focus-visible:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold">{{ item.title }}</p>
+            <h3 class="m-0 text-sm font-semibold underline-offset-4 group-hover:underline group-focus-visible:underline">
+              {{ item.title }}
+            </h3>
             <Badge variant="outline">{{ item.count }}</Badge>
           </div>
           <p class="mt-2 text-xs text-muted-foreground">{{ item.detail }}</p>
-          <Button variant="ghost" size="sm" class="mt-2" as-child>
-            <RouterLink :to="item.route">Open</RouterLink>
-          </Button>
-        </article>
+        </RouterLink>
       </div>
     </section>
   </main>

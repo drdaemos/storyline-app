@@ -17,6 +17,7 @@ class Character(BaseModel):
     desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
     kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
     is_persona: bool = Field(default=False, description="Whether this character is a persona (user character)")
+    ruleset_id: str = Field(default="", description="Ruleset this character is authored against")
 
     # New simulation fields — starting values per ruleset schema.
     # Set per scenario-character pairing, not at character creation time.
@@ -95,6 +96,7 @@ class PartialCharacter(BaseModel):
     desires: list[str] = Field(default_factory=list, description="Character's goals and desires")
     kinks: list[str] = Field(default_factory=list, description="Character's kinks and preferences")
     is_persona: bool = Field(default=False, description="Whether this character is a persona (user character)")
+    ruleset_id: str = Field(default="", description="Ruleset this character is authored against")
     starting_drives: dict[str, float] = Field(default_factory=dict, description="Initial drive values")
     starting_skills: dict[str, float] = Field(default_factory=dict, description="Initial skill values")
     starting_emotional_state: dict[str, Any] = Field(default_factory=dict, description="Initial emotional state")

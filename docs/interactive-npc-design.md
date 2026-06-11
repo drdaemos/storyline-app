@@ -220,11 +220,12 @@ Per-relationship entries are instantiated for each pair of characters known to e
 
 Global emotional state influences intent generation (a character low on composure may act impulsively). Per-relationship sentiment influences action generation (a character with high resentment toward someone may avoid or confront them). Both are included in character prompts.
 
-**Two sources of state change**: the ruleset defines all dynamic stats, but they change through two different mechanisms:
-- **Action-driven** (GM, step 6.3): drive effects caused by successful actions (eating → satiation +3, running → energy -1). The GM identifies these because they require interpreting the action against the rules.
-- **Reactive** (character processing, step 6.7): changes that result from social or emotional events — trust shifts, mood changes, resentment building. The character processing LLM identifies these because they require interpreting events through the character's personality and perspective.
+**Three sources of state change**: the ruleset defines all dynamic stats, but they change through three different mechanisms:
+- **Action-driven** (GM consequence resolution, step 6.3b): drive effects caused by actions given their outcomes (eating succeeds → satiation +3, running and failing → energy -1). The GM identifies these because they require interpreting the action and its outcome against the rules.
+- **Cross-character reactive** (GM consequence resolution, step 6.3b): mechanical effects on OTHER characters caused by an action's outcome (failed public seduction → target's attraction drops, successful intimidation → target's composure -1). These are direct, mechanical consequences, not emotional reactions.
+- **Emotional/social reactive** (character processing, step 6.7): changes that result from social or emotional events — trust shifts, mood changes, resentment building. The character processing LLM identifies these because they require interpreting events through the character's personality and perspective.
 
-The engine doesn't distinguish between these at the storage level — both produce `{stat, change}` diffs validated against the same schema. The distinction is only about *which step* proposes them.
+The engine doesn't distinguish between these at the storage level — all produce `{stat, change}` diffs validated against the same schema. The distinction is only about *which step* proposes them.
 
 ### Dynamic Character State
 
@@ -313,7 +314,7 @@ The user sends a continuation: either selecting from presented options or provid
 
 All character actions are generated independently — no character sees another NPC's action for this turn. This is simultaneous resolution.
 
-### 6.3 GM Evaluation
+### 6.3a GM Challenge Setup
 
 **Model**: large/expensive
 
@@ -322,30 +323,50 @@ All character actions are generated independently — no character sees another 
 - All character actions from step 6.2 (including the user's action)
 - Current world state
 - Relevant character skill values
+- Relevant relationship stats (for context on difficulty — e.g., target's attraction toward actor)
 
 **Output** (structured):
 - For each action:
-  - `reasoning`: why this action does or doesn't require a check, and why this DC. Logged for debugging and tuning.
-  - Target(s) identified, whether a skill check is required, which skill applies, and the difficulty class (DC).
-  - `drive_effects`: mechanical drive changes this action would cause on success (e.g., eating → satiation +3). Most actions have none.
-  - `departure`: flag if this action, on success, results in the character leaving the current location.
+  - `character`, `action_summary`, `reasoning`: why this action does or doesn't require a check, and why this DC. Logged for debugging and tuning.
+  - `result_override`: `"auto_succeed"` | `"auto_fail"` | `null`. Auto-succeed is for mundane/trivial actions. Auto-fail is for actions that are physically impossible, violate world constraints, or have no reasonable chance of success (effective DC > 25).
+  - `check_required`, `skill`, `dc`, `contested_with`: same as before, only when `result_override` is null.
+  - `departure`: flag if this action implies leaving the current location. Evaluated regardless of outcome, but departure only proceeds if the action is not auto-failed.
 - For contested actions (two characters acting against each other): both are flagged as contested, with the relevant skill for each side.
-- Actions that are mundane and unopposed are marked as auto-succeed.
 
-The GM does not determine outcomes — only whether checks are needed and their parameters.
+The GM does not determine outcomes — only whether checks are needed, their parameters, and whether actions are overridden. Drive effects are determined after dice resolution in step 6.3b.
+
+### 6.3b GM Consequence Resolution
+
+**Model**: large/expensive
+
+Runs AFTER dice resolution (step 6.4).
+
+**Prompt inputs**:
+- All actions with their resolved outcomes (success/failure/auto_succeed/auto_fail, roll details)
+- Freeform rules text from the ruleset
+- Current world state
+- Relevant character states
+
+**Output** (structured):
+- For each action:
+  - `character`, `action_ref` (reference back to the action)
+  - `drive_effects`: array of `{ "drive": string, "change": number }` — mechanical consequences of this action given its outcome. Can differ based on success vs failure. Examples: eating succeeds → satiation +3. Failed public seduction → reputation -1, confidence -1. Running and failing → energy -1 (you still exerted yourself). Auto-fail at something embarrassing in public → reputation -2.
+  - `reactive_effects`: array of `{ "character": string, "drive": string, "change": number }` — effects on OTHER characters caused by this action's outcome. Example: a character witnesses a cringeworthy failed flirtation → their attraction toward the actor drops. One character's successful intimidation → target's composure -1. This is for cross-character consequences that are direct and mechanical, not emotional (emotional reactions are still handled in 6.7).
+  - `reasoning`: why these consequences, given the outcome. One sentence.
+- The GM sees ALL outcomes holistically, so it can reason about interactions: if character A tried to deflect character B's action and succeeded, the consequences for B account for the deflection.
+- Most actions will have empty `drive_effects` and `reactive_effects`. The GM should not invent consequences for mundane actions.
 
 ### 6.4 Dice Resolution
 
 **Programmatic — no LLM involved.**
 
-For each action requiring a skill check:
-- Roll `1d20 + character's skill value` vs DC.
+For each action:
+- When `result_override` is `"auto_succeed"`: record as success with result `"auto_succeed"`, no roll.
+- When `result_override` is `"auto_fail"`: record as failure with result `"auto_fail"`, no roll.
+- When `result_override` is `null` and `check_required` is true: roll `1d20 + character's skill value` vs DC. Record result as `"success"` or `"failure"`.
 - For contested actions: both sides roll, higher total wins.
-- Record: action, roll result, success/failure.
 
-Actions marked auto-succeed are recorded as successful.
-
-Output: a list of action outcomes `(character, action, result: success|failure, roll_details)`.
+Output: a list of action outcomes `(character, action, result: "success"|"failure"|"auto_succeed"|"auto_fail", roll_details)`.
 
 ### 6.5 Narration
 
@@ -356,14 +377,17 @@ This is a creative writing task. The narrator turns mechanical action outcomes i
 **Prompt inputs**:
 - Freeform rules text (for tone and genre guidance)
 - World lore (brief — for setting texture and sensory detail)
-- All action outcomes from step 6.4 (successes, failures, contest results)
+- All action outcomes from step 6.4 (successes, failures, auto_succeed, auto_fail, contest results)
+- Consequences from step 6.3b (drive_effects, reactive_effects per action)
 - Current world state (location, time, characters present)
 - Recent story history (sliding window of last K narrator outputs — see Context Budget section)
 
 **Output**:
 - Story continuation prose incorporating all action outcomes. This should read like a passage from a fiction book: vivid, well-paced, with attention to sensory detail and character behavior.
 
-The narrator has artistic liberty over *how* events are described — emphasis, pacing, sensory detail, atmosphere — but not over *what* happens. All outcomes must appear. No new events may be invented. Mechanical outcomes (success/failure) are binding. World lore and character facts are binding.
+The narrator has artistic liberty over *how* events are described — emphasis, pacing, sensory detail, atmosphere — but not over *what* happens. All outcomes must appear. No new events may be invented. Mechanical outcomes (success/failure/auto_succeed/auto_fail) are binding. World lore and character facts are binding.
+
+Auto-failed actions must be narrated as genuine attempts that fail. Do not skip them or reduce them to a thought — the character tried and it did not work.
 
 The narrator should spotlight the most significant actions and interactions. Mundane actions can be woven in as texture or omitted if there's more important content. The world around the characters — light, sound, weather, objects — should feel present, not just the characters' actions in a void.
 
@@ -393,11 +417,12 @@ Extracts notable events from the narration as shared observations. Does NOT gene
 ### 6.7 State Update, Character Processing & Observation Distribution
 
 **Programmatic state updates** (run first, before LLM calls):
-- Drive effects from actions: applied from the GM's `drive_effects` output (step 6.3), only for actions that succeeded (step 6.4). Validated against schema.
+- Drive effects from consequence resolution: applied from the GM's `drive_effects` output (step 6.3b). These are outcome-aware — the GM determined them after seeing dice results. Validated against schema.
+- Reactive effects from consequence resolution: applied from the GM's `reactive_effects` output (step 6.3b). These affect target characters specified in each reactive effect. Validated against schema.
 - Drive decay applied: `value = max(0, value - decay_rate)` for each drive, each turn.
 - Time advances (e.g., +1 minute per turn, configurable in ruleset).
 - Observations from step 6.6 distributed to NPC event streams (see above).
-- Characters present list updated: any NPC whose action was flagged as `departure: true` by the GM (step 6.3) and succeeded (step 6.4) is removed. On departure: their state is frozen, `intended_destination` is noted from their action description, and they become offscreen.
+- Characters present list updated: any NPC whose action was flagged as `departure: true` by the GM (step 6.3a) and succeeded or auto-succeeded (step 6.4) is removed. On departure: their state is frozen, `intended_destination` is noted from their action description, and they become offscreen.
 - **Empty location check**: if no NPCs remain present after departures, the turn ends early after continuation options (step 6.9) — the user is prompted with options that include relocation or time skip.
 
 **LLM-assisted character update** (per NPC, parallel):
@@ -405,7 +430,7 @@ Extracts notable events from the narration as shared observations. Does NOT gene
 **Model**: mini/cheap
 
 A single call per NPC that combines reactive state updates and optional reflection. The LLM receives this turn's observations for this character and decides:
-1. What stat changes are warranted as a consequence of events (e.g., trust shifts, mood changes). These are *reactive* changes — not action-driven ones like "eating restores satiation" (those are handled by the GM's `drive_effects` in step 6.3).
+1. What stat changes are warranted as a consequence of events (e.g., trust shifts, mood changes). These are *emotional/social reactive* changes — not action-driven ones like "eating restores satiation" or cross-character mechanical effects (those are handled by the GM's consequence resolution in step 6.3b).
 2. Whether the observations merit a reflection — a first-person conclusion or realization (if any).
 
 **Prompt inputs**:
@@ -453,15 +478,16 @@ Return to step 6.1.
 | Step | Model | Reason |
 |------|-------|--------|
 | 6.2 Character Actions | mini × N | Per NPC, structured output, has `reasoning` field |
-| 6.3 GM Evaluation | large × 1 | Complex reasoning about rules, context, difficulty, has `reasoning` field |
+| 6.3a GM Challenge Setup | large × 1 | Complex reasoning about rules, context, difficulty, has `reasoning` field |
 | 6.4 Dice Resolution | programmatic | Deterministic, verifiable |
+| 6.3b GM Consequence Resolution | large × 1 | Outcome-aware consequence reasoning, requires understanding rules and context |
 | 6.5 Narration | large × 1 | Creative writing — vivid prose from mechanical outcomes, streamable |
 | 6.6 Observation Extraction | mini × 1 | Shared extraction from narration, not per-character |
 | 6.7 Character Processing | mini × N | Per NPC: reactive state diffs + optional reflection in one call |
 | 6.8 Intent Lifecycle | mini (conditional) | Only runs when reflection generated or intent needs check |
 | 6.9 Continuation Options | mini × 1 | Suggestion generation, includes relocation/time-skip options |
 
-**Unconditional per turn**: 2N + 4 LLM calls (N for 6.2, 1 for 6.3, 1 for 6.5, 1 for 6.6, N for 6.7, 1 for 6.9). The merge absorbs the old conditional reflection calls into the unconditional 6.7 calls — same base count, but no additional conditional calls on top.
+**Unconditional per turn**: 2N + 5 LLM calls (N for 6.2, 1 for 6.3a, 1 for 6.3b, 1 for 6.5, 1 for 6.6, N for 6.7, 1 for 6.9). The merge absorbs the old conditional reflection calls into the unconditional 6.7 calls — same base count, but no additional conditional calls on top.
 
 ### Design Principles (informed by Dwarf Fortress)
 
@@ -588,7 +614,7 @@ When an NPC arrives at the user's location (either because the user relocated to
 
 ### NPC Departure
 
-When an NPC's action is flagged as `departure: true` by the GM (step 6.3) and succeeds (step 6.4):
+When an NPC's action is flagged as `departure: true` by the GM (step 6.3a) and succeeds or auto-succeeds (step 6.4):
 
 - Their departure is narrated (step 6.5).
 - During state update (step 6.7): `intended_destination` recorded from their action description, state frozen, removed from characters present.
@@ -648,7 +674,8 @@ Each step in the turn flow can fail (LLM timeout, malformed output, validation e
 |------|-------------|----------|
 | 6.1 User Input | User disconnects | Session paused, resume from snapshot |
 | 6.2 Character Actions | LLM fails for one NPC | Retry. If still failing, the character takes a default no-op action ("hesitates", "stays quiet"). Turn continues. |
-| 6.3 GM Evaluation | LLM fails | Retry. If still failing, all actions auto-succeed (no checks). Degrades quality but doesn't block. |
+| 6.3a GM Challenge Setup | LLM fails | Retry. If still failing, all actions get `result_override: "auto_succeed"` (no checks). Degrades quality but doesn't block. |
+| 6.3b GM Consequence Resolution | LLM fails | Retry. If still failing, apply no drive_effects or reactive_effects this turn. Narration proceeds without consequence data. State updates skip consequence application. Degrades quality but doesn't block. |
 | 6.4 Dice Resolution | N/A (programmatic) | Cannot fail meaningfully. |
 | 6.5 Narration | LLM fails | Retry. If still failing, generate a minimal factual summary from action outcomes (programmatic fallback). User sees degraded prose but turn completes. |
 | 6.6 Observation Extraction | LLM fails | Retry. If still failing, generate one generic observation per action from outcomes. Low quality but stream not broken. |
@@ -726,26 +753,42 @@ Ren:
      wake everyone up." } }
 ```
 
-**6.3 GM** →
+**6.3a GM Challenge Setup** →
 ```json
 { "evaluations": [
     { "character": "Alex", "action_summary": "Pour coffee and sit",
-      "reasoning": "Mundane.", "check_required": false, "skill": null,
-      "dc": null, "drive_effects": [], "departure": false },
+      "reasoning": "Mundane.",
+      "result_override": "auto_succeed", "check_required": false,
+      "skill": null, "dc": null, "departure": false },
     { "character": "Marta", "action_summary": "Cook eggs",
       "reasoning": "Routine kitchen activity.",
-      "check_required": false, "skill": null, "dc": null,
-      "drive_effects": [{ "drive": "satiation", "change": 2 }],
-      "departure": false },
+      "result_override": "auto_succeed", "check_required": false,
+      "skill": null, "dc": null, "departure": false },
     { "character": "Ren", "action_summary": "Apologize to Marta",
       "reasoning": "Sincere apology to someone annoyed. Persuasion check,
        moderate DC given her resentment.",
-      "check_required": true, "skill": "persuasion", "dc": 13,
-      "drive_effects": [], "departure": false }
+      "result_override": null, "check_required": true,
+      "skill": "persuasion", "dc": 13, "departure": false }
 ] }
 ```
 
-**6.4 Dice** — Alex: auto. Marta: auto (satiation +2 queued). Ren: 1d20+2 = 14 vs DC 13 → **success**.
+**6.4 Dice** — Alex: auto_succeed. Marta: auto_succeed. Ren: 1d20+2 = 14 vs DC 13 → **success**.
+
+**6.3b GM Consequence Resolution** →
+```json
+{ "consequences": [
+    { "character": "Alex", "action_ref": "Pour coffee and sit",
+      "drive_effects": [], "reactive_effects": [],
+      "reasoning": "Mundane action, no consequences." },
+    { "character": "Marta", "action_ref": "Cook eggs",
+      "drive_effects": [{ "drive": "satiation", "change": 2 }],
+      "reactive_effects": [],
+      "reasoning": "Cooking produces food — satiation increases." },
+    { "character": "Ren", "action_ref": "Apologize to Marta",
+      "drive_effects": [], "reactive_effects": [],
+      "reasoning": "Successful apology has no mechanical drive effect. Emotional impact handled in character processing." }
+] }
+```
 
 **6.5 Narration** (streamed) →
 
@@ -771,7 +814,7 @@ Ren:
 
 Alex pouring coffee: omitted — routine, below importance threshold. Three shared observations, all `public`, assigned IDs obs-50, obs-51, obs-52 and distributed to both Marta's and Ren's event streams.
 
-**6.7 Programmatic** — Marta satiation 3→5 (+2 effect), then decay (all drives -0.5): Marta satiation 4.5, energy 5.5. Ren satiation 3.5, energy 2.5. Time → 8:16 AM.
+**6.7 Programmatic** — Marta satiation 3→5 (+2 from 6.3b drive_effects), then decay (all drives -0.5): Marta satiation 4.5, energy 5.5. Ren satiation 3.5, energy 2.5. Time → 8:16 AM.
 
 **6.7 Marta processing** → (receives obs-50, obs-51, obs-52 + prior unreflected obs-41)
 ```json
@@ -852,9 +895,11 @@ Completion: "Marta acknowledges apology" — not met. Held.
      I feel terrible about it." } }
 ```
 
-**6.3 GM** → All three actions auto-succeed. Marta gets drive effect: satiation +3.
+**6.3a GM Challenge Setup** → All three actions get `result_override: "auto_succeed"`. No checks needed.
 
-**6.4 Dice** — All auto.
+**6.4 Dice** — All auto_succeed.
+
+**6.3b GM Consequence Resolution** → Marta gets drive effect: satiation +3 (eating). Alex and Ren: no effects.
 
 **6.5 Narration** (streamed) →
 
@@ -876,7 +921,7 @@ Completion: "Marta acknowledges apology" — not met. Held.
 
 Alex's question omitted — it's a trigger for Ren's answer, not independently notable. IDs: obs-53, obs-54.
 
-**6.7 Programmatic** — Marta satiation 4.5→7.5 (+3), decay → 7.0, energy → 5.0. Ren satiation → 3.0, energy → 2.0. Time → 8:17 AM.
+**6.7 Programmatic** — Marta satiation 4.5→7.5 (+3 from 6.3b drive_effects), decay → 7.0, energy → 5.0. Ren satiation → 3.0, energy → 2.0. Time → 8:17 AM.
 
 **6.7 Marta processing** → (receives obs-53, obs-54)
 ```json
@@ -947,35 +992,36 @@ Both characters share obs-50 through obs-54 (same content, same IDs). Reflection
 ### Data Flow Diagram
 
 ```
-6.1 user input ──────────────────────────────────────┐
-                                                     ↓
-6.2 [per NPC] ─→ actions ──────────────────────────→ 6.3 GM evaluation
-                                                     ↓
-                                          evaluations: checks, DCs,
-                                          drive_effects, departures
-                                                     ↓
-                                              6.4 dice resolution
-                                                     ↓
-                                                  outcomes
-                                                     ↓
-6.5 narration ←── outcomes + world state + history
-  ↓ (streamed to user)
-  ↓
-6.6 observation extraction ←── narration + outcomes
-  ↓
-  shared observations (engine distributes by visibility)
-  ↓
-6.7 programmatic: drive effects, decay, time, departures
-  ↓
-6.7 [per NPC] character processing ←── this NPC's observations
-  ↓
-  emotional_diffs + optional reflection
-  ↓ (engine applies diffs, stores reflection)
-  ↓
-6.8 intent lifecycle ←── reflection subject vs intent subject
-  ↓
-6.9 continuation options ─→ presented to user
-  ↓
+6.1 user input
+    ↓
+6.2 [per NPC] → actions → 6.3a GM challenge setup
+    ↓
+    evaluations: result_override, checks, DCs, departures (NO drive_effects)
+    ↓
+6.4 dice resolution
+    ↓
+    outcomes (success/failure/auto_succeed/auto_fail)
+    ↓
+6.3b GM consequence resolution ← outcomes + world state
+    ↓
+    drive_effects, reactive_effects per action
+    ↓
+6.5 narration ← outcomes + consequences + world state + history
+    ↓ (streamed to user)
+6.6 observation extraction ← narration + outcomes
+    ↓
+    shared observations (engine distributes)
+    ↓
+6.7 programmatic: drive_effects, reactive_effects, decay, time, departures
+    ↓
+6.7 [per NPC] character processing ← this NPC's observations
+    ↓
+    state_diffs + optional reflection
+    ↓
+6.8 intent lifecycle ← reflection subject vs intent subject
+    ↓
+6.9 continuation options → presented to user
+    ↓
 6.10 loop → 6.1
 ```
 
