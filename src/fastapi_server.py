@@ -52,8 +52,10 @@ from src.models.persona import create_default_persona
 from src.scenario_creation_assistant import ScenarioCreationAssistant
 from src.scenario_generator import ScenarioGenerator
 from src.session_starter import SessionStarter
+from src.vn.api import router as vn_router
 
 app = FastAPI(title="Storyline API", description="Interactive character chat API", version="0.1.0")
+app.include_router(vn_router)
 
 # Mount static files for the web interface
 static_dir = Path(__file__).parent.parent / "static" / "assets"

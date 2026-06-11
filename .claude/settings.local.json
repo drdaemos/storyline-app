@@ -3,7 +3,10 @@
     "allow": [
       "Bash(uv run ruff check:*)",
       "Bash(uv run pytest:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(uv run *)",
+      "PowerShell(uv run *)",
+      "PowerShell(npm run *)"
     ],
     "deny": [],
     "ask": []

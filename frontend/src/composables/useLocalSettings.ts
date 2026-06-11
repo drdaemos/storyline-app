@@ -5,7 +5,7 @@ const STORAGE_PREFIX = 'storyline_'
 
 const defaultSettings: LocalSettings = {
   aiProcessor: 'google-flash',
-  backupProcessor: 'deepseek-v32',
+  backupProcessor: 'deepseek',
   lastSelectedCharacter: undefined,
 }
 

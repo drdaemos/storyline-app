@@ -9,6 +9,8 @@ import CharacterPageView from './views/CharacterPageView.vue'
 import ChatView from './views/ChatView.vue'
 import CharacterCreationView from './views/CharacterCreationView.vue'
 import ScenarioCreationView from './views/ScenarioCreationView.vue'
+import VNLibraryView from './views/VNLibraryView.vue'
+import VNPlayerView from './views/VNPlayerView.vue'
 import { clerkPlugin } from '@clerk/vue'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -46,6 +48,17 @@ const routes = [
     path: '/character/:characterId/create-scenario',
     name: 'create-scenario',
     component: ScenarioCreationView,
+    props: true,
+  },
+  {
+    path: '/vn',
+    name: 'vn-library',
+    component: VNLibraryView,
+  },
+  {
+    path: '/vn/play/:sessionId',
+    name: 'vn-player',
+    component: VNPlayerView,
     props: true,
   },
 ]

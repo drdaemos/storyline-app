@@ -94,6 +94,67 @@ class Scenario(Base):
     )
 
 
+class VNScript(Base):
+    __tablename__ = "vn_scripts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # UUID
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    script_data: Mapped[dict] = mapped_column(JSON, nullable=False)  # Full VN script as JSON
+    input_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # Generation input, if generated
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    validation_status: Mapped[str] = mapped_column(String, nullable=False, default="unvalidated")
+    user_id: Mapped[str] = mapped_column(String, nullable=False, default="anonymous")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        CheckConstraint("validation_status IN ('unvalidated', 'valid', 'invalid')", name="check_vn_validation_status"),
+        Index("idx_vn_script_user", "user_id"),
+        Index("idx_vn_script_updated_at", "updated_at"),
+    )
+
+
+class VNSession(Base):
+    __tablename__ = "vn_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # UUID
+    script_id: Mapped[str] = mapped_column(String, nullable=False)
+    runtime_state: Mapped[dict] = mapped_column(JSON, nullable=False)  # Serialized VNRuntimeState
+    event_log: Mapped[list] = mapped_column(JSON, nullable=False, default=list)  # Accumulated engine events
+    narration_log: Mapped[list] = mapped_column(JSON, nullable=False, default=list)  # [{event_index, text}]
+    status: Mapped[str] = mapped_column(String, nullable=False, default="running")
+    user_id: Mapped[str] = mapped_column(String, nullable=False, default="anonymous")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'ended')", name="check_vn_session_status"),
+        Index("idx_vn_session_user", "user_id"),
+        Index("idx_vn_session_script", "script_id"),
+        Index("idx_vn_session_updated_at", "updated_at"),
+    )
+
+
+class VNGenerationJob(Base):
+    __tablename__ = "vn_generation_jobs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # UUID
+    input_data: Mapped[dict] = mapped_column(JSON, nullable=False)  # VNInput as JSON
+    processor_type: Mapped[str] = mapped_column(String, nullable=False)
+    checkpoint: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)  # GenerationCheckpoint: outline + completed scenes
+    status: Mapped[str] = mapped_column(String, nullable=False, default="running")
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, default="anonymous")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'failed')", name="check_vn_generation_job_status"),
+        Index("idx_vn_generation_job_user", "user_id"),
+        Index("idx_vn_generation_job_updated_at", "updated_at"),
+    )
+
+
 def create_database_engine(database_url: str) -> Engine:
     """Create SQLAlchemy engine from database URL."""
     from sqlalchemy import create_engine

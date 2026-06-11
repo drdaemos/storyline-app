@@ -1,7 +1,8 @@
 <template>
   <!-- Header -->
-  <div class="flex mb-8 gap-4">
+  <div class="flex mb-8 gap-4 items-center justify-between">
     <h2 class="text-3xl font-bold font-serif">Choose a Character</h2>
+    <UButton variant="soft" icon="i-lucide-book-open" to="/vn">Visual Novels (beta)</UButton>
   </div>
 
   <!-- Loading state -->

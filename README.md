@@ -42,7 +42,7 @@ Every N exchanges the conversation memory is summarized and further plot beats a
 Basically, pipeline operates on multiple levels:
 
 - Character works with the lowest level: dialogue, actions, internal thinking - following user input and their own idea of story beats the fit the scene
-- (every N exchanges) The scene is reevaluated based on the idea of point in narrative (e.g. is there a rising conflict / tension / escalation?). Act transition may be planned here. Next plot beats are generated for the following scene.
+- (every N exchanges) The scene is reevaluated based on the idea of point in narrative. Act transition may be planned here. Next plot beats are generated for the following scene.
 
 ### Commands
 
@@ -58,10 +58,10 @@ Basically, pipeline operates on multiple levels:
 - Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.
 - [x] Introduce scene intro message - either autogenerate or predefine via character card
 - Multi-group convos (LLM handle them, but probably there should be a different card format)
-- User profile / authentication / description
-- Generate user responses dynamically
+- [x] User profile / authentication / description
+- Generate default user responses
 - Support image generation for character portraits, scenes etc.
 - AI-to-AI roleplay (two characters interacting without user input)
-- Character creation screen:
+- [x] Character creation screen:
   - Left half: AI chat to guide through the creation
   - Right half: Dynamically populated character sheet with editable fields

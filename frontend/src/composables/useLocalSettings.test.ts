@@ -48,13 +48,13 @@ describe('useLocalSettings', () => {
   it('should load settings from localStorage on initialization', () => {
     // Set values in localStorage before creating instance
     localStorage.setItem('storyline_ai_processor', 'grok')
-    localStorage.setItem('storyline_backup_processor', 'deepseek-v32')
+    localStorage.setItem('storyline_backup_processor', 'deepseek')
 
     // Create a new instance (need to reload the module to re-initialize)
     const instance = useLocalSettings()
     instance.loadSettings()
 
     expect(instance.settings.value.aiProcessor).toBe('grok')
-    expect(instance.settings.value.backupProcessor).toBe('deepseek-v32')
+    expect(instance.settings.value.backupProcessor).toBe('deepseek')
   })
 })

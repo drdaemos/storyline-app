@@ -33,6 +33,7 @@ class ClaudePromptProcessor(PromptProcessor):
         """
         self.client = Anthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
         self.model = model
+        self.logger: ChatLogger | None = None
 
     def set_logger(self, logger: ChatLogger) -> None:
         self.logger = logger

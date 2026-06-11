@@ -33,6 +33,7 @@ class OpenRouterPromptProcessor(PromptProcessor):
         """
         self.client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key or os.getenv("OPENROUTER_API_KEY"))
         self.model = model
+        self.logger: ChatLogger | None = None
 
     def set_logger(self, logger: ChatLogger) -> None:
         self.logger = logger

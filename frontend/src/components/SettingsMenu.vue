@@ -60,17 +60,15 @@ const { settings, clearSettings } = useLocalSettings()
 
 const processorOptions = ref<SelectItem[]>([
   { label: 'Claude Haiku 4.5 ($5/M)', id: 'claude-haiku' },
-  { label: 'Claude Sonnet 4.5 ($15/M)', id: 'claude-sonnet' },
-  { label: 'Claude Opus 4.5 ($25/M)', id: 'claude-opus' },
+  { label: 'Claude Sonnet 4.6 ($15/M)', id: 'claude-sonnet' },
+  { label: 'Claude Opus 4.8 ($25/M)', id: 'claude-opus' },
   { label: 'GPT-5.2 Chat ($14/M)', id: 'gpt-5.2' },
-  { label: 'Gemini 3 Flash ($3/M)', id: 'google-flash' },
-  { label: 'Gemini 3 Pro ($12/M)', id: 'google-pro' },
-  { label: 'DeepSeek V3.2 ($1.68/M)', id: 'deepseek-v32' },
-  { label: 'Kimi K2 ($1.90/M)', id: 'kimi' },
-  { label: 'Kimi K2 Thinking ($2.50/M)', id: 'kimi-thinking' },
-  { label: 'Mistral Small Creative ($0.30/M)', id: 'mistral' },
-  { label: 'Grok 4.1 Fast ($0.50/M)', id: 'grok' },
-  { label: 'GLM-4.7 ($2.20/M)', id: 'glm' },
-  { label: 'Cohere Command A ($10/M)', id: 'cohere' },
+  { label: 'Qwen 3.7 Max ($2/M)', id: 'qwen' },
+  { label: 'Gemini 3.5 Flash ($7/M)', id: 'google-flash' },
+  { label: 'Gemini 3.1 Pro ($12/M)', id: 'google-pro' },
+  { label: 'DeepSeek V4 Pro ($1.90/M)', id: 'deepseek' },
+  { label: 'Kimi K2.7 ($1.90/M)', id: 'kimi' },
+  { label: 'Grok 4.3 Fast ($0.50/M)', id: 'grok' },
+  { label: 'GLM-5.1 ($2.20/M)', id: 'glm' },
 ])
 </script>
