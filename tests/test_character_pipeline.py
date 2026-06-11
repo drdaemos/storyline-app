@@ -9,9 +9,20 @@ from src.components.character_pipeline import CharacterPipeline, CharacterRespon
 from src.models.character import Character
 from src.models.message import GenericMessage
 from src.models.prompt_processor import PromptProcessor
-from src.models.summary import Summary
+from src.models.summary import PlotTracking, RelationshipState, StorySummary, TimeState
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def make_summary(story_beats: list[str] | None = None, user_learnings: list[str] | None = None) -> StorySummary:
+    """Minimal valid StorySummary for pipeline-input tests."""
+    return StorySummary(
+        time=TimeState(current_time="Day 1, afternoon"),
+        relationship=RelationshipState(trust=5, attraction=5, emotional_intimacy=5, conflict=5, power_balance=5, relationship_label="colleagues"),
+        plot=PlotTracking(location="Alice's office"),
+        story_beats=story_beats or [],
+        user_learnings=user_learnings or [],
+    )
 
 
 class MockPromptProcessor(PromptProcessor):
@@ -80,11 +91,9 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(evaluation_response)
 
-        summary = Summary(
-            story_information="Previous case discussion context",
-            story_summary=["Alice met with user to discuss missing person case"],
-            character_learnings=["User trusts Alice with sensitive information"],
-            narrative_overview="Investigation context with user cooperation",
+        summary = make_summary(
+            story_beats=["Alice met with user to discuss missing person case"],
+            user_learnings=["User trusts Alice with sensitive information"],
         )
 
         input_data: EvaluationInput = {
@@ -130,12 +139,7 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(plans_response)
 
-        summary = Summary(
-            story_information="Missing person case discussion",
-            story_summary=["John provided case files to Alice"],
-            character_learnings=[],
-            narrative_overview="Professional case collaboration",
-        )
+        summary = make_summary(story_beats=["John provided case files to Alice"])
 
         input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": summary, "scenario_state": "Office meeting, case files on desk"}
 
@@ -164,12 +168,7 @@ class TestCharacterPipeline:
 
         mock_processor = MockPromptProcessor(plans_response)
 
-        summary = Summary(
-            story_information="Test summary",
-            story_summary=[],
-            character_learnings=[],
-            narrative_overview="Test scenario",
-        )
+        summary = make_summary()
 
         input_data: PlanGenerationInput = {"character": self.test_character, "user_name": "John", "summary": summary, "scenario_state": "Test state"}
 
@@ -189,12 +188,7 @@ class TestCharacterPipeline:
             backstory="A detective colleague working on cases",
         )
 
-        summary = Summary(
-            story_information="Discussion about missing person case",
-            story_summary=["John provided case files"],
-            character_learnings=[],
-            narrative_overview="Case file review",
-        )
+        summary = make_summary(story_beats=["John provided case files"])
 
         input_data: CharacterResponseInput = {
             "summary": summary,
@@ -225,7 +219,7 @@ class TestCharacterPipeline:
 
     def test_get_memory_summary(self):
         """Test memory summarization."""
-        summary_response = "Alice met with John to discuss a missing person case. Key details include timeline inconsistencies and missing witness statements."
+        summary_response = make_summary(story_beats=["Alice met with John to discuss a missing person case"])
 
         mock_processor = MockPromptProcessor(summary_response)
 
@@ -235,12 +229,7 @@ class TestCharacterPipeline:
             backstory="A detective colleague working on cases",
         )
 
-        prior_summary = Summary(
-            story_information="Initial conversation",
-            story_summary=[],
-            character_learnings=[],
-            narrative_overview="First meeting",
-        )
+        prior_summary = make_summary()
 
         memory: list[GenericMessage] = [
             {"role": "user", "content": "I need help with a case"},

@@ -14,7 +14,7 @@ from src.models.vn.pipeline import SceneOutlineItem, ScriptOutline
 from src.vn.api import get_vn_service
 from src.vn.registry import VNGenerationJobRegistry, VNScriptRegistry, VNSessionRegistry
 from src.vn.service import VNService
-from tests.vn.test_pipeline import FakeProcessor, make_mechanics_patch
+from tests.vn.test_pipeline import FakeProcessor, make_llm_mechanics_patch, scene_to_llm_scene, scenes_as_llm_scenes
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -155,7 +155,7 @@ class TestVNApi:
                 SceneOutlineItem(id="sc_reckoning", intent="x", synopsis="s", exit_mode="ending", ending_ids=["end_bargain", "end_flight"]),
             ],
         )
-        processor = FakeProcessor([outline, *locked_granary.scenes, make_mechanics_patch(locked_granary)])
+        processor = FakeProcessor([outline, *scenes_as_llm_scenes(locked_granary), make_llm_mechanics_patch(locked_granary)])
         monkeypatch.setattr("src.vn.api.PromptProcessorFactory.create_processor", lambda processor_type: processor)
 
         request = {
@@ -197,7 +197,7 @@ class TestVNApi:
             ],
         )
         # outline + first scene pass, then the second scene fails all repair attempts
-        failing = FakeProcessor([outline, locked_granary.scenes[0], "garbage", "garbage", "garbage"])
+        failing = FakeProcessor([outline, scene_to_llm_scene(locked_granary.scenes[0]), "garbage", "garbage", "garbage"])
         monkeypatch.setattr("src.vn.api.PromptProcessorFactory.create_processor", lambda processor_type: failing)
         request = {
             "input": {
@@ -221,7 +221,7 @@ class TestVNApi:
         assert jobs[0]["scenes"][0]["beats"][0]["intent"] == locked_granary.scenes[0].beats[0].intent
 
         # resume with a working processor: only the missing scenes and mechanics run
-        resuming = FakeProcessor([*locked_granary.scenes[1:], make_mechanics_patch(locked_granary)])
+        resuming = FakeProcessor([*scenes_as_llm_scenes(locked_granary)[1:], make_llm_mechanics_patch(locked_granary)])
         monkeypatch.setattr("src.vn.api.PromptProcessorFactory.create_processor", lambda processor_type: resuming)
         response = self.client.post(f"/api/vn/generation-jobs/{job_id}/resume")
         events = [json.loads(line.removeprefix("data: ")) for line in response.text.splitlines() if line.startswith("data: ")]

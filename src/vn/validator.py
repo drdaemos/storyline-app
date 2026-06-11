@@ -24,7 +24,6 @@ from src.models.vn.script import (
     Scene,
     Script,
     StateVar,
-    VarCondition,
 )
 from src.models.vn.validation import ValidationIssue, ValidationReport
 
@@ -209,11 +208,12 @@ def _scene_reference_issues(scene: Scene, scene_ids: set[str], all_ids: set[str]
 
 
 def _condition_issues(condition: Condition, declarations: dict[str, StateVar], all_ids: set[str], scene_id: str, beat_id: str | None, context: str) -> list[ValidationIssue]:
-    if not isinstance(condition, VarCondition):
+    if condition.is_visited:
         if condition.visited not in all_ids:
             return [ValidationIssue(code="unknown_visited_ref", scene_id=scene_id, beat_id=beat_id, message=f"{context}: visited('{condition.visited}') matches no scene or beat id")]
         return []
 
+    assert condition.var is not None  # narrowed by is_var; guaranteed by the model validator
     declaration = declarations.get(condition.var)
     if declaration is None:
         return [ValidationIssue(code="unknown_var_ref", scene_id=scene_id, beat_id=beat_id, message=f"{context}: condition references undeclared var '{condition.var}'")]

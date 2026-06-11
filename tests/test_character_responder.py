@@ -5,7 +5,7 @@ import pytest
 from src.character_responder import CharacterResponder
 from src.models.character import Character
 from src.models.character_responder_dependencies import CharacterResponderDependencies
-from tests.test_character_pipeline import MockPromptProcessor
+from tests.test_character_pipeline import MockPromptProcessor, make_summary
 
 
 def create_test_character() -> Character:
@@ -282,7 +282,7 @@ def test_regenerate_after_memory_compression(mock_get_memory_summary, mock_get_c
     responder.memory = initial_history[-10:]  # Keep last 5 rounds in memory
 
     # Mock memory summary response
-    mock_get_memory_summary.return_value = "Summary of previous conversation"
+    mock_get_memory_summary.return_value = make_summary(story_beats=["Summary of previous conversation"])
     # Mock character plans response
     mock_get_character_plans.return_value = "Character's plans for the future"
 
@@ -372,7 +372,7 @@ def test_regenerate_loads_correct_message_after_summarization(mock_get_memory_su
     # Mock the response
     mock_get_character_response.return_value = iter("Regenerated response")
     mock_get_character_plans.return_value = "Some plans"
-    mock_get_memory_summary.return_value = "Summary"
+    mock_get_memory_summary.return_value = make_summary(story_beats=["Summary"])
 
     # Call regenerate
     result = responder.respond("/regenerate")

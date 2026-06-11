@@ -4,20 +4,28 @@ import pytest
 from pydantic import BaseModel
 
 from src.models.prompt_processor import PromptProcessor
-from src.models.vn import CheckBeat, ChoiceBeat, PlainBeat, Scene, Script, VNInput
+from src.models.vn import CheckBeat, ChoiceBeat, EndingBeat, FlagVar, PlainBeat, Scene, Script, StateVar, VNInput
 from src.models.vn.pipeline import (
     BeatEffectsPatch,
     CheckModifiersPatch,
     ExitEdgeGuardPatch,
     GenerationCheckpoint,
+    LLMBeatEffectsPatch,
+    LLMCheckModifiersPatch,
+    LLMExitEdgeGuardPatch,
+    LLMMechanicsPatch,
+    LLMOptionGuardPatch,
+    LLMScenePatch,
     MechanicsPatch,
     OptionGuardPatch,
     SceneOutlineItem,
     ScenePatch,
     ScriptOutline,
 )
+from src.models.vn.script import CheckModifier, Condition, DraftScene, Effect, LLMBeat, LLMChoiceOption, LLMScene
 from src.models.vn.validation import ValidationIssue, ValidationReport
 from src.vn.pipeline.generator import VNScriptGenerator
+from src.vn.pipeline.mechanics import MechanicsStage
 from src.vn.pipeline.outline import OutlineStage
 from src.vn.pipeline.repair import VNGenerationError, run_with_repair
 from src.vn.pipeline.scene_graphs import SceneGraphStage
@@ -68,6 +76,172 @@ def make_mechanics_patch(script: Script) -> MechanicsPatch:
             if isinstance(beat, CheckBeat) and beat.check.modifiers:
                 patch.check_modifiers.append(CheckModifiersPatch(beat_id=beat.id, modifiers=beat.check.modifiers))
     return patch
+
+
+def make_llm_mechanics_patch(script: Script) -> LLMMechanicsPatch:
+    """Derive the Anthropic-friendly mechanics DSL patch for `script`."""
+    patch = make_mechanics_patch(script)
+    return LLMMechanicsPatch(
+        state_vars=[_state_var_to_dsl(var) for var in patch.state_vars],
+        beat_effects=[
+            LLMBeatEffectsPatch(beat_id=item.beat_id, effects=[_effect_to_dsl(effect) for effect in item.effects])
+            for item in patch.beat_effects
+        ],
+        option_guards=[
+            LLMOptionGuardPatch(beat_id=item.beat_id, option_index=item.option_index, guard=[_condition_to_dsl(condition) for condition in item.guard])
+            for item in patch.option_guards
+        ],
+        exit_edge_guards=[
+            LLMExitEdgeGuardPatch(beat_id=item.beat_id, edge_index=item.edge_index, guard=[_condition_to_dsl(condition) for condition in item.guard])
+            for item in patch.exit_edge_guards
+        ],
+        scene_patches=[
+            LLMScenePatch(
+                scene_id=item.scene_id,
+                prerequisites=[_condition_to_dsl(condition) for condition in item.prerequisites],
+                repeatable=bool(item.repeatable),
+                forced=-1 if item.forced is None else item.forced,
+            )
+            for item in patch.scene_patches
+        ],
+        check_modifiers=[
+            LLMCheckModifiersPatch(beat_id=item.beat_id, modifiers=[_modifier_to_dsl(modifier) for modifier in item.modifiers])
+            for item in patch.check_modifiers
+        ],
+    )
+
+
+def _state_var_to_dsl(var: StateVar) -> str:
+    if var.type == "flag":
+        return f"flag {var.name}={_value_to_dsl(var.initial)}"
+    if var.type == "counter":
+        return f"counter {var.name} max={var.max} initial={var.initial}"
+    return f"enum {var.name} values={'|'.join(var.values)} initial={var.initial}"
+
+
+def _effect_to_dsl(effect: Effect) -> str:
+    if effect.op == "set":
+        return f"{effect.var} = {_value_to_dsl(effect.value)}"
+    op = "+=" if effect.op == "inc" else "-="
+    return f"{effect.var} {op} {_value_to_dsl(effect.value)}"
+
+
+def _modifier_to_dsl(modifier: CheckModifier) -> str:
+    return f"{_condition_to_dsl(modifier)} => {modifier.mod:+d}"
+
+
+def _condition_to_dsl(condition: Condition) -> str:
+    if condition.is_visited:
+        prefix = "not " if condition.value is False else ""
+        return f"{prefix}visited:{condition.visited}"
+    return f"{condition.var} {condition.op} {_value_to_dsl(condition.value)}"
+
+
+def _value_to_dsl(value: bool | int | str) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return str(value)
+
+
+def scene_to_draft(scene: Scene) -> DraftScene:
+    """Strip mechanics from a canonical `Scene` to the structure-only `DraftScene`
+    the scene-graph stage actually requests from the LLM (the inverse of
+    `draft_scene_to_scene`). Mechanics are reapplied later by the mechanics patch."""
+    beats: list[dict[str, object]] = []
+    for beat in scene.beats:
+        common: dict[str, object] = {"id": beat.id, "intent": beat.intent, "type": beat.type, "extension": beat.extension}
+        if isinstance(beat, PlainBeat):
+            beats.append({**common, "next": beat.next, "exit": beat.exit, "exit_edges": [{"target_scene": edge.target_scene, "priority": edge.priority} for edge in beat.exit_edges] if beat.exit_edges is not None else None})
+        elif isinstance(beat, CheckBeat):
+            beats.append({**common, "check": {"difficulty": beat.check.difficulty, "on_success": beat.check.on_success, "on_failure": beat.check.on_failure}})
+        elif isinstance(beat, ChoiceBeat):
+            beats.append({**common, "options": [{"intent": option.intent, "target": option.target} for option in beat.options]})
+        else:
+            assert isinstance(beat, EndingBeat)
+            beats.append({**common, "ending_id": beat.ending_id})
+    return DraftScene.model_validate({"id": scene.id, "intent": scene.intent, "entry_beat": scene.entry_beat, "beats": beats})
+
+
+def scene_to_llm_scene(scene: Scene) -> LLMScene:
+    beats: list[LLMBeat] = []
+    for beat in scene.beats:
+        extension_domain = beat.extension.deeper_domain if beat.extension is not None else ""
+        if isinstance(beat, PlainBeat):
+            beats.append(
+                LLMBeat(
+                    id=beat.id,
+                    type="plain",
+                    intent=beat.intent,
+                    extension_domain=extension_domain,
+                    route=_plain_route_to_dsl(beat),
+                    check_difficulty=0,
+                    check_success="",
+                    check_failure="",
+                    options=[],
+                    ending_id="",
+                )
+            )
+        elif isinstance(beat, CheckBeat):
+            beats.append(
+                LLMBeat(
+                    id=beat.id,
+                    type="check",
+                    intent=beat.intent,
+                    extension_domain=extension_domain,
+                    route="",
+                    check_difficulty=beat.check.difficulty,
+                    check_success=beat.check.on_success,
+                    check_failure=beat.check.on_failure,
+                    options=[],
+                    ending_id="",
+                )
+            )
+        elif isinstance(beat, ChoiceBeat):
+            beats.append(
+                LLMBeat(
+                    id=beat.id,
+                    type="choice",
+                    intent=beat.intent,
+                    extension_domain=extension_domain,
+                    route="",
+                    check_difficulty=0,
+                    check_success="",
+                    check_failure="",
+                    options=[LLMChoiceOption(intent=option.intent, target=option.target) for option in beat.options],
+                    ending_id="",
+                )
+            )
+        else:
+            assert isinstance(beat, EndingBeat)
+            beats.append(
+                LLMBeat(
+                    id=beat.id,
+                    type="ending",
+                    intent=beat.intent,
+                    extension_domain=extension_domain,
+                    route="",
+                    check_difficulty=0,
+                    check_success="",
+                    check_failure="",
+                    options=[],
+                    ending_id=beat.ending_id,
+                )
+            )
+    return LLMScene(id=scene.id, intent=scene.intent, entry_beat=scene.entry_beat, beats=beats)
+
+
+def scenes_as_llm_scenes(script: Script) -> list[LLMScene]:
+    """The scene-graph stage outputs for `script`, in order."""
+    return [scene_to_llm_scene(scene) for scene in script.scenes]
+
+
+def _plain_route_to_dsl(beat: PlainBeat) -> str:
+    if beat.next is not None:
+        return f"next:{beat.next}"
+    if beat.exit == "open":
+        return "exit:open"
+    assert beat.exit_edges is not None
+    return "edges:" + "|".join(f"{edge.target_scene}@{edge.priority}" for edge in beat.exit_edges)
 
 
 @pytest.fixture
@@ -147,6 +321,24 @@ class TestSceneGraphGate:
         assert "exit_mode_mismatch" in {issue.code for issue in report.errors}
 
 
+class TestMechanicsGate:
+    def test_state_var_written_but_never_read_is_repair_feedback(self, locked_granary: Script, vn_input):
+        first_scene = locked_granary.scenes[0]
+        first_beat = first_scene.beats[0].model_copy(
+            update={"effects": [*first_scene.beats[0].effects, Effect(var="unused_signal", op="set", value=True)]}
+        )
+        script = locked_granary.model_copy(
+            update={
+                "state_vars": [*locked_granary.state_vars, FlagVar(name="unused_signal", initial=False)],
+                "scenes": [first_scene.model_copy(update={"beats": [first_beat, *first_scene.beats[1:]]}), *locked_granary.scenes[1:]],
+            }
+        )
+
+        report = MechanicsStage(FakeProcessor([])).gate(script, vn_input)
+
+        assert "state_var_never_read" in {issue.code for issue in report.errors}
+
+
 class TestRepairLoop:
     def test_feedback_passed_on_retry(self):
         seen_feedback: list[ValidationReport | None] = []
@@ -170,12 +362,12 @@ class TestRepairLoop:
 
 class TestGeneratorEndToEnd:
     def test_clean_run(self, vn_input, outline, locked_granary: Script):
-        processor = FakeProcessor([outline, *locked_granary.scenes, make_mechanics_patch(locked_granary)])
+        processor = FakeProcessor([outline, *scenes_as_llm_scenes(locked_granary), make_llm_mechanics_patch(locked_granary)])
         progress = []
         script = VNScriptGenerator(processor).generate(vn_input, on_progress=progress.append)
 
         assert script == locked_granary
-        assert processor.calls == [ScriptOutline, Scene, Scene, Scene, MechanicsPatch]
+        assert processor.calls == [ScriptOutline, LLMScene, LLMScene, LLMScene, LLMMechanicsPatch]
         stages = [(p.stage, p.status) for p in progress]
         assert stages == [
             ("outline", "started"),
@@ -191,7 +383,7 @@ class TestGeneratorEndToEnd:
         ]
 
     def test_checkpoint_reported_after_each_artifact(self, vn_input, outline, locked_granary: Script):
-        processor = FakeProcessor([outline, *locked_granary.scenes, make_mechanics_patch(locked_granary)])
+        processor = FakeProcessor([outline, *scenes_as_llm_scenes(locked_granary), make_llm_mechanics_patch(locked_granary)])
         checkpoints: list[GenerationCheckpoint] = []
         VNScriptGenerator(processor).generate(vn_input, on_checkpoint=checkpoints.append)
 
@@ -202,19 +394,19 @@ class TestGeneratorEndToEnd:
 
     def test_resume_skips_checkpointed_work(self, vn_input, outline, locked_granary: Script):
         checkpoint = GenerationCheckpoint(outline=outline, scenes=[locked_granary.scenes[0]])
-        processor = FakeProcessor([*locked_granary.scenes[1:], make_mechanics_patch(locked_granary)])  # neither outline nor the first scene are requested again
+        processor = FakeProcessor([*scenes_as_llm_scenes(locked_granary)[1:], make_llm_mechanics_patch(locked_granary)])  # neither outline nor the first scene are requested again
         progress = []
         script = VNScriptGenerator(processor).generate(vn_input, on_progress=progress.append, checkpoint=checkpoint)
 
         assert script == locked_granary
-        assert processor.calls == [Scene, Scene, MechanicsPatch]
+        assert processor.calls == [LLMScene, LLMScene, LLMMechanicsPatch]
         started_scenes = [p.scene_id for p in progress if p.stage == "scene_graph" and p.status == "started"]
         assert started_scenes == ["sc_granary", "sc_reckoning"]
         assert not any(p.stage == "outline" and p.status == "started" for p in progress)
 
     def test_unparseable_output_is_repaired(self, vn_input, outline, locked_granary: Script):
         """A response the SDK cannot parse counts as a failed attempt with parse feedback."""
-        processor = FakeProcessor(["Sure! Here is your outline: it has three scenes.", outline, *locked_granary.scenes, make_mechanics_patch(locked_granary)])
+        processor = FakeProcessor(["Sure! Here is your outline: it has three scenes.", outline, *scenes_as_llm_scenes(locked_granary), make_llm_mechanics_patch(locked_granary)])
         progress = []
         script = VNScriptGenerator(processor).generate(vn_input, on_progress=progress.append)
 
@@ -225,9 +417,9 @@ class TestGeneratorEndToEnd:
         assert "output_parse_error" in repairing[0].detail
 
     def test_mechanics_repair_then_success(self, vn_input, outline, locked_granary: Script):
-        good = make_mechanics_patch(locked_granary)
+        good = make_llm_mechanics_patch(locked_granary)
         broken = good.model_copy(update={"state_vars": []})  # guards now reference undeclared vars
-        processor = FakeProcessor([outline, *locked_granary.scenes, broken, good])
+        processor = FakeProcessor([outline, *scenes_as_llm_scenes(locked_granary), broken, good])
         progress = []
         script = VNScriptGenerator(processor).generate(vn_input, on_progress=progress.append)
 
@@ -238,8 +430,8 @@ class TestGeneratorEndToEnd:
         assert "unknown_var_ref" in repairing[0].detail
 
     def test_persistent_failure_raises(self, vn_input, outline, locked_granary: Script):
-        broken = make_mechanics_patch(locked_granary).model_copy(update={"state_vars": []})
-        processor = FakeProcessor([outline, *locked_granary.scenes, broken, broken, broken])
+        broken = make_llm_mechanics_patch(locked_granary).model_copy(update={"state_vars": []})
+        processor = FakeProcessor([outline, *scenes_as_llm_scenes(locked_granary), broken, broken, broken])
         with pytest.raises(VNGenerationError) as exc_info:
             VNScriptGenerator(processor).generate(vn_input)
         assert "unknown_var_ref" in {issue.code for issue in exc_info.value.report.errors}
@@ -278,8 +470,8 @@ class TestGeneratorEndToEnd:
                 SceneOutlineItem(id="sc_b", intent="x", synopsis="s", exit_mode="ending", ending_ids=["end_1"]),
             ],
         )
-        patch = make_mechanics_patch(softlocked)
-        processor = FakeProcessor([outline, *softlocked.scenes, patch, patch, patch])
+        patch = make_llm_mechanics_patch(softlocked)
+        processor = FakeProcessor([outline, *scenes_as_llm_scenes(softlocked), patch, patch, patch])
         with pytest.raises(VNGenerationError) as exc_info:
             VNScriptGenerator(processor).generate(vn_input)
         assert "dead_end" in {issue.code for issue in exc_info.value.report.errors}

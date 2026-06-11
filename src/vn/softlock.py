@@ -37,7 +37,6 @@ from src.models.vn.script import (
     Scene,
     Script,
     StateValue,
-    VisitedCondition,
 )
 from src.models.vn.validation import ValidationIssue, ValidationReport
 from src.vn.conditions import StateMap, evaluate_guard
@@ -138,7 +137,7 @@ class SoftlockChecker:
         return frozenset(ids)
 
     def _guard_refs(self, guard: Guard) -> set[str]:
-        return {condition.visited for condition in guard if isinstance(condition, VisitedCondition)}
+        return {condition.visited for condition in guard if condition.visited is not None}
 
     def _expand(self, node: WalkNode) -> tuple[list[WalkNode], list[ValidationIssue], str | None]:
         """Execute one beat: mark visited, apply effects, enumerate all possible successors."""

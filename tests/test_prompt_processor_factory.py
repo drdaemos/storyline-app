@@ -6,8 +6,6 @@ import pytest
 
 from src.models.prompt_processor_factory import PromptProcessorFactory
 from src.processors.claude_prompt_processor import ClaudePromptProcessor
-from src.processors.cohere_prompt_processor import CoherePromptProcessor
-from src.processors.openai_prompt_processor import OpenAiPromptProcessor
 from src.processors.openrouter_prompt_processor import OpenRouterPromptProcessor
 
 
@@ -18,7 +16,7 @@ class TestPromptProcessorFactory:
         """Test creating Claude Sonnet processor."""
         processor = PromptProcessorFactory.create_processor("claude-sonnet")
         assert isinstance(processor, ClaudePromptProcessor)
-        assert processor.model == "claude-sonnet-4-5"
+        assert processor.model == "claude-sonnet-4-6"
 
     def test_create_claude_haiku_processor(self) -> None:
         """Test creating Claude Haiku processor."""

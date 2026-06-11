@@ -109,7 +109,7 @@ class Scenario(BaseModel):
 
     # Character references (for interactive/stored scenarios)
     character_id: str = Field(default="", description="Main AI character ID this scenario is for")
-    persona_id: str = Field(..., min_length=1, description="User persona ID - required for all scenarios")
+    persona_id: str = Field(default="", description="User persona ID; populated by the server after generation, not authored by the model")
 
     # Location/Setting
     location: str = Field(default="", description="Where the scenario takes place")

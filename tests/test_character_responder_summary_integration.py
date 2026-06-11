@@ -20,6 +20,11 @@ class MockPromptProcessor:
         self.logger = logger
 
     def respond_with_model(self, prompt: str, user_prompt: str, output_type, conversation_history=None, max_tokens=None):
+        from src.models.summary import StorySummary
+        from tests.test_character_pipeline import make_summary
+
+        if output_type == StorySummary:
+            return make_summary(story_beats=[self.response])
         return self.response
 
     def respond_with_text(self, prompt: str, user_prompt: str, conversation_history=None, max_tokens=None, reasoning=False) -> str:
@@ -86,11 +91,14 @@ class TestCharacterResponderSummaryIntegration:
         """Create dependencies with mock processors that return specific responses."""
         # Create a mock that can return different responses for different calls
         from src.models.evaluation import Evaluation
+        from src.models.summary import StorySummary
+        from tests.test_character_pipeline import make_summary
 
         class MockProcessorWithSummary:
             def __init__(self, eval_response, summary_response: str):
                 self.eval_response = eval_response
                 self.summary_response = summary_response
+                self.summary_model = make_summary(story_beats=[summary_response])
                 self.logger = None
                 self.call_count = 0
 
@@ -104,6 +112,9 @@ class TestCharacterResponderSummaryIntegration:
                 # Return Evaluation object for evaluation calls
                 if output_type == Evaluation:
                     return self.eval_response
+                # Structured summaries are returned as StorySummary objects
+                if output_type == StorySummary:
+                    return self.summary_model
                 # For other model responses, return string
                 return self.summary_response
 
@@ -185,31 +196,30 @@ class TestCharacterResponderSummaryIntegration:
         stored_summary = summaries[0]
         assert stored_summary["character_id"] == "TestBot"
         assert stored_summary["session_id"] == self.session_id
-        assert stored_summary["summary"] == summary_response
+        # Summaries are stored as serialized StorySummary JSON; the beat text is embedded.
+        assert summary_response in stored_summary["summary"]
         assert stored_summary["start_offset"] >= 0
         assert stored_summary["end_offset"] >= stored_summary["start_offset"]
 
     def test_existing_summaries_loading(self):
         """Test that existing summaries are properly loaded and concatenated on initialization."""
-        # Pre-populate summary memory with test summaries using XML format
-        summary1 = """<story_summary>First summary of early conversation (messages 0-5)</story_summary>
-<character_learnings>User introduced themselves</character_learnings>"""
+        from tests.test_character_pipeline import make_summary
 
-        summary2 = """<story_summary>Second summary of middle conversation (messages 6-11)</story_summary>
-<character_learnings>Discussed the case details</character_learnings>"""
+        # Pre-populate summary memory with serialized StorySummary JSON (the storage format).
+        summary1 = make_summary(story_beats=["First summary of early conversation (messages 0-5)"], user_learnings=["User introduced themselves"])
+        summary2 = make_summary(story_beats=["Second summary of middle conversation (messages 6-11)"], user_learnings=["Discussed the case details"])
 
-        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary=summary1, start_offset=0, end_offset=5)
-        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary=summary2, start_offset=6, end_offset=11)
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary=summary1.model_dump_json(), start_offset=0, end_offset=5)
+        self.summary_memory.add_summary(character_id="TestBot", session_id=self.session_id, summary=summary2.model_dump_json(), start_offset=6, end_offset=11)
 
         # Create responder which should load existing summaries
         dependencies = self.create_dependencies_with_mock_responses("test", "test")
         responder = CharacterResponder(self.character, dependencies)
 
-        # Verify summaries were loaded and concatenated
+        # Verify summaries were loaded and concatenated into the StorySummary's story_beats
         assert responder.memory_summary is not None
-        # Check that the Summary model contains the expected content
-        assert "First summary of early conversation" in str(responder.memory_summary.story_summary)
-        assert "Second summary of middle conversation" in str(responder.memory_summary.story_summary)
+        assert "First summary of early conversation" in str(responder.memory_summary.story_beats)
+        assert "Second summary of middle conversation" in str(responder.memory_summary.story_beats)
 
     def test_clear_session_removes_summaries(self):
         """Test that clearing session also removes associated summaries."""

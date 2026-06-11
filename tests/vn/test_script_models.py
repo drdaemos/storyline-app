@@ -11,6 +11,7 @@ from src.models.vn import (
     Script,
     VNInput,
 )
+from src.models.vn.script import DraftPlainBeat
 
 
 class TestWorkedExample:
@@ -107,6 +108,25 @@ class TestBeatRouting:
         with pytest.raises(ValidationError):
             Script.model_validate(_minimal_script(beats=[beat]))
 
+    def test_draft_plain_beat_with_no_routing_rejected(self):
+        # The slim DraftPlainBeat must mirror PlainBeat's routing contract so a
+        # malformed draft fails at parse time (caught by request_model → repair loop)
+        # rather than later when lifted into a canonical Scene, where it would escape.
+        with pytest.raises(ValidationError, match="exactly one"):
+            DraftPlainBeat.model_validate({"id": "b1", "type": "plain", "intent": "x"})
+
+    def test_draft_plain_beat_with_two_routings_rejected(self):
+        with pytest.raises(ValidationError, match="exactly one"):
+            DraftPlainBeat.model_validate({"id": "b1", "type": "plain", "intent": "x", "next": "b2", "exit": "open"})
+
+    def test_draft_plain_beat_with_empty_exit_edges_rejected(self):
+        with pytest.raises(ValidationError, match="must not be empty"):
+            DraftPlainBeat.model_validate({"id": "b1", "type": "plain", "intent": "x", "exit_edges": []})
+
+    def test_draft_plain_beat_single_routing_accepted(self):
+        beat = DraftPlainBeat.model_validate({"id": "b1", "type": "plain", "intent": "x", "next": "b2"})
+        assert beat.next == "b2"
+
 
 class TestConditions:
     def test_visited_condition_default_true(self, locked_granary: Script):
@@ -122,6 +142,69 @@ class TestConditions:
         }
         with pytest.raises(ValidationError):
             Script.model_validate(_minimal_script(beats=[beat]))
+
+    def test_var_and_visited_conditions_in_one_guard(self):
+        """The two guard forms are one object type distinguished by which field is set."""
+        beat = {
+            "id": "b1",
+            "type": "choice",
+            "intent": "x",
+            "options": [
+                {
+                    "intent": "go",
+                    "guard": [{"var": "v", "op": "==", "value": 1}, {"visited": "b1", "value": False}],
+                    "target": "b1",
+                }
+            ],
+        }
+        scene = Script.model_validate(_minimal_script(state_vars=[{"name": "v", "type": "counter", "max": 3}], beats=[beat])).scenes[0]
+        guard = scene.beats[0].options[0].guard
+        assert guard[0].is_var and guard[0].var == "v" and guard[0].op == "=="
+        assert guard[1].is_visited and guard[1].visited == "b1" and guard[1].value is False
+
+    def test_condition_with_neither_form_rejected(self):
+        beat = {"id": "b1", "type": "choice", "intent": "x", "options": [{"intent": "go", "guard": [{"value": 1}], "target": "b1"}]}
+        with pytest.raises(ValidationError, match="exactly one of 'var' or 'visited'"):
+            Script.model_validate(_minimal_script(beats=[beat]))
+
+    def test_condition_with_both_forms_rejected(self):
+        guard = [{"var": "v", "op": "==", "value": 1, "visited": "b1"}]
+        beat = {"id": "b1", "type": "choice", "intent": "x", "options": [{"intent": "go", "guard": guard, "target": "b1"}]}
+        with pytest.raises(ValidationError, match="exactly one of 'var' or 'visited'"):
+            Script.model_validate(_minimal_script(state_vars=[{"name": "v", "type": "counter", "max": 3}], beats=[beat]))
+
+    def test_var_condition_without_op_rejected(self):
+        guard = [{"var": "v", "value": 1}]
+        beat = {"id": "b1", "type": "choice", "intent": "x", "options": [{"intent": "go", "guard": guard, "target": "b1"}]}
+        with pytest.raises(ValidationError, match="requires an 'op'"):
+            Script.model_validate(_minimal_script(state_vars=[{"name": "v", "type": "counter", "max": 3}], beats=[beat]))
+
+    def test_check_modifiers_are_conditions_with_mod(self):
+        beat = {
+            "id": "b1",
+            "type": "check",
+            "intent": "x",
+            "check": {
+                "difficulty": 10,
+                "modifiers": [{"var": "v", "op": "==", "value": 1, "mod": -2}, {"visited": "b1", "mod": 1}],
+                "on_success": "b1",
+                "on_failure": "b1",
+            },
+        }
+        scene = Script.model_validate(_minimal_script(state_vars=[{"name": "v", "type": "counter", "max": 3}], beats=[beat])).scenes[0]
+        modifiers = scene.beats[0].check.modifiers
+        assert modifiers[0].is_var and modifiers[0].mod == -2
+        assert modifiers[1].is_visited and modifiers[1].mod == 1
+
+    def test_guard_arrays_carry_no_object_union(self):
+        """The grammar fix: guard arrays must reference a single Condition object, not an
+        object union per element — an array-element object union is what overflowed Anthropic's
+        compiled structured-output grammar ("compiled grammar is too large")."""
+        schema = Script.model_json_schema()
+        guard_items = schema["$defs"]["ExitEdge"]["properties"]["guard"]["items"]
+        assert guard_items == {"$ref": "#/$defs/Condition"}
+        modifier_items = schema["$defs"]["CheckSpec"]["properties"]["modifiers"]["items"]
+        assert modifier_items == {"$ref": "#/$defs/CheckModifier"}
 
 
 class TestVNInput:

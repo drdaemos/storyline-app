@@ -108,6 +108,17 @@ class TestScenarioToSummary:
 class TestSessionStarterWithScenario:
     """Tests for SessionStarter integration with scenarios."""
 
+    @pytest.fixture(autouse=True)
+    def _isolated_db(self, tmp_path, monkeypatch) -> None:
+        """Point every registry/memory at a fresh per-test SQLite DB.
+
+        Registries here are constructed without a memory_dir, so without this they
+        would share the repo's ./memory/conversations.db. A fresh DB also guarantees
+        the schema matches the current ORM (e.g. scenarios.character_id).
+        """
+        db_path = tmp_path / "scenario_integration.db"
+        monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
     @pytest.fixture
     def character_loader_with_test_char(self) -> CharacterLoader:
         """Create a character loader with a test character in database."""

@@ -48,14 +48,10 @@ class TestClaudePromptProcessor:
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
     def test_respond_with_model_output(self, mock_anthropic):
-        # Mock the response with tool use
-        mock_tool_block = Mock()
-        mock_tool_block.type = "tool_use"
-        mock_tool_block.input = {"name": "John", "age": 30, "description": "Test person"}
-
+        # Structured outputs are parsed server-side; the SDK returns parsed_output.
         mock_response = Mock()
-        mock_response.content = [mock_tool_block]
-        mock_anthropic.return_value.messages.create.return_value = mock_response
+        mock_response.parsed_output = MockResponse(name="John", age=30, description="Test person")
+        mock_anthropic.return_value.beta.messages.parse.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key="test-key")
         result = processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
@@ -64,7 +60,9 @@ class TestClaudePromptProcessor:
         assert result.name == "John"
         assert result.age == 30
         assert result.description == "Test person"
-        mock_anthropic.return_value.messages.create.assert_called_once()
+        mock_anthropic.return_value.beta.messages.parse.assert_called_once()
+        # The output model is passed through as the structured-output format.
+        assert mock_anthropic.return_value.beta.messages.parse.call_args[1]["output_format"] is MockResponse
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
     def test_respond_with_text_with_substituted_string_output(self, mock_anthropic):
@@ -110,33 +108,15 @@ class TestClaudePromptProcessor:
             processor.respond_with_text("Test system prompt", "Test user prompt")
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
-    def test_respond_with_model_no_tool_use(self, mock_anthropic):
-        mock_text_block = Mock()
-        mock_text_block.type = "text"
-        mock_text_block.text = "Some text"
-
+    def test_respond_with_model_no_structured_output(self, mock_anthropic):
+        # The model returned text instead of a structured object: parsed_output is empty.
         mock_response = Mock()
-        mock_response.content = [mock_text_block]
-        mock_anthropic.return_value.messages.create.return_value = mock_response
+        mock_response.parsed_output = None
+        mock_anthropic.return_value.beta.messages.parse.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key="test-key")
 
         with pytest.raises(ValueError, match="No structured output received from Claude API"):
-            processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
-
-    @patch("src.processors.claude_prompt_processor.Anthropic")
-    def test_respond_with_model_invalid_data(self, mock_anthropic):
-        mock_tool_block = Mock()
-        mock_tool_block.type = "tool_use"
-        mock_tool_block.input = {"invalid": "data"}  # Missing required fields
-
-        mock_response = Mock()
-        mock_response.content = [mock_tool_block]
-        mock_anthropic.return_value.messages.create.return_value = mock_response
-
-        processor = ClaudePromptProcessor(api_key="test-key")
-
-        with pytest.raises(ValueError, match="Failed to parse structured response"):
             processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse)
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
@@ -237,29 +217,21 @@ class TestClaudePromptProcessor:
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
     def test_respond_with_model_custom_parameters(self, mock_anthropic):
-        mock_tool_block = Mock()
-        mock_tool_block.type = "tool_use"
-        mock_tool_block.input = {"name": "John", "age": 30, "description": "Test person"}
-
         mock_response = Mock()
-        mock_response.content = [mock_tool_block]
-        mock_anthropic.return_value.messages.create.return_value = mock_response
+        mock_response.parsed_output = MockResponse(name="John", age=30, description="Test person")
+        mock_anthropic.return_value.beta.messages.parse.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key="test-key")
         processor.respond_with_model("Test system prompt", "Test user prompt", MockResponse, max_tokens=100)
 
-        call_args = mock_anthropic.return_value.messages.create.call_args
+        call_args = mock_anthropic.return_value.beta.messages.parse.call_args
         assert call_args[1]["max_tokens"] == 100
 
     @patch("src.processors.claude_prompt_processor.Anthropic")
     def test_respond_with_model_conversation_history(self, mock_anthropic):
-        mock_tool_block = Mock()
-        mock_tool_block.type = "tool_use"
-        mock_tool_block.input = {"name": "John", "age": 30, "description": "Test person"}
-
         mock_response = Mock()
-        mock_response.content = [mock_tool_block]
-        mock_anthropic.return_value.messages.create.return_value = mock_response
+        mock_response.parsed_output = MockResponse(name="John", age=30, description="Test person")
+        mock_anthropic.return_value.beta.messages.parse.return_value = mock_response
 
         processor = ClaudePromptProcessor(api_key="test-key")
         conversation_history: list[GenericMessage] = [{"role": "user", "content": "Previous message"}, {"role": "assistant", "content": "Previous response"}]
@@ -270,7 +242,7 @@ class TestClaudePromptProcessor:
         assert result.name == "John"
 
         # Check that conversation history was included in the messages
-        call_args = mock_anthropic.return_value.messages.create.call_args
+        call_args = mock_anthropic.return_value.beta.messages.parse.call_args
         messages = call_args[1]["messages"]
 
         assert len(messages) == 3  # 2 history + 1 current

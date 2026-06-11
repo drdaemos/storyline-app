@@ -19,3 +19,7 @@ characters/**
 logs/**
 memory/**
 !characters/morgan.yaml
+
+# runtime
+runs/
+examples/

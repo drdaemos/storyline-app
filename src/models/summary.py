@@ -1,11 +1,11 @@
-from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class TimeState(BaseModel):
     """Tracks temporal progression in the story"""
     current_time: str = Field(
-        ..., 
+        ...,
         description=(
             "Current story time in dateparser-compatible format. Use ONE of these patterns:\n"
             "- Relative: 'Day 5, morning' | 'Day 5, 2:30 PM' | 'Day 5, late evening'\n"
@@ -17,44 +17,44 @@ class TimeState(BaseModel):
 
 class RelationshipState(BaseModel):
     """Tracks relationship between characters on 1-10 scales"""
-    
+
     trust: int = Field(
         ...,
         ge=1,
         le=10,
         description="1=complete distrust/betrayed, 5=neutral/uncertain, 10=absolute trust"
     )
-    
+
     attraction: int = Field(
         ...,
         ge=1,
         le=10,
         description="1=repulsed/none, 5=neutral/uncertain, 10=intense desire. Use 5 if not applicable to genre"
     )
-    
+
     emotional_intimacy: int = Field(
         ...,
         ge=1,
         le=10,
         description="1=complete strangers/guarded, 5=friendly/surface-level, 10=deeply vulnerable/no barriers"
     )
-    
+
     conflict: int = Field(
         ...,
         ge=1,
         le=10,
         description="1=harmonious/aligned, 5=minor tension, 10=intense opposition/fighting"
     )
-    
+
     power_balance: int = Field(
         ...,
         ge=1,
         le=10,
         description="1=user character completely controls dynamic, 5=equal partnership, 10=ai character completely controls dynamic"
     )
-    
+
     relationship_label: str = Field(
-        ..., 
+        ...,
         description="Current status in plain language (e.g., 'strangers', 'colleagues', 'friends', 'dating', 'enemies', 'it's complicated')"
     )
 
@@ -72,19 +72,19 @@ Relationship Status:
 
 class PlotTracking(BaseModel):
     """Simple plot tracking - ongoing and resolved"""
-    ongoing_plots: List[str] = Field(
+    ongoing_plots: list[str] = Field(
         default_factory=list,
         description="Active plot threads as brief, factual descriptions (e.g., 'Investigating the murder', 'Completing big work commission', 'Planning the heist'). Max 3 threads."
     )
-    resolved_outcomes: List[str] = Field(
+    resolved_outcomes: list[str] = Field(
         default_factory=list,
         description="Plot resolutions and their outcomes (e.g., 'Murder solved: victim's partner was the killer', 'Work commission completed successfully')"
     )
     location: str = Field(
-        ..., 
+        ...,
         description="Where characters are right now (e.g., '<character's> workshop', '<character's> apartment bedroom', 'coffee shop'. If they are separate, list both locations with reference to character)"
     )
-    notable_objects: Optional[str] = Field(
+    notable_objects: str | None = Field(
         None,
         description="Only objects actively in use or plot-relevant (e.g., 'bloodied knife on table', 'engagement ring in pocket', 'timer counting down N minutes')"
     )
@@ -108,42 +108,42 @@ class PhysicalState(BaseModel):
         ...,
         description="Exact physical position of the character (e.g., '<character> sitting at desk, <character> standing behind', 'both lying in bed', 'facing each other across table')"
     )
-    clothing_status: Optional[str] = Field(
-        None, 
+    clothing_status: str | None = Field(
+        None,
         description="Only if relevant/changed (e.g., 'fully dressed', '<character> shirtless', '<character> in towel')"
     )
-    physical_contact: Optional[str] = Field(
-        None, 
+    physical_contact: str | None = Field(
+        None,
         description="Any ongoing touch/contact (e.g., '<character>'s hand on <character>'s shoulder', 'embracing', 'no contact')"
     )
-    conditions: Optional[str] = Field(
-        None, 
+    conditions: str | None = Field(
+        None,
         description="Physical conditions affecting the character (e.g., 'injured leg, limping', 'exhausted, struggling to stay awake', 'healthy and alert')"
     )
 
     def to_string(self) -> str:
-        return f"""{self.character_name}: 
+        return f"""{self.character_name}:
 - Physical position: {self.character_position},
-- Clothing: {self.clothing_status or 'unknown'}, 
-- Ongoing touch/contact: {self.physical_contact or 'none'}, 
+- Clothing: {self.clothing_status or 'unknown'},
+- Ongoing touch/contact: {self.physical_contact or 'none'},
 - Physical conditions: {self.conditions or 'none'}"
 """
-    
+
 
 class EmotionalState(BaseModel):
     character_name: str = Field(..., description="Name of the character")
     """Character emotional states - ONLY major shifts, leave fields None if unchanged"""
-    character_emotions: Optional[str] = Field(
+    character_emotions: str | None = Field(
         None,
         description="Character's emotional state"
     )
-    character_wants: Optional[str] = Field(
+    character_wants: str | None = Field(
         None,
         description="What the character currently desires or aims for in story (short-term)"
     )
 
     def to_string(self) -> str:
-        return f"""{self.character_name}: 
+        return f"""{self.character_name}:
 - Emotional state: {self.character_emotions or 'neutral'},
 - Current desires/aims: {self.character_wants or 'unknown'}
 """
@@ -169,26 +169,26 @@ class StorySummary(BaseModel):
     time: TimeState
     relationship: RelationshipState
     plot: PlotTracking
-    physical_state: List[PhysicalState] = Field(
+    physical_state: list[PhysicalState] = Field(
         default_factory=list,
         description="One entry per character being tracked"
     )
-    emotional_state: List[EmotionalState] = Field(
+    emotional_state: list[EmotionalState] = Field(
         default_factory=list,
         description="One entry per character being tracked"
     )
 
-    story_beats: List[str] = Field(
+    story_beats: list[str] = Field(
         default_factory=list,
         description="Maximum 5 beats - only events that would matter when resuming scene later"
     )
 
-    user_learnings: List[str] = Field(
+    user_learnings: list[str] = Field(
         default_factory=list,
         description="Accumulated learnings about user preferences from OOC commands or behavior patterns"
     )
 
-    ai_quality_issues: List[QualityIssue] = Field(
+    ai_quality_issues: list[QualityIssue] = Field(
         default_factory=list,
         description="Only populate if problems detected in the conversation"
     )

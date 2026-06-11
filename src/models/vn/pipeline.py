@@ -72,6 +72,54 @@ class MechanicsPatch(VNPipelineModel):
     check_modifiers: list[CheckModifiersPatch] = Field(default_factory=list)
 
 
+class LLMBeatEffectsPatch(VNPipelineModel):
+    beat_id: str = Field(..., min_length=1, description="Existing beat id receiving these effects")
+    effects: list[str] = Field(..., description='Effect DSL strings, e.g. "trust += 1", "lamp_color = white", "injured = true"')
+
+
+class LLMOptionGuardPatch(VNPipelineModel):
+    beat_id: str = Field(..., min_length=1, description="Existing choice beat id")
+    option_index: int = Field(..., ge=0, description="0-based index into the choice beat's options")
+    guard: list[str] = Field(..., description='Guard DSL strings with AND semantics, e.g. "trust >= 2", "visited:b_ledger", "not visited:sc_town"')
+
+
+class LLMExitEdgeGuardPatch(VNPipelineModel):
+    beat_id: str = Field(..., min_length=1, description="Existing plain beat id with exit_edges")
+    edge_index: int = Field(..., ge=0, description="0-based index into the beat's exit_edges")
+    guard: list[str] = Field(..., description='Guard DSL strings with AND semantics, e.g. "alarm == false"')
+
+
+class LLMScenePatch(VNPipelineModel):
+    scene_id: str = Field(..., min_length=1, description="Existing scene id")
+    prerequisites: list[str] = Field(..., description='Guard DSL strings controlling open-exit availability, or [] for none')
+    repeatable: bool = Field(..., description="Whether this scene may be selected more than once")
+    forced: int = Field(..., description="Forced priority, or -1 when this scene is not forced")
+
+
+class LLMCheckModifiersPatch(VNPipelineModel):
+    beat_id: str = Field(..., min_length=1, description="Existing check beat id")
+    modifiers: list[str] = Field(..., description='Modifier DSL strings, e.g. "trust >= 2 => +2", "visited:b_alarm => -1"')
+
+
+class LLMMechanicsPatch(VNPipelineModel):
+    """Anthropic-friendly Stage C output.
+
+    The provider sees a flat schema with no unions/nullables. DSL strings are parsed
+    into the canonical MechanicsPatch before the full validator and softlock checker
+    run.
+    """
+
+    state_vars: list[str] = Field(
+        ...,
+        description='State var DSL strings: "flag name=false", "counter trust max=3 initial=1", or "enum mood values=calm|alert initial=calm"',
+    )
+    beat_effects: list[LLMBeatEffectsPatch] = Field(..., description="Beat effect patches; use [] when none")
+    option_guards: list[LLMOptionGuardPatch] = Field(..., description="Choice option guard patches; use [] when none")
+    exit_edge_guards: list[LLMExitEdgeGuardPatch] = Field(..., description="Exit edge guard patches; use [] when none")
+    scene_patches: list[LLMScenePatch] = Field(..., description="Scene prerequisite/repeatable/forced patches; use [] when none")
+    check_modifiers: list[LLMCheckModifiersPatch] = Field(..., description="Check modifier patches; use [] when none")
+
+
 class GenerationCheckpoint(VNPipelineModel):
     """Artifacts produced so far by the pipeline; a resumed run skips everything stored here."""
 

@@ -1,4 +1,7 @@
+import json
 import os
+from datetime import datetime
+from pathlib import Path
 
 import click
 from dotenv import load_dotenv
@@ -8,9 +11,20 @@ from rich.panel import Panel
 from .character_loader import CharacterLoader
 from .character_manager import CharacterManager
 from .interactive_chat import InteractiveChatCLI
+from .models.prompt_processor_factory import PromptProcessorFactory
+from .models.vn import Script, VNInput
+from .models.vn.pipeline import PipelineProgress
 from .text_analyzer import TextAnalyzer
+from .vn.judge import VNScriptJudge, compare_evaluations
+from .vn.judge.storage import load_evaluation, slugify, write_evaluation_files
+from .vn.pipeline.generator import VNScriptGenerator
+from .vn.registry import VNGenerationJobRegistry, VNScriptRegistry, VNSessionRegistry
+from .vn.service import VNNotFoundError, VNService
 
-load_dotenv()
+
+def build_vn_service() -> VNService:
+    """Same persistence stack the web flow uses; tests substitute it."""
+    return VNService(VNScriptRegistry(), VNSessionRegistry(), VNGenerationJobRegistry())
 
 
 @click.group()
@@ -179,6 +193,141 @@ def sync_characters(check: bool, characters_dir: str) -> None:
         console.print(f"[red]Error during sync: {e}[/red]")
 
 
+@cli.command("vn-generate")
+@click.argument("input_file", type=click.Path(exists=True, dir_okay=False), required=False)
+@click.option("--resume", "resume_job_id", default=None, help="Resume a failed generation job by its id (instead of INPUT_FILE)")
+@click.option("--processor", "-p", "processor_type", default=None, help="Processor type (default: claude-sonnet, or the job's processor on resume)")
+@click.option("--guidance", "guidance_file", type=click.Path(exists=True, dir_okay=False), default=None, help="Reviewer guidance file (from vn-review) appended to the input rules")
+@click.option("--user-id", default="cli", show_default=True, help="User scope for persisted scripts and jobs")
+@click.option("--output", "-o", "output_file", type=click.Path(dir_okay=False), default=None, help="Also write the generated script JSON to this path")
+def vn_generate(
+    input_file: str | None,
+    resume_job_id: str | None,
+    processor_type: str | None,
+    guidance_file: str | None,
+    user_id: str,
+    output_file: str | None,
+) -> None:
+    """Generate a VN script from a VNInput JSON file, persisting it like the web flow.
+
+    The run is a checkpointed job: on failure it stays resumable via --resume.
+    """
+    console = Console()
+    if (input_file is None) == (resume_job_id is None):
+        raise click.UsageError("provide exactly one of INPUT_FILE or --resume JOB_ID")
+
+    service = build_vn_service()
+    if resume_job_id is not None:
+        try:
+            job = service.get_generation_job(resume_job_id, user_id)
+        except VNNotFoundError as e:
+            raise click.ClickException(str(e)) from e
+        processor_type = processor_type or job.processor_type
+        job_id = resume_job_id
+    else:
+        assert input_file is not None
+        vn_input = VNInput.model_validate(json.loads(Path(input_file).read_text(encoding="utf-8")))
+        if guidance_file is not None:
+            guidance = Path(guidance_file).read_text(encoding="utf-8").strip()
+            rules = f"{vn_input.rules}\n\nDirector's notes from the previous review (address these):\n{guidance}".strip()
+            vn_input = vn_input.model_copy(update={"rules": rules})
+        processor_type = processor_type or "claude-sonnet"
+        job_id = service.start_generation_job(vn_input, processor_type, user_id)
+
+    generator = VNScriptGenerator(PromptProcessorFactory.create_processor(processor_type))
+    console.print(f"[blue]Generation job {job_id} (processor: {processor_type})[/blue]")
+
+    def on_progress(progress: PipelineProgress) -> None:
+        scene = f" {progress.scene_id}" if progress.scene_id else ""
+        detail = f" — {progress.detail}" if progress.detail else ""
+        console.print(f"[cyan]{progress.stage}{scene}[/cyan] {progress.status}{detail}")
+
+    try:
+        script_id, status, report = service.run_generation_job(job_id, generator, user_id, on_progress)
+    except VNNotFoundError as e:
+        raise click.ClickException(str(e)) from e
+    except Exception as e:
+        console.print(f"[red]Generation failed: {e}[/red]")
+        console.print(f"[yellow]The job is checkpointed; continue it with: vn-generate --resume {job_id}[/yellow]")
+        raise SystemExit(1) from e
+
+    console.print(f"[green]Script saved with id {script_id} (validation: {status})[/green]")
+    for issue in report.issues:
+        console.print(f"[yellow]{issue.severity}: [{issue.code}] {issue.message}[/yellow]")
+    if output_file is not None:
+        script = service.get_script(script_id, user_id).script
+        Path(output_file).write_text(json.dumps(script.model_dump(mode="json"), indent=2, ensure_ascii=False), encoding="utf-8")
+        console.print(f"[green]Script JSON written to {output_file}[/green]")
+
+
+@cli.command("vn-review")
+@click.argument("target")
+@click.option("--processor", "-p", "processor_type", default="claude-sonnet", show_default=True, help="Processor type used for the judge")
+@click.option("--input", "input_file", type=click.Path(exists=True, dir_okay=False), default=None, help="VNInput JSON for premise context when TARGET is a script file")
+@click.option("--user-id", default="cli", show_default=True, help="User scope when TARGET is a persisted script id")
+@click.option("--output-dir", default="evaluations", show_default=True, type=click.Path(file_okay=False), help="Directory for the evaluation JSON/markdown/guidance files")
+@click.option("--baseline", "baseline_file", type=click.Path(exists=True, dir_okay=False), default=None, help="Previous evaluation JSON; computes numeric progress and a stop/continue recommendation")
+@click.option("--target-score", default=4.0, show_default=True, type=float, help="Overall score at which the improvement loop should stop")
+def vn_review(
+    target: str,
+    processor_type: str,
+    input_file: str | None,
+    user_id: str,
+    output_dir: str,
+    baseline_file: str | None,
+    target_score: float,
+) -> None:
+    """Review a VN script (persisted id or JSON file) as a playwright and an interactivity director.
+
+    Writes a machine-readable evaluation (the numeric trail for iteration), a markdown
+    report, and a guidance file feedable back into vn-generate --guidance.
+    """
+    console = Console()
+    target_path = Path(target)
+    if target_path.is_file():
+        script = Script.model_validate(json.loads(target_path.read_text(encoding="utf-8")))
+        vn_input = VNInput.model_validate(json.loads(Path(input_file).read_text(encoding="utf-8"))) if input_file else None
+        stem_base = slugify(target_path.stem)
+    else:
+        service = build_vn_service()
+        try:
+            script = service.get_script(target, user_id).script
+            vn_input = service.get_script_input(target, user_id)
+        except VNNotFoundError as e:
+            raise click.ClickException(str(e)) from e
+        stem_base = target
+
+    judge = VNScriptJudge(PromptProcessorFactory.create_processor(processor_type))
+    console.print(f"[blue]Reviewing '{script.meta.title}' (processor: {processor_type})[/blue]")
+    try:
+        evaluation = judge.evaluate(script, vn_input)
+    except Exception as e:
+        console.print(f"[red]Review failed: {e}[/red]")
+        raise SystemExit(1) from e
+
+    delta = None
+    if baseline_file is not None:
+        delta = compare_evaluations(evaluation, load_evaluation(Path(baseline_file)), target_score=target_score)
+
+    stem = f"{stem_base}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    json_path, md_path, guidance_path = write_evaluation_files(Path(output_dir), stem, evaluation, delta)
+
+    console.print(f"[bold]{evaluation.script_title}[/bold] — verdict: [green]{evaluation.verdict}[/green], overall {evaluation.overall_score}/5")
+    for name, score in evaluation.dimension_scores.items():
+        console.print(f"  {name}: {score}/5")
+    if evaluation.priorities:
+        console.print("[bold]Top findings:[/bold]")
+        for finding in evaluation.priorities[:3]:
+            location = "/".join(part for part in [finding.scene_id, finding.beat_id] if part) or "global"
+            console.print(f"  [{finding.severity}] {location}: {finding.issue}")
+    if delta is not None:
+        console.print(f"[bold]Progress:[/bold] {delta.status} ({delta.baseline_score} → {delta.current_score}, Δ {delta.overall_delta:+.2f}) — recommendation: {delta.recommendation}")
+    console.print(f"[green]Saved: {json_path}, {md_path}, {guidance_path}[/green]")
+
+
 def main() -> None:
     """Entry point for the CLI."""
+    # Loaded here, not at import time: importing this module (e.g. from tests)
+    # must never mutate process env such as DATABASE_URL.
+    load_dotenv()
     cli()

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.models.vn import CounterVar, Effect, EnumVar, FlagVar, VarCondition, VisitedCondition
+from src.models.vn import Condition, CounterVar, Effect, EnumVar, FlagVar
 from src.vn.conditions import evaluate_condition, evaluate_guard
 from src.vn.effects import apply_effect, apply_effects, declarations_by_name, initial_state
 
@@ -25,12 +25,12 @@ class TestConditions:
     @pytest.mark.parametrize(
         ("condition", "expected"),
         [
-            (VarCondition(var="injured", op="==", value=False), True),
-            (VarCondition(var="injured", op="==", value=True), False),
-            (VarCondition(var="trust", op=">=", value=1), True),
-            (VarCondition(var="trust", op=">=", value=2), False),
-            (VarCondition(var="trust", op="<=", value=1), True),
-            (VarCondition(var="town", op="==", value="calm"), True),
+            (Condition(var="injured", op="==", value=False), True),
+            (Condition(var="injured", op="==", value=True), False),
+            (Condition(var="trust", op=">=", value=1), True),
+            (Condition(var="trust", op=">=", value=2), False),
+            (Condition(var="trust", op="<=", value=1), True),
+            (Condition(var="town", op="==", value="calm"), True),
         ],
     )
     def test_var_conditions(self, condition, expected):
@@ -39,13 +39,13 @@ class TestConditions:
 
     def test_visited_condition(self):
         state = initial_state(list(DECLS.values()))
-        assert evaluate_condition(VisitedCondition(visited="sc_gate"), state, {"sc_gate"}) is True
-        assert evaluate_condition(VisitedCondition(visited="sc_gate"), state, set()) is False
-        assert evaluate_condition(VisitedCondition(visited="sc_gate", value=False), state, set()) is True
+        assert evaluate_condition(Condition(visited="sc_gate"), state, {"sc_gate"}) is True
+        assert evaluate_condition(Condition(visited="sc_gate"), state, set()) is False
+        assert evaluate_condition(Condition(visited="sc_gate", value=False), state, set()) is True
 
     def test_guard_and_semantics(self):
         state = initial_state(list(DECLS.values()))
-        guard = [VarCondition(var="trust", op=">=", value=1), VisitedCondition(visited="b_x")]
+        guard = [Condition(var="trust", op=">=", value=1), Condition(visited="b_x")]
         assert evaluate_guard(guard, state, {"b_x"}) is True
         assert evaluate_guard(guard, state, set()) is False
 

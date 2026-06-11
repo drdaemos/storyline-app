@@ -36,10 +36,6 @@ from src.models.vn.script import (
     Script,
     StateValue,
     StateVar,
-    VarCheckModifier,
-    VarCondition,
-    VisitedCheckModifier,
-    VisitedCondition,
 )
 from src.models.vn.validation import ValidationIssue, ValidationReport
 
@@ -84,9 +80,5 @@ __all__ = [
     "VNSetting",
     "ValidationIssue",
     "ValidationReport",
-    "VarCheckModifier",
-    "VarCondition",
-    "VisitedCheckModifier",
-    "VisitedCondition",
     "WentDeeper",
 ]

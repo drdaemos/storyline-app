@@ -111,3 +111,26 @@ Keep notes concise and reusable.
 - Avoid putting extra logic into the interfacing classes (e.g API / CLI handler) - separate it from handling the comms by putting dataclasses / models into /src/models and creating separate logic classes in /src
 - In general, avoid having one thing doing too much - aggressively separate logic into smaller pieces that can be tested and reused.
 - VN engine work (anything under `src/vn/`, `src/models/vn/`, `tests/vn/`, or the VN frontend views): follow `specs/vn_implementation_plan.md` and keep `specs/vn_implementation_tracker.md` up to date in the same change set — set the task's Status/Updated/Notes when starting, finishing, or getting blocked, and record any deviation from the plan in its "Decisions & deviations" table.
+
+### Anthropic structured outputs: "compiled grammar is too large"
+
+**Problem pattern.** `processor.respond_with_model(...)` uses the Anthropic `structured-outputs-2025-11-13` beta (`client.beta.messages.parse(..., output_format=Model)`). The API compiles the Pydantic JSON schema into a constrained-decoding grammar with **hard, combined-across-the-request limits**: ≤16 union-type params (`anyOf` / `X | None` / `bool | int | str`), ≤24 optional params, ≤20 strict tools, plus an internal grammar-size ceiling. Cost is combinatorial, not proportional to schema bytes — a small JSON schema can still blow up. The worst offenders, in order: **union types** (each `anyOf` multiplies state), then **optional/nullable fields** (each ~doubles part of the state space), then **deeply nested arrays of objects** (a union or optional inside `list[...]` is paid at every position). Symptom: HTTP 400 `"The compiled grammar is too large…"` or `"Schema is too complex for compilation."` mid-pipeline (it passed earlier stages because those requested smaller models).
+
+To see where you stand, count unions/optionals across **every** `$defs` entry of the model you send (not just the top level):
+```python
+import json
+def grammar_budget(model):  # model: a BaseModel subclass
+    sch = model.model_json_schema(); to = tu = 0
+    for d in list(sch.get("$defs", {}).values()) + [sch]:
+        props, req = d.get("properties", {}), set(d.get("required", []))
+        to += sum(p not in req for p in props)
+        tu += sum("anyOf" in v for v in props.values())
+    return {"optional": to, "union": tu}  # limits: optional ≤ 24, union ≤ 16
+```
+
+**What prevents recurrence.** Keep the schema you *send* under the limits without distorting the canonical models other code relies on:
+1. **Request a slimmer model than you store.** If a later stage fills fields in (e.g. the VN mechanics stage adds guards/effects/check-modifiers/prerequisites over a structural draft), the earlier stage's request model must *not* include them. Define a slim draft model (e.g. `DraftScene` in `src/models/vn/script.py`), request that, then lift it into the canonical model with a converter (`draft_scene_to_scene`) that fills empty defaults. This removed the union-heavy `Condition`/`Effect`/`CheckModifier` branches from the compiled grammar at the scene-graph stage and dropped it from (31 optional, 17 union) to (13, 7).
+2. **Fold per-element unions into one object.** A `A | B` union used inside a `list[...]` keeps both branches open at every position. Collapse it to a single object with the superset of fields plus a `model_validator` enforcing "exactly one form" and `is_*` properties to discriminate (see `Condition` / `CheckModifier`). Old persisted data with the same field names still validates.
+3. **Prefer required fields and avoid `bool | int | str`-style value unions** in hot, list-nested positions. Post-processing/coercion on values is acceptable to keep the wire schema a single type — but only when the coercion is unambiguous.
+4. Always add **field descriptions** to request/draft models so the LLM knows what each field means once the schema is slimmed.
+5. When you change which model a stage requests, update the test fakes that queue stage outputs (e.g. `FakeProcessor` queues in `tests/vn/test_pipeline.py`; helpers `scene_to_draft` / `scenes_as_drafts`) and any `processor.calls == [...]` call-sequence assertions.

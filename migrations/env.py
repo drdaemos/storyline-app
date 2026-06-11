@@ -1,10 +1,9 @@
 import os
 from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from pathlib import Path
 
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 from src.memory.db_models import Base
 
@@ -24,7 +23,6 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Set URL from environment variable or use default
-from pathlib import Path
 database_url = os.getenv('DATABASE_URL')
 if not database_url:
     # Default to SQLite database in memory directory

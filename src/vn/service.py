@@ -166,6 +166,13 @@ class VNService:
             updated_at=record["updated_at"],
         )
 
+    def get_script_input(self, script_id: str, user_id: str) -> VNInput | None:
+        """The generation input stored with the script, if it was generated (imports have none)."""
+        record = self._script_record(script_id, user_id)
+        if not record["input_data"]:
+            return None
+        return VNInput.model_validate(record["input_data"])
+
     def delete_script(self, script_id: str, user_id: str) -> None:
         if not self.scripts.delete_script(script_id, user_id):
             raise VNNotFoundError(f"script '{script_id}' not found")
