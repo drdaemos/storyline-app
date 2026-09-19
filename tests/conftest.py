@@ -12,6 +12,7 @@ depend on a developer's real keys, so dummy keys are provided when absent
 import os
 
 import pytest
+from pydantic_ai import models
 
 _DB_ENV_VARS = ("DATABASE_URL", "DB_TYPE", "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
 _API_KEY_VARS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "COHERE_API_KEY")
@@ -19,6 +20,7 @@ _API_KEY_VARS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "C
 
 @pytest.fixture(autouse=True)
 def _isolate_process_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(models, "ALLOW_MODEL_REQUESTS", False)
     for name in _DB_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     for name in _API_KEY_VARS:

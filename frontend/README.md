@@ -1,6 +1,6 @@
 # Storyline Frontend
 
-Vue.js 3 frontend application for the Storyline interactive character chat system.
+Vue.js 3 frontend application for the Storyline.
 
 ## Features
 
@@ -11,36 +11,11 @@ Vue.js 3 frontend application for the Storyline interactive character chat syste
 - **Settings**: Configure AI processor and preferences
 - **Mobile Responsive**: Works on desktop and mobile devices
 
-## Project Structure
-
-```
-src/
-├── App.vue                 # Main app component
-├── main.ts                 # Application entry point
-├── types/                  # TypeScript type definitions
-├── views/                  # Page components
-│   ├── StartView.vue      # Character selection and session list
-│   ├── ChatView.vue       # Chat interface with streaming
-│   └── CharacterCreationView.vue  # Character creation form
-├── components/            # Reusable components
-│   ├── CharacterCard.vue  # Character display card
-│   ├── SessionList.vue    # List of chat sessions
-│   ├── ChatMessage.vue    # Individual chat message
-│   ├── ChatInput.vue      # Message input with controls
-│   └── SettingsMenu.vue   # Settings dropdown
-├── composables/           # Vue composition functions
-│   ├── useApi.ts          # API integration
-│   ├── useLocalSettings.ts # Local storage settings
-│   └── useEventStream.ts  # Server-sent events handling
-└── utils/
-    └── formatters.ts      # Utility functions
-```
-
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 24+ and npm
 - Backend server running on port 8000
 
 ### Installation
