@@ -13,14 +13,27 @@ dependencies = [
     "httpx>=0.28.1",
     "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.7",
-    "pydantic-ai[examples,]>=2.27.1",
+    "pydantic-ai[examples]>=2.27.1",
     "pydantic-ai-harness>=0.18.1",
     "pytest>=8.4.1",
     "pyyaml",
     "rich>=14.1.0",
     "sqlalchemy>=2.0.43",
     "uvicorn[standard]>=0.35.0",
+    "textual>=8.2.8",
+    "logfire[system-metrics]>=5.1.0",
 ]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["storyline*"]
+
+[project.scripts]
+storyline = "storyline.cli:main"
 
 [project.optional-dependencies]
 test = [
@@ -55,3 +68,6 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN"]  # Don't require annotations in tests
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

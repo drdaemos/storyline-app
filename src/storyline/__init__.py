@@ -1,1 +1,1 @@
-"""Storyline backend."""
+"""Storyline application package."""

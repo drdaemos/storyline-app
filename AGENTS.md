@@ -18,7 +18,7 @@ Run commands from repository root: `/Users/eugenedementjev/repos/storyline-app`.
 - Bootstrap Python dependencies: `uv sync`
 - Bootstrap frontend dependencies: `npm install --prefix frontend`
 - Start full dev environment (backend + frontend): `./dev.sh`
-- Start backend only (hot reload): `uv run main.py serve --port 8000 --reload`
+- Start backend only (hot reload): `uv run -m storyline.cli serve --port 8000 --reload`
 - Start frontend only: `npm run --prefix frontend dev`
 - Build production assets/deps: `./build.sh`
 - Run DB migrations: `uv run alembic upgrade head`

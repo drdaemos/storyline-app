@@ -1,3 +1,3 @@
 #!/bin/bash
-uv run main.py serve --port 8000 &
+uv run -m storyline.cli serve --port 8000 &
 cd frontend && npm run dev
