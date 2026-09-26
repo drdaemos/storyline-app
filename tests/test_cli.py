@@ -26,6 +26,13 @@ def test_default_command_starts_interactive_session_in_the_workspace(start_sessi
     assert options["workspace"].root == tmp_path.resolve()
 
 
+def test_write_command_can_be_named_explicitly(start_session: Mock, tmp_path) -> None:
+    cli.main(["write", "--workspace", str(tmp_path), "--model", "openrouter:explicit/model"])
+
+    assert start_session.call_args.kwargs["model_name"] == "openrouter:explicit/model"
+    assert start_session.call_args.kwargs["workspace"].root == tmp_path.resolve()
+
+
 def test_model_option_overrides_the_environment(
     start_session: Mock, monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:

@@ -1,37 +1,64 @@
-"""Tool registry for writer-agent workspace operations."""
+"""Tool registry for writer-agent workspace operations.
+
+Edits are anchored on text, never on offsets or line numbers, and the model only sends what changes:
+new prose is appended, and revisions name a short unique excerpt to replace.
+"""
 
 from pydantic_ai import FunctionToolset, RunContext, ToolFailed
 
-from storyline.workspace import LoreAction, ScriptWorkspace, WorkspaceEditError
+from storyline.workspace import ScriptWorkspace, TextEdit, WorkspaceEditError
+from storyline.workspace.text_edit import paragraphs
 
 WRITER_TOOLSET = FunctionToolset[ScriptWorkspace](id="writer_workspace")
 """The writer agent's registered workspace tools."""
 
 
 @WRITER_TOOLSET.tool
-async def edit_script(
-    ctx: RunContext[ScriptWorkspace],
-    start_offset: int,
-    replacement: str,
-    end_offset: int | None = None,
-) -> str:
-    """Replace a character range in the story text without resending unchanged text.
-    After an edit, briefly state what changed.
+async def append_to_script(ctx: RunContext[ScriptWorkspace], text: str) -> str:
+    """Add new prose to the end of the story. This is the normal way to continue writing.
 
     Args:
-        start_offset: Zero-based start of the half-open range to replace.
-        end_offset: Zero-based end of the half-open range to replace. When omitted, it is start_offset plus replacement length.
-        replacement: Text that replaces the selected range. Equal offsets insert text.
+        text: The new text only. Start it with a blank line to begin a new paragraph.
     """
     try:
-        edit = await ctx.deps.apply_edit(
-            start_offset=start_offset,
-            end_offset=end_offset,
-            replacement=replacement,
-        )
+        return _describe("Appended to", await ctx.deps.append_script(text=text))
     except WorkspaceEditError as error:
         raise ToolFailed(str(error)) from error
-    return f"Updated story text {edit.start_offset}:{edit.end_offset}."
+
+
+@WRITER_TOOLSET.tool
+async def edit_script(ctx: RunContext[ScriptWorkspace], find: str, replace: str) -> str:
+    """Revise one passage of the story without resending unchanged text.
+
+    To delete, use an empty replace. To insert, find a short nearby excerpt and repeat it in replace together with the new text.
+
+    Args:
+        find: A short excerpt copied exactly from the story that occurs only once. Keep it as small as possible while unique.
+        replace: The text that takes its place.
+    """
+    try:
+        return _describe("Edited", await ctx.deps.replace_in_script(find=find, replace=replace))
+    except WorkspaceEditError as error:
+        raise ToolFailed(str(error)) from error
+
+
+@WRITER_TOOLSET.tool
+async def read_script(ctx: RunContext[ScriptWorkspace], from_paragraph: int = 1, to_paragraph: int | None = None) -> str:
+    """Read part of the story. Paragraphs are separated by blank lines and numbered from 1.
+
+    Args:
+        from_paragraph: First paragraph to return.
+        to_paragraph: Last paragraph to return, inclusive. Omit to read to the end.
+    """
+    story = paragraphs(await ctx.deps.read_script())
+    if not story:
+        return "The story is empty."
+    last = len(story) if to_paragraph is None else min(to_paragraph, len(story))
+    if not 1 <= from_paragraph <= last:
+        raise ToolFailed(f"The story has {len(story)} paragraphs; choose a range within 1-{len(story)}.")
+    selected = story[from_paragraph - 1 : last]
+    body = "\n\n".join(paragraph.text for paragraph in selected)
+    return f"Paragraphs {from_paragraph}-{last} of {len(story)}:\n\n{body}"
 
 
 @WRITER_TOOLSET.tool
@@ -50,7 +77,7 @@ async def list_lore(ctx: RunContext[ScriptWorkspace]) -> str:
 
 @WRITER_TOOLSET.tool
 async def read_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
-    """Read the full text of one Markdown lore file beside script.md.
+    """Read the full text of one Markdown lore file.
 
     Args:
         filename: Markdown filename returned by list_lore, such as setting.md.
@@ -62,34 +89,67 @@ async def read_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
 
 
 @WRITER_TOOLSET.tool
-async def edit_lore(
-    ctx: RunContext[ScriptWorkspace],
-    filename: str,
-    action: LoreAction,
-    content: str | None = None,
-    start_offset: int | None = None,
-    end_offset: int | None = None,
-) -> str:
-    """Append to, replace within, or delete a Markdown lore file.
+async def write_lore(ctx: RunContext[ScriptWorkspace], filename: str, content: str) -> str:
+    """Create a lore file, or replace all of its content. For changes to an existing file prefer append_lore or edit_lore.
 
-    Lore files require a hyphen-delimited metadata header with non-empty summary and keywords properties.
+    Lore files must start with a hyphen-delimited metadata header with non-empty summary and keywords properties, e.g.
+    "---\\nsummary: One line.\\nkeywords: a, b\\n---\\n".
 
     Args:
         filename: Markdown filename beside script.md, such as setting.md. The .md extension is optional.
-        action: append or replace creates a missing file. delete removes the file.
-        content: Text to append or use as the replacement. delete does not require content.
-        start_offset: Zero-based start of the half-open range for replace.
-        end_offset: Zero-based end of the half-open range for replace. When omitted, it is start_offset plus content length.
+        content: The complete file content, including the metadata header.
     """
     try:
-        edit = await ctx.deps.edit_lore(
-            filename=filename,
-            action=action,
-            content=content,
-            start_offset=start_offset,
-            end_offset=end_offset,
-        )
+        return _describe("Wrote", await ctx.deps.write_lore(filename=filename, content=content))
     except WorkspaceEditError as error:
         raise ToolFailed(str(error)) from error
-    completed_action = {"append": "Updated", "replace": "Replaced", "delete": "Deleted"}[edit.action]
-    return f"{completed_action} {edit.filename}; length changed from {edit.original_length} to {edit.new_length}."
+
+
+@WRITER_TOOLSET.tool
+async def append_lore(ctx: RunContext[ScriptWorkspace], filename: str, text: str) -> str:
+    """Add text to the end of an existing lore file.
+
+    Args:
+        filename: Existing lore filename, such as setting.md.
+        text: The new text only.
+    """
+    try:
+        return _describe("Appended to", await ctx.deps.append_lore(filename=filename, text=text))
+    except WorkspaceEditError as error:
+        raise ToolFailed(str(error)) from error
+
+
+@WRITER_TOOLSET.tool
+async def edit_lore(ctx: RunContext[ScriptWorkspace], filename: str, find: str, replace: str) -> str:
+    """Revise one passage of a lore file without resending unchanged text.
+
+    Args:
+        filename: Existing lore filename, such as setting.md.
+        find: A short excerpt copied exactly from the file that occurs only once.
+        replace: The text that takes its place. Use an empty string to delete.
+    """
+    try:
+        return _describe("Edited", await ctx.deps.replace_in_lore(filename=filename, find=find, replace=replace))
+    except WorkspaceEditError as error:
+        raise ToolFailed(str(error)) from error
+
+
+@WRITER_TOOLSET.tool
+async def delete_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
+    """Delete a lore file.
+
+    Args:
+        filename: Existing lore filename, such as setting.md.
+    """
+    try:
+        await ctx.deps.delete_lore(filename=filename)
+    except WorkspaceEditError as error:
+        raise ToolFailed(str(error)) from error
+    return f"Deleted {filename}."
+
+
+def _describe(verb: str, edit: TextEdit) -> str:
+    return (
+        f"{verb} {edit.filename} ({edit.original_length} → {edit.new_length} characters). "
+        f"Around the change it now reads:\n{edit.snippet}"
+    )

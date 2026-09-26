@@ -1,5 +1,6 @@
 """Inline prompt and slash-command list for the terminal UI."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from rich.text import Text
@@ -8,7 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.message import Message
-from textual.widgets import OptionList, TextArea
+from textual.widgets import OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 
 from storyline.tui.models import PromptCommand
@@ -63,12 +64,14 @@ class PromptBlock(Vertical):
     PromptBlock OptionList {
         display: none;
         height: auto;
-        max-height: 5;
+        max-height: 8;
         padding: 0;
         border: none;
         background: transparent;
     }
     PromptBlock.-commands-visible OptionList { display: block; }
+    PromptBlock #queued-prompts { display: none; height: auto; max-height: 4; color: $text-muted; text-style: italic; }
+    PromptBlock.-has-queued #queued-prompts { display: block; }
     """
 
     @dataclass
@@ -87,8 +90,10 @@ class PromptBlock(Vertical):
         super().__init__(id=id)
         self._commands = commands
         self._matches: tuple[PromptCommand, ...] = ()
+        self._queued: tuple[str, ...] = ()
 
     def compose(self) -> ComposeResult:
+        yield Static(id="queued-prompts", markup=False)
         yield OptionList(id="command-list", markup=False, compact=True)
         yield PromptInput(id="prompt-input", compact=True, soft_wrap=True, show_line_numbers=False)
 
@@ -134,6 +139,18 @@ class PromptBlock(Vertical):
     def input_disabled(self, disabled: bool) -> None:
         self._input.disabled = disabled
 
+    @property
+    def queued(self) -> tuple[str, ...]:
+        """Return the prompts shown as waiting for the agent."""
+        return self._queued
+
+    def show_queued(self, prompts: Sequence[str]) -> None:
+        """Show prompts that the agent has not read yet above the input."""
+        self._queued = tuple(prompts)
+        lines = [f"queued › {' '.join(prompt.split())}" for prompt in self._queued]
+        self.query_one("#queued-prompts", Static).update("\n".join(lines))
+        self.set_class(bool(self._queued), "-has-queued")
+
     def clear(self) -> None:
         """Clear the prompt input."""
         self.value = ""
@@ -158,7 +175,8 @@ class PromptBlock(Vertical):
     @on(PromptInput.Submitted)
     def _on_input_submitted(self, event: PromptInput.Submitted) -> None:
         event.stop()
-        if len(self._matches) == 1 and not _contains_whitespace(event.value):
+        is_complete_command = any(command.name == event.value for command in self._matches)
+        if len(self._matches) == 1 and not is_complete_command:
             self._select_command(self._matches[0])
             return
         self.post_message(self.Submitted(value=event.value.strip()))

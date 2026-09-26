@@ -1,27 +1,27 @@
 """Filesystem adapter for the writing workspace interface."""
 
 import asyncio
+import os
 import re
+import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
-from storyline.workspace.contracts import (
-    ConversationHistoryError,
-    LoreAction,
-    LoreEdit,
-    LoreEditError,
-    LoreFile,
-    ScriptEdit,
-    ScriptEditError,
-)
+from storyline.workspace.contracts import ConversationHistoryError, LoreEditError, LoreFile, TextEdit
+from storyline.workspace.text_edit import TextChange, append_text, replace_unique, snippet
 
 SCRIPT_FILENAME = "script.md"
 CONVERSATION_HISTORY_FILENAME = ".storyline-history.json"
 LORE_HEADER_DELIMITER = re.compile(r"-{3,}\s*")
 LORE_HEADER_PROPERTY = re.compile(r"(?P<key>[^:\s][^:]*):\s*(?P<value>.*)")
+
+type TextChanger = Callable[[str], TextChange]
 
 
 @dataclass
@@ -45,21 +45,13 @@ class FileWorkspace:
         """Return an empty script until the first edit creates it."""
         return await asyncio.to_thread(self._read_script)
 
-    async def apply_edit(
-        self,
-        *,
-        start_offset: int,
-        replacement: str,
-        end_offset: int | None = None,
-    ) -> ScriptEdit:
-        """Apply one focused replacement and persist the resulting script."""
-        async with self._write_lock:
-            return await asyncio.to_thread(
-                self._apply_edit,
-                start_offset=start_offset,
-                end_offset=end_offset,
-                replacement=replacement,
-            )
+    async def append_script(self, *, text: str) -> TextEdit:
+        """Add text to the end of the script, creating it if needed."""
+        return await self._locked(partial(self._change_script, partial(append_text, addition=text)))
+
+    async def replace_in_script(self, *, find: str, replace: str) -> TextEdit:
+        """Replace the one passage of the script that matches ``find``."""
+        return await self._locked(partial(self._change_script, partial(replace_unique, find=find, replace=replace)))
 
     async def list_lore(self) -> tuple[LoreFile, ...]:
         """List Markdown lore files with their summary and keywords."""
@@ -67,37 +59,42 @@ class FileWorkspace:
 
     async def read_lore(self, *, filename: str) -> str:
         """Read one full Markdown lore file."""
-        return await asyncio.to_thread(self._read_lore, filename=filename)
+        return await asyncio.to_thread(self._read_existing_lore, self._lore_path(filename))
 
-    async def edit_lore(
-        self,
-        *,
-        filename: str,
-        action: LoreAction,
-        content: str | None = None,
-        start_offset: int | None = None,
-        end_offset: int | None = None,
-    ) -> LoreEdit:
-        """Apply one focused change to a Markdown lore file."""
-        async with self._write_lock:
-            return await asyncio.to_thread(
-                self._edit_lore,
-                filename=filename,
-                action=action,
-                content=content,
-                start_offset=start_offset,
-                end_offset=end_offset,
-            )
+    async def write_lore(self, *, filename: str, content: str) -> TextEdit:
+        """Create a lore file or replace all of its content."""
+        return await self._locked(partial(self._change_lore, filename, partial(_overwrite, content=content), create=True))
+
+    async def append_lore(self, *, filename: str, text: str) -> TextEdit:
+        """Add text to the end of an existing lore file."""
+        return await self._locked(partial(self._change_lore, filename, partial(append_text, addition=text), create=False))
+
+    async def replace_in_lore(self, *, filename: str, find: str, replace: str) -> TextEdit:
+        """Replace the one passage of a lore file that matches ``find``."""
+        change = partial(replace_unique, find=find, replace=replace)
+        return await self._locked(partial(self._change_lore, filename, change, create=False))
+
+    async def delete_lore(self, *, filename: str) -> None:
+        """Remove an existing lore file."""
+        await self._locked(partial(self._delete_lore, filename))
 
     async def read_message_history(self) -> list[ModelMessage]:
         """Read the complete persisted Pydantic AI conversation history."""
         return await asyncio.to_thread(self._read_message_history)
 
+    async def archive_message_history(self) -> str:
+        """Move the saved history aside so a fresh conversation can start; return the archive filename."""
+        return await self._locked(self._archive_message_history)
+
     async def write_message_history(self, *, message_history: list[ModelMessage]) -> None:
         """Persist Pydantic AI messages without losing tool call details."""
         serialized_history = ModelMessagesTypeAdapter.dump_json(message_history)
+        await self._locked(partial(_atomic_write, self.conversation_history_path, serialized_history))
+
+    async def _locked[T](self, operation: Callable[[], T]) -> T:
+        """Run a blocking write off the event loop, one at a time."""
         async with self._write_lock:
-            await asyncio.to_thread(self._write_message_history, serialized_history)
+            return await asyncio.to_thread(operation)
 
     def _read_script(self) -> str:
         try:
@@ -105,20 +102,11 @@ class FileWorkspace:
         except FileNotFoundError:
             return ""
 
-    def _apply_edit(self, *, start_offset: int, end_offset: int | None, replacement: str) -> ScriptEdit:
+    def _change_script(self, change: TextChanger) -> TextEdit:
         script = self._read_script()
-        resolved_end_offset = _resolve_end_offset(start_offset, end_offset, replacement)
-        if not _is_valid_range(start_offset, resolved_end_offset, len(script)):
-            raise ScriptEditError(_invalid_range_message(start_offset, resolved_end_offset, "script", len(script)))
-        updated_script = f"{script[:start_offset]}{replacement}{script[resolved_end_offset:]}"
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.script_path.write_text(updated_script, encoding="utf-8")
-        return ScriptEdit(
-            start_offset=start_offset,
-            end_offset=resolved_end_offset,
-            original_length=len(script),
-            new_length=len(updated_script),
-        )
+        result = change(script)
+        _atomic_write(self.script_path, result.text.encode("utf-8"))
+        return _text_edit(SCRIPT_FILENAME, script, result)
 
     def _list_lore(self) -> tuple[LoreFile, ...]:
         if not self.root.is_dir():
@@ -138,64 +126,33 @@ class FileWorkspace:
             )
         return tuple(lore_files)
 
-    def _read_lore(self, *, filename: str) -> str:
-        path = self._lore_path(filename)
+    def _read_existing_lore(self, path: Path) -> str:
         if not path.is_file():
-            raise LoreEditError(f"Lore file does not exist: {filename}")
+            raise LoreEditError(f"Lore file does not exist: {path.name}. Use write_lore to create it.")
         return path.read_text(encoding="utf-8")
 
-    def _edit_lore(
-        self,
-        *,
-        filename: str,
-        action: LoreAction,
-        content: str | None,
-        start_offset: int | None,
-        end_offset: int | None,
-    ) -> LoreEdit:
+    def _change_lore(self, filename: str, change: TextChanger, *, create: bool) -> TextEdit:
         path = self._lore_path(filename)
         if path.exists() and not path.is_file():
-            raise LoreEditError(f"Lore path is not a file: {filename}")
-
-        existing = path.read_text(encoding="utf-8") if path.is_file() else None
-        original_length = len(existing) if existing is not None else 0
-        if action == "delete":
-            if existing is not None:
-                path.unlink()
-            return LoreEdit(
-                filename=path.name,
-                action=action,
-                original_length=original_length,
-                new_length=0,
-            )
-
-        if content is None:
-            raise LoreEditError(f"{action.capitalize()} requires content.")
-        if existing is None:
-            updated = content
-        elif action == "append":
-            updated = f"{existing}{content}"
+            raise LoreEditError(f"Lore path is not a file: {path.name}")
+        if create:
+            existing = path.read_text(encoding="utf-8") if path.is_file() else ""
         else:
-            if start_offset is None:
-                raise LoreEditError("Replace requires start_offset.")
-            resolved_end_offset = _resolve_end_offset(start_offset, end_offset, content)
-            if not _is_valid_range(start_offset, resolved_end_offset, len(existing)):
-                raise LoreEditError(_invalid_range_message(start_offset, resolved_end_offset, path.name, len(existing)))
-            updated = f"{existing[:start_offset]}{content}{existing[resolved_end_offset:]}"
+            existing = self._read_existing_lore(path)
 
-        metadata = _lore_metadata(updated)
+        result = change(existing)
+        metadata = _lore_metadata(result.text)
         if metadata is None or not metadata.get("summary") or not metadata.get("keywords"):
             raise LoreEditError(
                 "Lore files must start with a hyphen-delimited header containing non-empty summary and keywords properties."
             )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(updated, encoding="utf-8")
-        return LoreEdit(
-            filename=path.name,
-            action=action,
-            original_length=original_length,
-            new_length=len(updated),
-        )
+        _atomic_write(path, result.text.encode("utf-8"))
+        return _text_edit(path.name, existing, result)
+
+    def _delete_lore(self, filename: str) -> None:
+        path = self._lore_path(filename)
+        self._read_existing_lore(path)
+        path.unlink()
 
     def _read_message_history(self) -> list[ModelMessage]:
         try:
@@ -210,9 +167,11 @@ class FileWorkspace:
                 f"Saved conversation history is invalid: {self.conversation_history_path}"
             ) from error
 
-    def _write_message_history(self, serialized_history: bytes) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.conversation_history_path.write_bytes(serialized_history)
+    def _archive_message_history(self) -> str:
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        archive_path = self.root / f".storyline-history.{timestamp}.broken.json"
+        self.conversation_history_path.replace(archive_path)
+        return archive_path.name
 
     def _lore_path(self, filename: str) -> Path:
         relative_path = Path(filename.strip())
@@ -230,18 +189,31 @@ class FileWorkspace:
         return self.root.joinpath(relative_path)
 
 
-def _is_valid_range(start_offset: int, end_offset: int, length: int) -> bool:
-    return 0 <= start_offset <= end_offset <= length
+def _overwrite(_: str, *, content: str) -> TextChange:
+    return TextChange(text=content, start=0, end=len(content))
 
 
-def _invalid_range_message(start_offset: int, end_offset: int, target: str, length: int) -> str:
-    return f"Invalid edit range {start_offset}:{end_offset} for {target} with {length} characters."
+def _text_edit(filename: str, original: str, change: TextChange) -> TextEdit:
+    return TextEdit(
+        filename=filename,
+        original_length=len(original),
+        new_length=len(change.text),
+        snippet=snippet(change.text, change.start, change.end),
+    )
 
 
-def _resolve_end_offset(start_offset: int, end_offset: int | None, replacement: str) -> int:
-    if end_offset is not None:
-        return end_offset
-    return start_offset + len(replacement)
+def _atomic_write(path: Path, data: bytes) -> None:
+    """Write through a sibling temp file so a crash never leaves a truncated file behind."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as file:
+        file.write(data)
+        file.flush()
+        os.fsync(file.fileno())
+    try:
+        os.replace(file.name, path)
+    except BaseException:
+        Path(file.name).unlink(missing_ok=True)
+        raise
 
 
 def _lore_metadata(content: str) -> dict[str, str] | None:

@@ -1,30 +1,52 @@
 """Interactive presentation of conversation and tool activity."""
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Sequence
 
 from rich.console import RenderableType
-from rich.markdown import Markdown
 from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.message import Message
-from textual.widgets import Collapsible, Static
+from textual.widget import Widget
+from textual.widgets import Collapsible, Markdown, Static
+from textual.widgets.markdown import MarkdownStream
 
 from storyline.tui.models import MessageKind
+from storyline.tui.transcript import TranscriptEntry, TranscriptMessage
 
 
 class ChatMessage(Static):
-    """One conversation entry whose body can grow while a reply streams in."""
+    """One plain conversation entry: a user prompt, notice or error."""
 
     def __init__(self, kind: MessageKind, body: str) -> None:
         super().__init__(_renderable(kind, body), classes=f"message {kind}")
         self.kind = kind
         self.body = body
 
-    def append(self, text: str) -> None:
-        """Extend the body and re-render it."""
-        self.body += text
-        self.update(_renderable(self.kind, self.body))
+
+class AgentReply(Markdown):
+    """An agent reply rendered as Markdown, appended to incrementally while it streams."""
+
+    DEFAULT_CSS = """
+    AgentReply { margin: 0 0 1 0; padding: 0; background: transparent; }
+    """
+
+    def __init__(self, body: str = "") -> None:
+        super().__init__(body, classes="message agent")
+        self.body = body
+        self._stream: MarkdownStream | None = None
+
+    async def stream_text(self, fragment: str) -> None:
+        """Add streamed text without re-rendering what is already shown."""
+        self.body += fragment
+        if self._stream is None:
+            self._stream = Markdown.get_stream(self)
+        await self._stream.write(fragment)
+
+    async def finish(self) -> None:
+        """Flush any buffered text."""
+        if self._stream is not None:
+            await self._stream.stop()
+            self._stream = None
 
 
 class ToolLogEntry(Collapsible):
@@ -35,32 +57,28 @@ class ToolLogEntry(Collapsible):
     ToolLogEntry .tool-details { color: $text-muted; }
     """
 
-    def __init__(self, *, tool_name: str, arguments: str) -> None:
+    def __init__(self, *, tool_name: str, arguments: str, result: str | None = None, outcome: str = "working") -> None:
         self._tool_name = tool_name
         self._arguments = arguments
-        super().__init__(
-            Static(self._details(None), classes="tool-details"),
-            title=f"{tool_name} · working",
-            classes="message tool",
-        )
+        self._details = Static(self._details_text(result), classes="tool-details")
+        super().__init__(self._details, title=f"{tool_name} · {outcome}", classes="message tool")
 
-    def complete(self, *, content: object, outcome: str) -> None:
+    def complete(self, *, result: str, outcome: str) -> None:
         """Attach a result while keeping it in the existing tool entry."""
         self.title = f"{self._tool_name} · {outcome}"
-        self.query_one(".tool-details", Static).update(self._details(str(content)))
+        self._details.update(self._details_text(result))
 
-    def _details(self, result: str | None) -> Text:
+    def _details_text(self, result: str | None) -> Text:
         return Text(f"Request\n{self._arguments}\n\nResult\n{result or 'Waiting for result.'}")
 
 
 class MessageLog(VerticalScroll):
-    """A scrollable log that follows updates until the reader scrolls away."""
+    """A scrollable log that stays anchored to the newest entry until the reader scrolls away."""
 
     DEFAULT_CSS = """
     MessageLog { height: 1fr; padding: 1 2; }
     MessageLog .message { margin-bottom: 1; }
     MessageLog .user { color: $accent; background: $surface-lighten-1; }
-    MessageLog .agent { color: $text; }
     MessageLog .system, MessageLog .tool { color: $warning; }
     MessageLog .error { color: $error; }
     """
@@ -74,54 +92,83 @@ class MessageLog(VerticalScroll):
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
         self._tool_entries: dict[str, ToolLogEntry] = {}
+        self._reader_away = False
+
+    def on_mount(self) -> None:
+        self.anchor()
 
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         super().watch_scroll_y(old_value, new_value)
-        if self.is_vertical_scroll_end:
+        self._reader_away = not self.is_vertical_scroll_end
+        if not self._reader_away:
             self.post_message(self.ReachedBottom())
 
     async def add_message(self, kind: MessageKind, body: str) -> ChatMessage:
-        """Add one conversation entry."""
+        """Add one plain conversation entry."""
         message = ChatMessage(kind, body)
-        with self._following_changes():
-            await self.mount(message)
+        await self._mount_entries([message])
         return message
 
-    def append_to_message(self, message: ChatMessage, text: str) -> None:
-        """Extend a streamed message."""
-        with self._following_changes():
-            message.append(text)
+    async def add_reply(self) -> AgentReply:
+        """Add an empty agent reply to stream into."""
+        reply = AgentReply()
+        await self._mount_entries([reply])
+        return reply
+
+    async def append_to_reply(self, reply: AgentReply, text: str) -> None:
+        """Extend a streamed reply."""
+        await reply.stream_text(text)
+        self._content_changed()
 
     async def add_tool_call(self, *, tool_call_id: str, tool_name: str, arguments: str) -> ToolLogEntry:
         """Add a compact tool entry whose details are available on click."""
         entry = ToolLogEntry(tool_name=tool_name, arguments=arguments)
         self._tool_entries[tool_call_id] = entry
-        with self._following_changes():
-            await self.mount(entry)
+        await self._mount_entries([entry])
         return entry
 
-    def complete_tool_call(self, *, tool_call_id: str, content: object, outcome: str) -> None:
+    def complete_tool_call(self, *, tool_call_id: str, result: str, outcome: str) -> None:
         """Attach a result to its existing tool entry."""
         entry = self._tool_entries.pop(tool_call_id, None)
-        if entry is None:
-            return
-        with self._following_changes():
-            entry.complete(content=content, outcome=outcome)
+        if entry is not None:
+            entry.complete(result=result, outcome=outcome)
+            self._content_changed()
 
-    @contextmanager
-    def _following_changes(self) -> Iterator[None]:
-        """Keep the newest entry in view if the reader was already there; otherwise flag unseen content."""
-        follows_log = self.is_vertical_scroll_end
-        yield
-        if follows_log:
-            self.scroll_end(animate=False)
-        else:
+    async def show_transcript(self, entries: Sequence[TranscriptEntry], *, hidden_count: int = 0) -> None:
+        """Add entries restored from a saved conversation."""
+        widgets: list[Widget] = []
+        if hidden_count:
+            widgets.append(ChatMessage(MessageKind.SYSTEM, f"… {hidden_count} earlier entries not shown"))
+        for entry in entries:
+            if isinstance(entry, TranscriptMessage):
+                widgets.append(AgentReply(entry.body) if entry.kind == MessageKind.AGENT else ChatMessage(entry.kind, entry.body))
+            else:
+                widgets.append(
+                    ToolLogEntry(
+                        tool_name=entry.tool_name,
+                        arguments=entry.arguments,
+                        result=entry.result,
+                        outcome=entry.outcome,
+                    )
+                )
+        await self._mount_entries(widgets)
+
+    async def clear(self) -> None:
+        """Remove every entry."""
+        self._tool_entries.clear()
+        await self.remove_children()
+
+    async def _mount_entries(self, widgets: Sequence[Widget]) -> None:
+        if widgets:
+            await self.mount_all(widgets)
+            self._content_changed()
+
+    def _content_changed(self) -> None:
+        if self._reader_away:
             self.post_message(self.NewMessages())
 
 
 def _renderable(kind: MessageKind, body: str) -> RenderableType:
-    if kind == MessageKind.AGENT:
-        return Markdown(body)
     if kind == MessageKind.USER:
         return Text.assemble(("> ", "bold"), body)
     return Text(body)
