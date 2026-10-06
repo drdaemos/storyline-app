@@ -6,10 +6,11 @@ import pytest
 from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.messages import ModelMessage, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.native_tools import WebSearchTool
 
 from storyline.agent import create_writer_agent, story_snapshot, turn_prompt, visible_prompt_text
 from storyline.agent.story_context import SNAPSHOT_OPEN, TAIL_CHARACTERS
-from storyline.workspace.file import FileWorkspace
+from storyline.workspace.file_story import FileStory
 
 LORE_HEADER = "---\nsummary: A setting.\nkeywords: city\n---\n"
 
@@ -21,13 +22,7 @@ def _call_tools_then_reply(*calls: ToolCallPart) -> tuple[ModelFunction, list[To
     results: list[ToolReturnPart] = []
 
     def model_response(messages: list[ModelMessage], _: AgentInfo) -> ModelResponse:
-        results[:] = [
-            part
-            for message in messages
-            if isinstance(message, ModelRequest)
-            for part in message.parts
-            if isinstance(part, ToolReturnPart)
-        ]
+        results[:] = [part for message in messages if isinstance(message, ModelRequest) for part in message.parts if isinstance(part, ToolReturnPart)]
         if len(results) < len(calls):
             return ModelResponse(parts=[calls[len(results)]])
         return ModelResponse(parts=[TextPart(content="Done.")])
@@ -43,7 +38,7 @@ async def test_writer_agent_exposes_the_anchored_editing_tools(tmp_path) -> None
         observed_tool_names.extend(tool.name for tool in info.function_tools)
         return ModelResponse(parts=[TextPart(content="Ready.")])
 
-    await create_writer_agent().run("Hi.", deps=FileWorkspace(tmp_path), model=FunctionModel(model_response))
+    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(model_response))
 
     assert observed_tool_names == [
         "append_to_script",
@@ -59,8 +54,21 @@ async def test_writer_agent_exposes_the_anchored_editing_tools(tmp_path) -> None
 
 
 @pytest.mark.asyncio
+async def test_writer_agent_offers_web_search(tmp_path) -> None:
+    observed_native_tools: list[object] = []
+
+    def model_response(_: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        observed_native_tools.extend(info.model_request_parameters.native_tools)
+        return ModelResponse(parts=[TextPart(content="Ready.")])
+
+    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(model_response))
+
+    assert any(isinstance(tool, WebSearchTool) for tool in observed_native_tools)
+
+
+@pytest.mark.asyncio
 async def test_writer_agent_appends_and_revises_the_story_by_excerpt(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
+    workspace = FileStory(tmp_path)
     model, results = _call_tools_then_reply(
         ToolCallPart(tool_name="append_to_script", args={"text": "FADE IN:\n\nA quiet street."}),
         ToolCallPart(tool_name="edit_script", args={"find": "quiet", "replace": "rain-soaked"}),
@@ -76,7 +84,7 @@ async def test_writer_agent_appends_and_revises_the_story_by_excerpt(tmp_path) -
 
 @pytest.mark.asyncio
 async def test_writer_agent_returns_workspace_errors_to_the_model(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
+    workspace = FileStory(tmp_path)
     await workspace.append_script(text="The bell rang. The bell rang again.")
     model, results = _call_tools_then_reply(
         ToolCallPart(tool_name="edit_script", args={"find": "The bell rang", "replace": "A bell tolled"}),
@@ -91,7 +99,7 @@ async def test_writer_agent_returns_workspace_errors_to_the_model(tmp_path) -> N
 
 @pytest.mark.asyncio
 async def test_writer_agent_reads_story_paragraph_ranges(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
+    workspace = FileStory(tmp_path)
     await workspace.append_script(text="One.\n\nTwo.\n\nThree.")
     model, results = _call_tools_then_reply(
         ToolCallPart(tool_name="read_script", args={"from_paragraph": 2, "to_paragraph": 9}),
@@ -106,7 +114,7 @@ async def test_writer_agent_reads_story_paragraph_ranges(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_writer_agent_manages_lore_files(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
+    workspace = FileStory(tmp_path)
     model, results = _call_tools_then_reply(
         ToolCallPart(tool_name="write_lore", args={"filename": "setting", "content": f"{LORE_HEADER}Rainy streets."}),
         ToolCallPart(tool_name="edit_lore", args={"filename": "setting.md", "find": "Rainy", "replace": "Foggy"}),
@@ -129,7 +137,7 @@ async def test_writer_agent_manages_lore_files(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_story_travels_in_the_turn_prompt_not_the_instructions(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
+    workspace = FileStory(tmp_path)
     await workspace.append_script(text="A distinctive opening line.")
     observed: list[tuple[str | None, list[ModelMessage]]] = []
 

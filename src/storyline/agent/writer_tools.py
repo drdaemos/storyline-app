@@ -1,4 +1,4 @@
-"""Tool registry for writer-agent workspace operations.
+"""Tool registry for writer-agent story operations.
 
 Edits are anchored on text, never on offsets or line numbers, and the model only sends what changes:
 new prose is appended, and revisions name a short unique excerpt to replace.
@@ -6,15 +6,15 @@ new prose is appended, and revisions name a short unique excerpt to replace.
 
 from pydantic_ai import FunctionToolset, RunContext, ToolFailed
 
-from storyline.workspace import ScriptWorkspace, TextEdit, WorkspaceEditError
+from storyline.workspace import Story, TextEdit, WorkspaceEditError
 from storyline.workspace.text_edit import paragraphs
 
-WRITER_TOOLSET = FunctionToolset[ScriptWorkspace](id="writer_workspace")
-"""The writer agent's registered workspace tools."""
+WRITER_TOOLSET = FunctionToolset[Story](id="writer_workspace")
+"""The writer agent's registered story tools."""
 
 
 @WRITER_TOOLSET.tool
-async def append_to_script(ctx: RunContext[ScriptWorkspace], text: str) -> str:
+async def append_to_script(ctx: RunContext[Story], text: str) -> str:
     """Add new prose to the end of the story. This is the normal way to continue writing.
 
     Args:
@@ -27,7 +27,7 @@ async def append_to_script(ctx: RunContext[ScriptWorkspace], text: str) -> str:
 
 
 @WRITER_TOOLSET.tool
-async def edit_script(ctx: RunContext[ScriptWorkspace], find: str, replace: str) -> str:
+async def edit_script(ctx: RunContext[Story], find: str, replace: str) -> str:
     """Revise one passage of the story without resending unchanged text.
 
     To delete, use an empty replace. To insert, find a short nearby excerpt and repeat it in replace together with the new text.
@@ -43,7 +43,7 @@ async def edit_script(ctx: RunContext[ScriptWorkspace], find: str, replace: str)
 
 
 @WRITER_TOOLSET.tool
-async def read_script(ctx: RunContext[ScriptWorkspace], from_paragraph: int = 1, to_paragraph: int | None = None) -> str:
+async def read_script(ctx: RunContext[Story], from_paragraph: int = 1, to_paragraph: int | None = None) -> str:
     """Read part of the story. Paragraphs are separated by blank lines and numbered from 1.
 
     Args:
@@ -62,7 +62,7 @@ async def read_script(ctx: RunContext[ScriptWorkspace], from_paragraph: int = 1,
 
 
 @WRITER_TOOLSET.tool
-async def list_lore(ctx: RunContext[ScriptWorkspace]) -> str:
+async def list_lore(ctx: RunContext[Story]) -> str:
     """List every lore file with its short summary from the metadata header."""
     lore_files = await ctx.deps.list_lore()
     if not lore_files:
@@ -76,7 +76,7 @@ async def list_lore(ctx: RunContext[ScriptWorkspace]) -> str:
 
 
 @WRITER_TOOLSET.tool
-async def read_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
+async def read_lore(ctx: RunContext[Story], filename: str) -> str:
     """Read the full text of one Markdown lore file.
 
     Args:
@@ -89,7 +89,7 @@ async def read_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
 
 
 @WRITER_TOOLSET.tool
-async def write_lore(ctx: RunContext[ScriptWorkspace], filename: str, content: str) -> str:
+async def write_lore(ctx: RunContext[Story], filename: str, content: str) -> str:
     """Create a lore file, or replace all of its content. For changes to an existing file prefer append_lore or edit_lore.
 
     Lore files must start with a hyphen-delimited metadata header with non-empty summary and keywords properties, e.g.
@@ -106,7 +106,7 @@ async def write_lore(ctx: RunContext[ScriptWorkspace], filename: str, content: s
 
 
 @WRITER_TOOLSET.tool
-async def append_lore(ctx: RunContext[ScriptWorkspace], filename: str, text: str) -> str:
+async def append_lore(ctx: RunContext[Story], filename: str, text: str) -> str:
     """Add text to the end of an existing lore file.
 
     Args:
@@ -120,7 +120,7 @@ async def append_lore(ctx: RunContext[ScriptWorkspace], filename: str, text: str
 
 
 @WRITER_TOOLSET.tool
-async def edit_lore(ctx: RunContext[ScriptWorkspace], filename: str, find: str, replace: str) -> str:
+async def edit_lore(ctx: RunContext[Story], filename: str, find: str, replace: str) -> str:
     """Revise one passage of a lore file without resending unchanged text.
 
     Args:
@@ -135,7 +135,7 @@ async def edit_lore(ctx: RunContext[ScriptWorkspace], filename: str, find: str, 
 
 
 @WRITER_TOOLSET.tool
-async def delete_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
+async def delete_lore(ctx: RunContext[Story], filename: str) -> str:
     """Delete a lore file.
 
     Args:
@@ -149,7 +149,4 @@ async def delete_lore(ctx: RunContext[ScriptWorkspace], filename: str) -> str:
 
 
 def _describe(verb: str, edit: TextEdit) -> str:
-    return (
-        f"{verb} {edit.filename} ({edit.original_length} → {edit.new_length} characters). "
-        f"Around the change it now reads:\n{edit.snippet}"
-    )
+    return f"{verb} {edit.filename} ({edit.original_length} → {edit.new_length} characters). Around the change it now reads:\n{edit.snippet}"

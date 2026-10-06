@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 from pydantic_ai.messages import UserContent
 
-from storyline.workspace import ScriptWorkspace
+from storyline.workspace import Story
 from storyline.workspace.text_edit import Paragraph, paragraphs
 
 SNAPSHOT_OPEN = "<story-snapshot>"
@@ -18,9 +18,9 @@ TAIL_CHARACTERS = 2000
 HEADING_LIMIT = 40
 
 
-async def turn_prompt(workspace: ScriptWorkspace, prompt: str) -> list[UserContent]:
+async def turn_prompt(story: Story, prompt: str) -> list[UserContent]:
     """Return the user content for one turn: a story snapshot followed by the user's prompt."""
-    return [story_snapshot(await workspace.read_script()), prompt]
+    return [story_snapshot(await story.read_script()), prompt]
 
 
 def story_snapshot(script: str) -> str:

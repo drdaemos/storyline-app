@@ -4,6 +4,7 @@ from collections.abc import Sequence
 
 from rich.console import RenderableType
 from rich.text import Text
+from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
@@ -72,11 +73,25 @@ class ToolLogEntry(Collapsible):
         return Text(f"Request\n{self._arguments}\n\nResult\n{result or 'Waiting for result.'}")
 
 
+class ActivityLine(Static):
+    """What the agent is doing right now, kept below the newest entry."""
+
+    DEFAULT_CSS = """
+    ActivityLine { display: none; color: $text-muted; text-style: italic; }
+    ActivityLine.-active { display: block; }
+    """
+
+    def show(self, activity: str) -> None:
+        """Show ``activity``, or hide the line when it is empty."""
+        self.update(activity)
+        self.set_class(bool(activity), "-active")
+
+
 class MessageLog(VerticalScroll):
     """A scrollable log that stays anchored to the newest entry until the reader scrolls away."""
 
     DEFAULT_CSS = """
-    MessageLog { height: 1fr; padding: 1 2; }
+    MessageLog { height: 1fr; padding: 1 4 1 2; }
     MessageLog .message { margin-bottom: 1; }
     MessageLog .user { color: $accent; background: $surface-lighten-1; }
     MessageLog .system, MessageLog .tool { color: $warning; }
@@ -93,6 +108,10 @@ class MessageLog(VerticalScroll):
         super().__init__(id=id)
         self._tool_entries: dict[str, ToolLogEntry] = {}
         self._reader_away = False
+        self._activity = ActivityLine()
+
+    def compose(self) -> ComposeResult:
+        yield self._activity
 
     def on_mount(self) -> None:
         self.anchor()
@@ -102,6 +121,10 @@ class MessageLog(VerticalScroll):
         self._reader_away = not self.is_vertical_scroll_end
         if not self._reader_away:
             self.post_message(self.ReachedBottom())
+
+    def show_activity(self, activity: str) -> None:
+        """Show what the agent is doing as the last item, or hide it when ``activity`` is empty."""
+        self._activity.show(activity)
 
     async def add_message(self, kind: MessageKind, body: str) -> ChatMessage:
         """Add one plain conversation entry."""
@@ -156,11 +179,11 @@ class MessageLog(VerticalScroll):
     async def clear(self) -> None:
         """Remove every entry."""
         self._tool_entries.clear()
-        await self.remove_children()
+        await self.query_children(".message").remove()
 
     async def _mount_entries(self, widgets: Sequence[Widget]) -> None:
         if widgets:
-            await self.mount_all(widgets)
+            await self.mount_all(widgets, before=self._activity)
             self._content_changed()
 
     def _content_changed(self) -> None:

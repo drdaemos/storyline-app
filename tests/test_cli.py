@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from storyline import cli
-from storyline.workspace.file import FileWorkspace
+from storyline.workspace.file_workspace import FileWorkspace
 
 
 @pytest.fixture
@@ -24,6 +24,13 @@ def test_default_command_starts_interactive_session_in_the_workspace(start_sessi
     assert options["model_name"] == "openrouter:meta/muse-spark-1.3"
     assert isinstance(options["workspace"], FileWorkspace)
     assert options["workspace"].root == tmp_path.resolve()
+    assert options["story_name"] is None
+
+
+def test_story_option_names_the_story_to_open(start_session: Mock, tmp_path) -> None:
+    cli.main(["--workspace", str(tmp_path), "--story", "harbor"])
+
+    assert start_session.call_args.kwargs["story_name"] == "harbor"
 
 
 def test_write_command_can_be_named_explicitly(start_session: Mock, tmp_path) -> None:
@@ -33,9 +40,7 @@ def test_write_command_can_be_named_explicitly(start_session: Mock, tmp_path) ->
     assert start_session.call_args.kwargs["workspace"].root == tmp_path.resolve()
 
 
-def test_model_option_overrides_the_environment(
-    start_session: Mock, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
+def test_model_option_overrides_the_environment(start_session: Mock, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("STORYLINE_MODEL", "openrouter:environment/model")
 
     cli.main(["--model", "openrouter:command/model", "--workspace", str(tmp_path)])
@@ -43,9 +48,7 @@ def test_model_option_overrides_the_environment(
     assert start_session.call_args.kwargs["model_name"] == "openrouter:command/model"
 
 
-def test_missing_workspace_exits_with_a_usage_error(
-    start_session: Mock, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_missing_workspace_exits_with_a_usage_error(start_session: Mock, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(cli, "load_dotenv", Mock())
     monkeypatch.delenv("STORYLINE_WORKSPACE", raising=False)
 
@@ -63,6 +66,7 @@ def test_help_command_prints_available_commands(capsys: pytest.CaptureFixture[st
     output = capsys.readouterr().out
     assert "serve" in output
     assert "--workspace" in output
+    assert "--story" in output
     assert "--port" in output
     assert "--reload" in output
 

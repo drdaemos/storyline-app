@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 
+import pydantic_ai
 import pytest
 from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.messages import ModelMessage, RetryPromptPart, UserPromptPart
@@ -10,12 +11,16 @@ from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls
 from textual.widgets import Static
 
 from storyline.agent import create_writer_agent, turn_prompt, visible_prompt_text
-from storyline.tui.message_log import AgentReply, ChatMessage, MessageLog, ToolLogEntry
+from storyline.tui.message_log import ActivityLine, AgentReply, ChatMessage, MessageLog, ToolLogEntry
 from storyline.tui.models import MessageKind, TuiConfig
 from storyline.tui.prompt import PromptBlock
 from storyline.tui.session import INTERRUPTED_NOTICE, StorylineTui
 from storyline.tui.status_line import NEW_MESSAGES_STATUS, StatusLine
-from storyline.workspace.file import CONVERSATION_HISTORY_FILENAME, FileWorkspace
+from storyline.workspace import StoryLibrary
+from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, FileStory
+from storyline.workspace.file_workspace import FileWorkspace
+
+STORY_NAME = "noir"
 
 
 @pytest.mark.asyncio
@@ -47,15 +52,15 @@ async def test_help_lists_every_command(tmp_path) -> None:
         await _submit(pilot, app, "/help")
 
         help_text = _bodies(app, MessageKind.SYSTEM)[-1]
-        for name in ("/help", "/model", "/script", "/lore", "/clear", "/quit"):
+        for name in ("/help", "/model", "/stories", "/story", "/new", "/script", "/lore", "/clear", "/quit"):
             assert name in help_text
 
 
 @pytest.mark.asyncio
-async def test_script_and_lore_commands_show_the_workspace(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
-    await workspace.append_script(text="INT. ROOM")
-    await workspace.write_lore(filename="city.md", content="---\nsummary: The city.\nkeywords: city\n---\n")
+async def test_script_and_lore_commands_show_the_active_story(tmp_path) -> None:
+    story = _story(tmp_path)
+    await story.append_script(text="INT. ROOM")
+    await story.write_lore(filename="city.md", content="---\nsummary: The city.\nkeywords: city\n---\n")
     app = _build_app(tmp_path)
 
     async with app.run_test() as pilot:
@@ -69,14 +74,14 @@ async def test_script_and_lore_commands_show_the_workspace(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_clear_command_starts_a_new_conversation(tmp_path) -> None:
-    await FileWorkspace(tmp_path).write_message_history(message_history=[_user_request("Old prompt.")])
+    await _story(tmp_path).write_message_history(message_history=[_user_request("Old prompt.")])
     app = _build_app(tmp_path)
 
     async with app.run_test() as pilot:
         await _submit(pilot, app, "/clear")
 
         assert _bodies(app, MessageKind.USER) == []
-        assert await FileWorkspace(tmp_path).read_message_history() == []
+        assert await _story(tmp_path).read_message_history() == []
 
 
 @pytest.mark.asyncio
@@ -97,7 +102,7 @@ async def test_slash_opens_the_command_list_and_tab_completes(tmp_path) -> None:
         prompt = app.query_one(PromptBlock)
         prompt.value = "/"
         await pilot.pause()
-        assert prompt.command_count == 6
+        assert prompt.command_count == 9
 
         prompt.value = "/mo"
         await pilot.pause()
@@ -137,7 +142,7 @@ async def test_restored_history_is_shown_on_startup(tmp_path) -> None:
         ModelRequest(parts=[ToolReturnPart(tool_name="edit_script", content="Updated.", tool_call_id="c1")]),
         ModelResponse(parts=[TextPart(content="Added an **opening**.")]),
     ]
-    await FileWorkspace(tmp_path).write_message_history(message_history=history)
+    await _story(tmp_path).write_message_history(message_history=history)
     app = _build_app(tmp_path)
 
     async with app.run_test():
@@ -149,10 +154,10 @@ async def test_restored_history_is_shown_on_startup(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_restored_prompts_hide_the_story_snapshot(tmp_path) -> None:
-    workspace = FileWorkspace(tmp_path)
-    await workspace.append_script(text="Secret opening.")
-    prompt = await turn_prompt(workspace, "Continue.")
-    await workspace.write_message_history(message_history=[ModelRequest(parts=[UserPromptPart(content=prompt)])])
+    story = _story(tmp_path)
+    await story.append_script(text="Secret opening.")
+    prompt = await turn_prompt(story, "Continue.")
+    await story.write_message_history(message_history=[ModelRequest(parts=[UserPromptPart(content=prompt)])])
     app = _build_app(tmp_path)
 
     async with app.run_test():
@@ -161,14 +166,14 @@ async def test_restored_prompts_hide_the_story_snapshot(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_unreadable_history_is_archived_and_reported(tmp_path) -> None:
-    (tmp_path / CONVERSATION_HISTORY_FILENAME).write_text("not json", encoding="utf-8")
     app = _build_app(tmp_path)
+    (tmp_path / STORY_NAME / CONVERSATION_HISTORY_FILENAME).write_text("not json", encoding="utf-8")
 
     async with app.run_test():
         assert app._state.message_history == []
         assert any("started a new conversation" in body for body in _bodies(app, MessageKind.ERROR))
-        assert not (tmp_path / CONVERSATION_HISTORY_FILENAME).exists()
-        assert len(list(tmp_path.glob("*.broken.json"))) == 1
+        assert not (tmp_path / STORY_NAME / CONVERSATION_HISTORY_FILENAME).exists()
+        assert len(list((tmp_path / STORY_NAME).glob("*.broken.json"))) == 1
 
 
 @pytest.mark.asyncio
@@ -237,7 +242,7 @@ async def test_agent_turn_streams_a_markdown_reply_and_persists_history(tmp_path
             await pilot.pause()
 
             assert [reply.body for reply in app.query(AgentReply)] == ["## Scene\nDone."]
-            assert await FileWorkspace(tmp_path).read_message_history() == app._state.message_history
+            assert await _story(tmp_path).read_message_history() == app._state.message_history
             assert len(app._state.message_history) == 2
 
 
@@ -294,6 +299,35 @@ async def test_prompts_sent_while_the_agent_works_reach_it_at_the_next_step(tmp_
 
 
 @pytest.mark.asyncio
+async def test_agent_activity_is_shown_as_the_last_log_entry_while_it_works(tmp_path) -> None:
+    release = asyncio.Event()
+
+    async def stream_response(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        yield "Starting"
+        await release.wait()
+        yield " the scene."
+
+    app = _build_app(tmp_path)
+    with app._config.agent.override(model=FunctionModel(stream_function=stream_response)):
+        async with app.run_test() as pilot:
+            await _submit(pilot, app, "Write the opening.")
+            await pilot.pause()
+
+            log = app.query_one(MessageLog)
+            activity = app.query_one(ActivityLine)
+            assert log.children[-1] is activity
+            assert activity.display
+            assert "Writing" in str(activity.render())
+
+            release.set()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+
+            assert log.children[-1] is activity
+            assert not activity.display
+
+
+@pytest.mark.asyncio
 async def test_escape_interrupts_the_agent_and_returns_unread_prompts_to_the_input(tmp_path) -> None:
     never = asyncio.Event()
 
@@ -315,8 +349,140 @@ async def test_escape_interrupts_the_agent_and_returns_unread_prompts_to_the_inp
             assert INTERRUPTED_NOTICE in _bodies(app, MessageKind.SYSTEM)
             assert prompt.value == "Make it rain."
             assert prompt.queued == ()
-            saved = await FileWorkspace(tmp_path).read_message_history()
+            saved = await _story(tmp_path).read_message_history()
             assert _user_prompts(saved) == ["Write the opening."]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_workspace_asks_for_a_story_before_writing(tmp_path) -> None:
+    app = StorylineTui(_config(tmp_path))
+
+    async with app.run_test() as pilot:
+        assert "no stories yet" in _bodies(app, MessageKind.SYSTEM)[-1]
+        assert "no story" in app.query_one(PromptBlock).placeholder
+
+        await _submit(pilot, app, "Write the opening.")
+        assert app.query_one(PromptBlock).value == "Write the opening."
+        await _submit(pilot, app, "/script")
+
+        assert _bodies(app, MessageKind.USER) == []
+        assert all("No story is open" in body for body in _bodies(app, MessageKind.ERROR))
+        assert len(_bodies(app, MessageKind.ERROR)) == 2
+
+
+@pytest.mark.asyncio
+async def test_new_command_creates_a_story_and_switches_to_it(tmp_path) -> None:
+    app = StorylineTui(_config(tmp_path))
+
+    async with app.run_test() as pilot:
+        await _submit(pilot, app, "/new harbor")
+        await _submit(pilot, app, "/new harbor")
+        await _submit(pilot, app, "/new")
+
+        assert (tmp_path / "harbor").is_dir()
+        assert "harbor" in app.query_one(PromptBlock).placeholder
+        assert "Created harbor." in _bodies(app, MessageKind.SYSTEM)
+        errors = _bodies(app, MessageKind.ERROR)
+        assert "already exists" in errors[0]
+        assert "/new <name>" in errors[1]
+
+
+@pytest.mark.asyncio
+async def test_several_stories_without_an_active_one_are_listed_for_choice(tmp_path) -> None:
+    (tmp_path / "attic").mkdir()
+    (tmp_path / "harbor").mkdir()
+    app = StorylineTui(_config(tmp_path))
+
+    async with app.run_test():
+        choice = _bodies(app, MessageKind.SYSTEM)[-1]
+        assert "Choose a story" in choice
+        assert "attic" in choice and "harbor" in choice
+        assert app._state.story is None
+
+
+@pytest.mark.asyncio
+async def test_switching_stories_shows_and_extends_each_storys_own_conversation(tmp_path) -> None:
+    await _story(tmp_path, "attic").write_message_history(message_history=[_user_request("Attic prompt.")])
+    await _story(tmp_path, "harbor").write_message_history(message_history=[_user_request("Harbor prompt.")])
+
+    async def stream_response(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        yield "Done."
+
+    app = StorylineTui(_config(tmp_path, requested_story="attic"))
+    with app._config.agent.override(model=FunctionModel(stream_function=stream_response)):
+        async with app.run_test() as pilot:
+            assert _bodies(app, MessageKind.USER) == ["Attic prompt."]
+
+            await _submit(pilot, app, "/story harbor")
+            await _submit(pilot, app, "Continue the harbor.")
+            await app.workers.wait_for_complete()
+
+            assert _bodies(app, MessageKind.USER) == ["Harbor prompt.", "Continue the harbor."]
+            assert "Switched to harbor." in _bodies(app, MessageKind.SYSTEM)
+            assert "harbor" in app.query_one(PromptBlock).placeholder
+
+    assert _user_prompts(await _story(tmp_path, "attic").read_message_history()) == ["Attic prompt."]
+    assert _user_prompts(await _story(tmp_path, "harbor").read_message_history()) == [
+        "Harbor prompt.",
+        "Continue the harbor.",
+    ]
+    resumed = StorylineTui(_config(tmp_path))
+    async with resumed.run_test():
+        assert resumed._state.story is not None and resumed._state.story.name == "harbor"
+
+
+@pytest.mark.asyncio
+async def test_story_and_stories_commands_describe_the_workspace(tmp_path) -> None:
+    (tmp_path / "attic").mkdir()
+    (tmp_path / STORY_NAME).mkdir()
+    app = StorylineTui(_config(tmp_path, requested_story=STORY_NAME))
+
+    async with app.run_test() as pilot:
+        await _submit(pilot, app, "/stories")
+        await _submit(pilot, app, "/story")
+        await _submit(pilot, app, f"/story {STORY_NAME}")
+        await _submit(pilot, app, "/story cellar")
+
+        listing, active, already = _bodies(app, MessageKind.SYSTEM)[-3:]
+        assert "  attic" in listing and f"* {STORY_NAME}" in listing
+        assert active == f"Active story: {STORY_NAME}"
+        assert already == f"Already working on {STORY_NAME}."
+        assert "no story named 'cellar'" in _bodies(app, MessageKind.ERROR)[-1]
+        assert app._state.story is not None and app._state.story.name == STORY_NAME
+
+
+@pytest.mark.asyncio
+async def test_a_requested_story_that_does_not_exist_is_reported(tmp_path) -> None:
+    (tmp_path / "attic").mkdir()
+    app = StorylineTui(_config(tmp_path, requested_story="cellar"))
+
+    async with app.run_test():
+        assert "no story named 'cellar'" in _bodies(app, MessageKind.ERROR)[0]
+        assert app._state.story is None
+
+
+@pytest.mark.asyncio
+async def test_stories_cannot_change_while_the_agent_works(tmp_path) -> None:
+    (tmp_path / "attic").mkdir()
+    (tmp_path / STORY_NAME).mkdir()
+    release = asyncio.Event()
+
+    async def stream_response(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        await release.wait()
+        yield "Done."
+
+    app = StorylineTui(_config(tmp_path, requested_story=STORY_NAME))
+    with app._config.agent.override(model=FunctionModel(stream_function=stream_response)):
+        async with app.run_test() as pilot:
+            await _submit(pilot, app, "Write the opening.")
+            await _submit(pilot, app, "/story attic")
+            await _submit(pilot, app, "/new cellar")
+            release.set()
+            await app.workers.wait_for_complete()
+
+            assert len([body for body in _bodies(app, MessageKind.ERROR) if "agent is working" in body]) == 2
+            assert app._state.story is not None and app._state.story.name == STORY_NAME
+            assert not (tmp_path / "cellar").exists()
 
 
 async def _submit(pilot, app: StorylineTui, text: str) -> None:
@@ -334,20 +500,26 @@ def _user_request(text: str) -> ModelRequest:
 
 
 def _user_prompts(messages: list[ModelMessage]) -> list[str]:
-    texts = [
-        visible_prompt_text(part.content)
-        for message in messages
-        if isinstance(message, ModelRequest)
-        for part in message.parts
-        if isinstance(part, UserPromptPart)
-    ]
+    texts = [visible_prompt_text(part.content) for message in messages if isinstance(message, ModelRequest) for part in message.parts if isinstance(part, UserPromptPart)]
     return [text for text in texts if text]
 
 
+def _story(workspace_path, name: str = STORY_NAME) -> FileStory:
+    return FileStory(workspace_path / name)
+
+
+def _config(workspace_path, *, requested_story: str | None = None) -> TuiConfig:
+    return TuiConfig(
+        library=StoryLibrary(FileWorkspace(workspace_path)),
+        agent=create_writer_agent(),
+        requested_story=requested_story,
+    )
+
+
 def _build_app(workspace_path) -> StorylineTui:
-    workspace = FileWorkspace(workspace_path)
-    config = TuiConfig(workspace=workspace, agent=create_writer_agent())
-    return StorylineTui(config)
+    """Build an app whose workspace holds a single story, which it opens on startup."""
+    (workspace_path / STORY_NAME).mkdir(exist_ok=True)
+    return StorylineTui(_config(workspace_path))
 
 
 class SubmissionRecordingTui(StorylineTui):
@@ -362,6 +534,8 @@ class SubmissionRecordingTui(StorylineTui):
 
 
 def _build_submission_app(workspace_path) -> SubmissionRecordingTui:
-    workspace = FileWorkspace(workspace_path)
-    config = TuiConfig(workspace=workspace, agent=create_writer_agent())
-    return SubmissionRecordingTui(config)
+    return SubmissionRecordingTui(_config(workspace_path))
+
+
+def test_session_turns_off_the_pydantic_ai_banner_that_would_draw_over_the_tui() -> None:
+    assert pydantic_ai.BANNER_ENABLED is False

@@ -1,9 +1,7 @@
-"""Filesystem adapter for the writing workspace interface."""
+"""Filesystem adapter for one story package."""
 
 import asyncio
-import os
 import re
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -13,6 +11,7 @@ from pathlib import Path
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
+from storyline.workspace.atomic_file import atomic_write
 from storyline.workspace.contracts import ConversationHistoryError, LoreEditError, LoreFile, TextEdit
 from storyline.workspace.text_edit import TextChange, append_text, replace_unique, snippet
 
@@ -25,20 +24,25 @@ type TextChanger = Callable[[str], TextChange]
 
 
 @dataclass
-class FileWorkspace:
-    """A local directory-backed writing workspace adapter."""
+class FileStory:
+    """A story package stored as one local directory."""
 
     root: Path
     _write_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     @property
+    def name(self) -> str:
+        """Return the story's directory name."""
+        return self.root.name
+
+    @property
     def script_path(self) -> Path:
-        """Return the fixed script location within this workspace."""
+        """Return the fixed script location within this story."""
         return self.root / SCRIPT_FILENAME
 
     @property
     def conversation_history_path(self) -> Path:
-        """Return the persisted Pydantic AI history location within this workspace."""
+        """Return the persisted Pydantic AI history location within this story."""
         return self.root / CONVERSATION_HISTORY_FILENAME
 
     async def read_script(self) -> str:
@@ -89,7 +93,7 @@ class FileWorkspace:
     async def write_message_history(self, *, message_history: list[ModelMessage]) -> None:
         """Persist Pydantic AI messages without losing tool call details."""
         serialized_history = ModelMessagesTypeAdapter.dump_json(message_history)
-        await self._locked(partial(_atomic_write, self.conversation_history_path, serialized_history))
+        await self._locked(partial(atomic_write, self.conversation_history_path, serialized_history))
 
     async def _locked[T](self, operation: Callable[[], T]) -> T:
         """Run a blocking write off the event loop, one at a time."""
@@ -105,7 +109,7 @@ class FileWorkspace:
     def _change_script(self, change: TextChanger) -> TextEdit:
         script = self._read_script()
         result = change(script)
-        _atomic_write(self.script_path, result.text.encode("utf-8"))
+        atomic_write(self.script_path, result.text.encode("utf-8"))
         return _text_edit(SCRIPT_FILENAME, script, result)
 
     def _list_lore(self) -> tuple[LoreFile, ...]:
@@ -143,10 +147,8 @@ class FileWorkspace:
         result = change(existing)
         metadata = _lore_metadata(result.text)
         if metadata is None or not metadata.get("summary") or not metadata.get("keywords"):
-            raise LoreEditError(
-                "Lore files must start with a hyphen-delimited header containing non-empty summary and keywords properties."
-            )
-        _atomic_write(path, result.text.encode("utf-8"))
+            raise LoreEditError("Lore files must start with a hyphen-delimited header containing non-empty summary and keywords properties.")
+        atomic_write(path, result.text.encode("utf-8"))
         return _text_edit(path.name, existing, result)
 
     def _delete_lore(self, filename: str) -> None:
@@ -163,9 +165,7 @@ class FileWorkspace:
         try:
             return ModelMessagesTypeAdapter.validate_json(serialized_history)
         except ValueError as error:
-            raise ConversationHistoryError(
-                f"Saved conversation history is invalid: {self.conversation_history_path}"
-            ) from error
+            raise ConversationHistoryError(f"Saved conversation history is invalid: {self.conversation_history_path}") from error
 
     def _archive_message_history(self) -> str:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -200,20 +200,6 @@ def _text_edit(filename: str, original: str, change: TextChange) -> TextEdit:
         new_length=len(change.text),
         snippet=snippet(change.text, change.start, change.end),
     )
-
-
-def _atomic_write(path: Path, data: bytes) -> None:
-    """Write through a sibling temp file so a crash never leaves a truncated file behind."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as file:
-        file.write(data)
-        file.flush()
-        os.fsync(file.fileno())
-    try:
-        os.replace(file.name, path)
-    except BaseException:
-        Path(file.name).unlink(missing_ok=True)
-        raise
 
 
 def _lore_metadata(content: str) -> dict[str, str] | None:

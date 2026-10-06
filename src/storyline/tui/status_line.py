@@ -10,7 +10,7 @@ class StatusLine(Widget):
     """Shows the current activity or key hints, plus an unseen-messages notice."""
 
     DEFAULT_CSS = """
-    StatusLine { dock: bottom; height: 2; padding: 0 2 1 2; color: $text-muted; }
+    StatusLine { dock: bottom; height: 2; padding: 1 3 0 3; color: $text-muted; text-style: dim; }
     """
 
     text: reactive[str] = reactive("")

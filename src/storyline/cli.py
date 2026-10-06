@@ -34,7 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
     write_parser.add_argument(
         "--workspace",
         metavar="PATH",
-        help=f"Workspace directory (default: ${WORKSPACE_ENV_VAR}).",
+        help=f"Workspace directory holding one subdirectory per story (default: ${WORKSPACE_ENV_VAR}).",
+    )
+    write_parser.add_argument(
+        "--story",
+        metavar="NAME",
+        help="Story to open (default: the last active story, or the only one).",
     )
 
     serve_parser = commands.add_parser("serve", help="Start the web server.")
@@ -62,7 +67,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             workspace = open_workspace(options.workspace)
         except WorkspaceConfigurationError as error:
             parser.error(str(error))
-        run_interactive_session(workspace=workspace, model_name=options.model)
+        run_interactive_session(workspace=workspace, story_name=options.story, model_name=options.model)
 
 
 def _with_default_command(argv: Sequence[str]) -> list[str]:

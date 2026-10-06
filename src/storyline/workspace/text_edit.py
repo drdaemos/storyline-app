@@ -74,9 +74,7 @@ def _locate(document: str, find: str) -> tuple[int, int]:
         start = document.index(find)
         return start, start + len(find)
     if exact_count > 1:
-        raise TextEditError(
-            f"find matches {exact_count} places. Include more surrounding text so it matches exactly once."
-        )
+        raise TextEditError(f"find matches {exact_count} places. Include more surrounding text so it matches exactly once.")
 
     normalized_document, spans = _normalize_with_spans(document)
     normalized_find, _ = _normalize_with_spans(find)
@@ -88,9 +86,7 @@ def _locate(document: str, find: str) -> tuple[int, int]:
             last = first + len(normalized_find) - 1
             return spans[first][0], spans[last][1]
         if len(matches) > 1:
-            raise TextEditError(
-                f"find matches {len(matches)} places. Include more surrounding text so it matches exactly once."
-            )
+            raise TextEditError(f"find matches {len(matches)} places. Include more surrounding text so it matches exactly once.")
     raise TextEditError("find does not match the current text. Read the passage again and copy it exactly.")
 
 

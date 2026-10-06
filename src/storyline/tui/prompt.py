@@ -57,9 +57,9 @@ class PromptBlock(Vertical):
         height: auto;
         min-height: 1;
         max-height: 6;
-        padding: 1 1;
+        padding: 1 3 1 1;
         border: none;
-        background: #1e1e1e;
+        background: #2a2a2d;
     }
     PromptBlock OptionList {
         display: none;

@@ -26,6 +26,10 @@ class ConversationHistoryError(ValueError):
     """Raised when saved conversation history cannot be restored."""
 
 
+class StorySelectionError(ValueError):
+    """Raised when a story cannot be created or opened under the requested name."""
+
+
 @dataclass(frozen=True)
 class TextEdit:
     """A completed change to the script or a lore file."""
@@ -46,8 +50,12 @@ class LoreFile:
     keywords: str | None
 
 
-class ScriptWorkspace(Protocol):
-    """Storage interface used by the writing agent and terminal UI."""
+class Story(Protocol):
+    """One self-contained story package: its script, lore and conversation history."""
+
+    @property
+    def name(self) -> str:
+        """Return the story's name within its workspace."""
 
     async def read_script(self) -> str:
         """Return the current contents of ``script.md``."""
@@ -84,3 +92,22 @@ class ScriptWorkspace(Protocol):
 
     async def write_message_history(self, *, message_history: list[ModelMessage]) -> None:
         """Persist the complete Pydantic AI conversation history."""
+
+
+class Workspace(Protocol):
+    """Storage interface for the collection of stories in one workspace."""
+
+    async def list_stories(self) -> tuple[str, ...]:
+        """Return the names of every story, sorted."""
+
+    async def create_story(self, *, name: str) -> Story:
+        """Create a new, empty story."""
+
+    async def open_story(self, *, name: str) -> Story:
+        """Open an existing story."""
+
+    async def read_active_story(self) -> str | None:
+        """Return the name of the story that was active last, if one was recorded."""
+
+    async def write_active_story(self, *, name: str) -> None:
+        """Record the story that is active now."""

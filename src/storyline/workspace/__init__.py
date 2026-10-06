@@ -4,22 +4,28 @@ from storyline.workspace.contracts import (
     ConversationHistoryError,
     LoreEditError,
     LoreFile,
-    ScriptWorkspace,
+    Story,
+    StorySelectionError,
     TextEdit,
     TextEditError,
+    Workspace,
     WorkspaceConfigurationError,
     WorkspaceEditError,
 )
 from storyline.workspace.factory import WORKSPACE_ENV_VAR, open_workspace
+from storyline.workspace.library import StoryLibrary
 
 __all__ = [
     "WORKSPACE_ENV_VAR",
     "ConversationHistoryError",
     "LoreEditError",
     "LoreFile",
-    "ScriptWorkspace",
+    "Story",
+    "StoryLibrary",
+    "StorySelectionError",
     "TextEdit",
     "TextEditError",
+    "Workspace",
     "WorkspaceConfigurationError",
     "WorkspaceEditError",
     "open_workspace",
