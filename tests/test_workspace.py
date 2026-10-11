@@ -12,8 +12,9 @@ from storyline.workspace import (
     WorkspaceConfigurationError,
     open_workspace,
 )
-from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, FileStory
+from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, STORY_SETTINGS_FILENAME, FileStory
 from storyline.workspace.file_workspace import FileWorkspace
+from storyline.workspace.lore_format import lore_body, lore_metadata
 from storyline.workspace.text_edit import SNIPPET_RADIUS, paragraphs
 
 LORE_HEADER = "---\nsummary: A mystery reference.\nkeywords: mystery, city\n---\n"
@@ -206,3 +207,35 @@ def test_open_workspace_prefers_an_explicit_path(monkeypatch: pytest.MonkeyPatch
 
     assert isinstance(workspace, FileWorkspace)
     assert workspace.root == (tmp_path / "explicit").resolve()
+
+
+def test_lore_format_separates_header_and_body() -> None:
+    content = "---\nsummary: Harbor town.\nkeywords: harbor\n---\n\nFog every morning."
+
+    assert lore_metadata(content) == {"summary": "Harbor town.", "keywords": "harbor"}
+    assert lore_body(content) == "Fog every morning."
+
+
+def test_lore_body_of_a_file_without_a_valid_header_is_the_whole_text() -> None:
+    assert lore_metadata("Just notes.") is None
+    assert lore_body("Just notes.\n") == "Just notes."
+    assert lore_body("---\nnot a property\n---\nText") == "---\nnot a property\n---\nText"
+
+
+@pytest.mark.asyncio
+async def test_story_remembers_its_model_name(tmp_path) -> None:
+    story = FileStory(tmp_path / "noir")
+
+    assert await story.read_model_name() is None
+
+    await story.write_model_name(model_name="openrouter:example/model")
+
+    assert await FileStory(tmp_path / "noir").read_model_name() == "openrouter:example/model"
+
+
+@pytest.mark.asyncio
+async def test_unreadable_story_settings_fall_back_to_no_model(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    (tmp_path / STORY_SETTINGS_FILENAME).write_text("not json", encoding="utf-8")
+
+    assert await story.read_model_name() is None

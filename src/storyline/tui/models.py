@@ -1,12 +1,11 @@
 """Typed data objects shared by the terminal UI."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic_ai import Agent
-from pydantic_ai.messages import ModelMessage
 
-from storyline.agent import DEFAULT_MODEL_NAME
+from storyline.agent import DEFAULT_MODEL_NAME, WritingSession
 from storyline.workspace import Story, StoryLibrary
 
 
@@ -42,6 +41,14 @@ class TuiConfig:
 class TuiState:
     """Mutable state owned by one terminal session."""
 
-    model_name: str
-    story: Story | None = None
-    message_history: list[ModelMessage] = field(default_factory=list)
+    default_model_name: str
+    """The model for stories that do not remember one; changed by ``/model`` while no story is open."""
+    session: WritingSession | None = None
+
+    @property
+    def story(self) -> Story | None:
+        return self.session.story if self.session is not None else None
+
+    @property
+    def model_name(self) -> str:
+        return self.session.model_name if self.session is not None else self.default_model_name

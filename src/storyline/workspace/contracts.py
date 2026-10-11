@@ -1,8 +1,11 @@
 """Workspace interface and shared value types."""
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
+from uuid import uuid4
 
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.messages import ModelMessage
 
 
@@ -20,6 +23,10 @@ class TextEditError(WorkspaceEditError):
 
 class LoreEditError(WorkspaceEditError):
     """Raised when a lore file cannot be read or changed."""
+
+
+class AgendaError(WorkspaceEditError):
+    """Raised when the agenda cannot be read, or a requested agenda change is invalid."""
 
 
 class ConversationHistoryError(ValueError):
@@ -48,6 +55,25 @@ class LoreFile:
     filename: str
     summary: str | None
     keywords: str | None
+
+
+type AgendaStatus = Literal["open", "working", "waiting", "settled", "dropped"]
+
+
+def _new_agenda_id() -> str:
+    return uuid4().hex[:8]
+
+
+class AgendaItem(BaseModel):
+    """One thing the writer and the user still have to work through, or have worked through."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=_new_agenda_id, min_length=1)
+    title: str = Field(min_length=1)
+    status: AgendaStatus = "open"
+    outcome: str = ""
+    """The decision in a few words, once the item is settled."""
 
 
 class Story(Protocol):
@@ -83,6 +109,21 @@ class Story(Protocol):
 
     async def delete_lore(self, *, filename: str) -> None:
         """Remove a lore file."""
+
+    async def read_agenda(self) -> tuple[AgendaItem, ...]:
+        """Return the agenda in order; empty when none has been written."""
+
+    async def write_agenda(self, *, items: Sequence[AgendaItem]) -> None:
+        """Replace the whole agenda."""
+
+    async def change_agenda(self, *, change: Callable[[tuple[AgendaItem, ...]], Sequence[AgendaItem]]) -> tuple[AgendaItem, ...]:
+        """Read, change and write the agenda as one step, so concurrent changes never overwrite each other."""
+
+    async def read_model_name(self) -> str | None:
+        """Return the model this story was last worked on with, or None when it has not been used yet."""
+
+    async def write_model_name(self, *, model_name: str) -> None:
+        """Remember the model this story is being worked on with."""
 
     async def read_message_history(self) -> list[ModelMessage]:
         """Return the complete persisted Pydantic AI conversation history."""

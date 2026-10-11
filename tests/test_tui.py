@@ -52,7 +52,7 @@ async def test_help_lists_every_command(tmp_path) -> None:
         await _submit(pilot, app, "/help")
 
         help_text = _bodies(app, MessageKind.SYSTEM)[-1]
-        for name in ("/help", "/model", "/stories", "/story", "/new", "/script", "/lore", "/clear", "/quit"):
+        for name in ("/help", "/model", "/stories", "/story", "/new", "/script", "/lore", "/undo", "/clear", "/quit"):
             assert name in help_text
 
 
@@ -102,7 +102,7 @@ async def test_slash_opens_the_command_list_and_tab_completes(tmp_path) -> None:
         prompt = app.query_one(PromptBlock)
         prompt.value = "/"
         await pilot.pause()
-        assert prompt.command_count == 9
+        assert prompt.command_count == 10
 
         prompt.value = "/mo"
         await pilot.pause()
@@ -146,7 +146,7 @@ async def test_restored_history_is_shown_on_startup(tmp_path) -> None:
     app = _build_app(tmp_path)
 
     async with app.run_test():
-        assert app._state.message_history == history
+        assert app._state.session.message_history == history
         assert _bodies(app, MessageKind.USER) == ["Add an opening."]
         assert [entry.title for entry in app.query(ToolLogEntry)] == ["edit_script · success"]
         assert [reply.body for reply in app.query(AgentReply)] == ["Added an **opening**."]
@@ -170,7 +170,7 @@ async def test_unreadable_history_is_archived_and_reported(tmp_path) -> None:
     (tmp_path / STORY_NAME / CONVERSATION_HISTORY_FILENAME).write_text("not json", encoding="utf-8")
 
     async with app.run_test():
-        assert app._state.message_history == []
+        assert app._state.session.message_history == []
         assert any("started a new conversation" in body for body in _bodies(app, MessageKind.ERROR))
         assert not (tmp_path / STORY_NAME / CONVERSATION_HISTORY_FILENAME).exists()
         assert len(list((tmp_path / STORY_NAME).glob("*.broken.json"))) == 1
@@ -242,8 +242,8 @@ async def test_agent_turn_streams_a_markdown_reply_and_persists_history(tmp_path
             await pilot.pause()
 
             assert [reply.body for reply in app.query(AgentReply)] == ["## Scene\nDone."]
-            assert await _story(tmp_path).read_message_history() == app._state.message_history
-            assert len(app._state.message_history) == 2
+            assert await _story(tmp_path).read_message_history() == app._state.session.message_history
+            assert len(app._state.session.message_history) == 2
 
 
 @pytest.mark.asyncio
@@ -539,3 +539,105 @@ def _build_submission_app(workspace_path) -> SubmissionRecordingTui:
 
 def test_session_turns_off_the_pydantic_ai_banner_that_would_draw_over_the_tui() -> None:
     assert pydantic_ai.BANNER_ENABLED is False
+
+
+@pytest.mark.asyncio
+async def test_a_story_remembers_the_model_it_was_last_used_with(tmp_path) -> None:
+    async def stream_response(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        yield "Done."
+
+    app = _build_app(tmp_path)
+    with app._config.agent.override(model=FunctionModel(stream_function=stream_response)):
+        async with app.run_test() as pilot:
+            await _submit(pilot, app, "Continue.")
+            await app.workers.wait_for_complete()
+    assert await _story(tmp_path).read_model_name() == app._config.initial_model_name
+
+    restarted = StorylineTui(_config(tmp_path))
+    async with restarted.run_test() as pilot:
+        await _submit(pilot, restarted, "/model openrouter:example/model")
+    assert await _story(tmp_path).read_model_name() == "openrouter:example/model"
+
+    resumed = StorylineTui(_config(tmp_path))
+    async with resumed.run_test():
+        assert resumed._state.model_name == "openrouter:example/model"
+        assert "openrouter:example/model" in resumed.query_one(PromptBlock).placeholder
+
+
+@pytest.mark.asyncio
+async def test_switching_stories_switches_to_each_storys_model(tmp_path) -> None:
+    await _story(tmp_path, "attic").write_model_name(model_name="openrouter:attic/model")
+    (tmp_path / "harbor").mkdir()
+
+    app = StorylineTui(_config(tmp_path, requested_story="attic"))
+    async with app.run_test() as pilot:
+        assert app._state.model_name == "openrouter:attic/model"
+        assert any("openrouter:attic/model" in body for body in _bodies(app, MessageKind.SYSTEM))
+
+        await _submit(pilot, app, "/story harbor")
+        assert app._state.model_name == "openrouter:attic/model"
+
+        await _submit(pilot, app, "/model openrouter:harbor/model")
+        await _submit(pilot, app, "/story attic")
+        assert app._state.model_name == "openrouter:attic/model"
+
+    assert await _story(tmp_path, "harbor").read_model_name() == "openrouter:harbor/model"
+
+
+@pytest.mark.asyncio
+async def test_a_history_ending_in_an_unanswered_tool_call_is_repaired_on_open(tmp_path) -> None:
+    (tmp_path / STORY_NAME).mkdir()
+    broken = [
+        _user_request("Try again."),
+        ModelResponse(parts=[TextPart(content="Loading research."), ToolCallPart(tool_name="load_capability", args={"id": "research"}, tool_call_id="c1")]),
+    ]
+    await _story(tmp_path).write_message_history(message_history=broken)
+
+    async def stream_response(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        yield "Done."
+
+    app = StorylineTui(_config(tmp_path))
+    with app._config.agent.override(model=FunctionModel(stream_function=stream_response)):
+        async with app.run_test() as pilot:
+            await _submit(pilot, app, "Go ahead.")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+
+            assert not _bodies(app, MessageKind.ERROR)
+            assert [reply.body for reply in app.query(AgentReply)][-1] == "Done."
+
+    saved = await _story(tmp_path).read_message_history()
+    assert not any(isinstance(part, ToolCallPart) for message in saved for part in message.parts)
+
+
+@pytest.mark.asyncio
+async def test_undo_removes_the_last_exchange_and_returns_the_message_to_the_input(tmp_path) -> None:
+    async def stream_response(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        yield "Done."
+
+    app = _build_app(tmp_path)
+    with app._config.agent.override(model=FunctionModel(stream_function=stream_response)):
+        async with app.run_test() as pilot:
+            for prompt in ("First.", "Second."):
+                await _submit(pilot, app, prompt)
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+
+            await _submit(pilot, app, "/undo")
+
+            assert app.query_one(PromptBlock).value == "Second."
+            assert _bodies(app, MessageKind.USER) == ["First."]
+            assert len(list(app.query(AgentReply))) == 1
+            assert any("Story files are unchanged" in body for body in _bodies(app, MessageKind.SYSTEM))
+
+    assert _user_prompts(await _story(tmp_path).read_message_history()) == ["First."]
+
+
+@pytest.mark.asyncio
+async def test_undo_with_nothing_to_remove_says_so(tmp_path) -> None:
+    app = _build_app(tmp_path)
+
+    async with app.run_test() as pilot:
+        await _submit(pilot, app, "/undo")
+
+        assert any("Nothing to undo" in body for body in _bodies(app, MessageKind.SYSTEM))

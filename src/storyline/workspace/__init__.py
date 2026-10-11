@@ -1,6 +1,10 @@
 """Abstract workspace interface and application factory."""
 
+from storyline.workspace.agenda import render_agenda, replace_agenda, update_agenda_item
 from storyline.workspace.contracts import (
+    AgendaError,
+    AgendaItem,
+    AgendaStatus,
     ConversationHistoryError,
     LoreEditError,
     LoreFile,
@@ -17,6 +21,9 @@ from storyline.workspace.library import StoryLibrary
 
 __all__ = [
     "WORKSPACE_ENV_VAR",
+    "AgendaError",
+    "AgendaItem",
+    "AgendaStatus",
     "ConversationHistoryError",
     "LoreEditError",
     "LoreFile",
@@ -29,4 +36,7 @@ __all__ = [
     "WorkspaceConfigurationError",
     "WorkspaceEditError",
     "open_workspace",
+    "render_agenda",
+    "replace_agenda",
+    "update_agenda_item",
 ]

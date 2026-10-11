@@ -22,6 +22,7 @@ Run commands from repository root: `/Users/eugenedementjev/repos/storyline-app`.
 - Start frontend only: `npm run --prefix frontend dev`
 - Build production assets/deps: `./build.sh`
 - Run DB migrations: `uv run alembic upgrade head`
+- Evaluate the writer prompt (real LLM calls, costs money; see `evals/README.md`): `uv run storyline eval run [SCENARIO...]`
 
 Useful env pointers:
 

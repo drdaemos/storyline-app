@@ -4,9 +4,23 @@ Edits are anchored on text, never on offsets or line numbers, and the model only
 new prose is appended, and revisions name a short unique excerpt to replace.
 """
 
+from functools import partial
+
+from pydantic import BaseModel, Field, ValidationError
 from pydantic_ai import FunctionToolset, RunContext, ToolFailed
 
-from storyline.workspace import Story, TextEdit, WorkspaceEditError
+from storyline.workspace import (
+    AgendaItem,
+    AgendaStatus,
+    Story,
+    TextEdit,
+    WorkspaceEditError,
+    render_agenda,
+    replace_agenda,
+)
+from storyline.workspace import (
+    update_agenda_item as change_agenda_item,
+)
 from storyline.workspace.text_edit import paragraphs
 
 WRITER_TOOLSET = FunctionToolset[Story](id="writer_workspace")
@@ -146,6 +160,70 @@ async def delete_lore(ctx: RunContext[Story], filename: str) -> str:
     except WorkspaceEditError as error:
         raise ToolFailed(str(error)) from error
     return f"Deleted {filename}."
+
+
+class AgendaItemInput(BaseModel):
+    """One agenda item as the model writes it."""
+
+    title: str = Field(min_length=1, description="What is to be worked out or written, in a few words, e.g. 'The city'.")
+    id: str | None = Field(default=None, description="Keep the id of an existing item when restructuring the list; omit for a new item.")
+    status: AgendaStatus = Field(default="open", description="open, working, waiting, settled or dropped.")
+    outcome: str = Field(default="", description="The decision in a few words. Required once the item is settled.")
+
+
+@WRITER_TOOLSET.tool
+async def set_agenda(ctx: RunContext[Story], items: list[AgendaItemInput]) -> str:
+    """Replace the whole agenda: the ordered list of things to work through with the user, shown to them at all times.
+
+    Use it to draw up the agenda, or to restructure it (add, remove, reorder or split items). For a status change on one
+    item use update_agenda_item. When restructuring, pass the id of every item you keep so its history is preserved;
+    items without an id are new.
+
+    Statuses: open = not started; working = you are on it this turn; waiting = put to the user, waiting for their
+    decision; settled = decided, with the decision in outcome (required); dropped = no longer needed.
+
+    Args:
+        items: The complete agenda in order. Early items are decisions and research; once writing starts they become scenes.
+    """
+    try:
+        agenda = replace_agenda([_agenda_item(item) for item in items])
+        await ctx.deps.write_agenda(items=agenda)
+    except (WorkspaceEditError, ValidationError) as error:
+        raise ToolFailed(str(error)) from error
+    return render_agenda(agenda)
+
+
+@WRITER_TOOLSET.tool
+async def update_agenda_item(
+    ctx: RunContext[Story],
+    item_id: str,
+    status: AgendaStatus | None = None,
+    outcome: str | None = None,
+    title: str | None = None,
+) -> str:
+    """Change one agenda item; fields you leave out stay as they are. Returns the whole agenda with ids.
+
+    Statuses: open = not started; working = you are on it this turn; waiting = put to the user, waiting for their
+    decision; settled = decided, with the decision in outcome; dropped = no longer needed. Settling an item requires an
+    outcome: the decision in a few words, e.g. 'Buffalo, 1970s'.
+
+    Args:
+        item_id: The id shown in the agenda, e.g. '3f2a9c1d'.
+        status: The new status.
+        outcome: The decision in a few words. Required when settling.
+        title: A reworded title.
+    """
+    try:
+        agenda = await ctx.deps.change_agenda(change=partial(change_agenda_item, item_id=item_id, status=status, outcome=outcome, title=title))
+    except (WorkspaceEditError, ValidationError) as error:
+        raise ToolFailed(str(error)) from error
+    return render_agenda(agenda)
+
+
+def _agenda_item(item: AgendaItemInput) -> AgendaItem:
+    if item.id is None:
+        return AgendaItem(title=item.title.strip(), status=item.status, outcome=item.outcome.strip())
+    return AgendaItem(id=item.id, title=item.title.strip(), status=item.status, outcome=item.outcome.strip())
 
 
 def _describe(verb: str, edit: TextEdit) -> str:

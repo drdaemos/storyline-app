@@ -1,11 +1,55 @@
 """Tests for the process command dispatcher."""
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
 from storyline import cli
+from storyline.agent import WRITER_INSTRUCTIONS, prompt_version
+from storyline.evals import EvalError, RunRequest
 from storyline.workspace.file_workspace import FileWorkspace
+
+
+class FakeEvalService:
+    """Records what the CLI asks of the eval service and answers with a summary file."""
+
+    instances: list["FakeEvalService"] = []
+
+    def __init__(self, *, scenarios_dir: Path, seeds_dir: Path) -> None:
+        self.scenarios_dir = scenarios_dir
+        self.seeds_dir = seeds_dir
+        self.calls: list[tuple[str, object]] = []
+        FakeEvalService.instances.append(self)
+
+    async def run(self, request: RunRequest, *, writer_model: object, judge_model: object) -> Path:
+        self.calls.append(("run", request))
+        self.calls.append(("judge", judge_model))
+        request.out_dir.mkdir(parents=True)
+        summary = request.out_dir / "summary.md"
+        summary.write_text("run summary", encoding="utf-8")
+        return summary
+
+    async def compare(self, run_a: Path, run_b: Path, *, judge_model: object, out_file: Path) -> Path:
+        self.calls.append(("compare", (run_a, run_b, out_file)))
+        raise EvalError("no cases in common")
+
+
+@pytest.fixture(autouse=True)
+def configure_tracing(monkeypatch: pytest.MonkeyPatch) -> Mock:
+    configure = Mock()
+    monkeypatch.setattr(cli, "configure_tracing", configure)
+    return configure
+
+
+@pytest.fixture
+def eval_service(monkeypatch: pytest.MonkeyPatch) -> type[FakeEvalService]:
+    FakeEvalService.instances = []
+    monkeypatch.setattr(cli, "EvalService", FakeEvalService)
+    monkeypatch.setattr(cli, "resolve_model", lambda name: f"resolved:{name}")
+    monkeypatch.delenv("STORYLINE_MODEL", raising=False)
+    monkeypatch.delenv(cli.JUDGE_MODEL_ENV_VAR, raising=False)
+    return FakeEvalService
 
 
 @pytest.fixture
@@ -78,3 +122,54 @@ def test_serve_command_starts_web_server_with_its_options(monkeypatch: pytest.Mo
     cli.main(["serve", "--port", "8123", "--reload"])
 
     run_server.assert_called_once_with(port=8123, reload=True)
+
+
+def test_commands_configure_tracing_but_help_does_not(start_session: Mock, configure_tracing: Mock, tmp_path) -> None:
+    cli.main(["help"])
+    configure_tracing.assert_not_called()
+
+    cli.main(["--workspace", str(tmp_path)])
+    configure_tracing.assert_called_once()
+
+
+def test_eval_run_passes_scenarios_models_and_options_to_the_service(eval_service: type[FakeEvalService], tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
+    prompt_file = tmp_path / "candidate.md"
+    prompt_file.write_text("Candidate prompt.", encoding="utf-8")
+
+    cli.main(["eval", "run", "feedback", "steering", "--instructions", str(prompt_file), "--repeat", "3", "--out", str(tmp_path / "out"), "--evals-dir", str(tmp_path)])
+
+    service = eval_service.instances[0]
+    request = service.calls[0][1]
+    assert isinstance(request, RunRequest)
+    assert request.scenario_names == ("feedback", "steering")
+    assert request.instructions == "Candidate prompt."
+    assert request.repeat == 3
+    assert request.judge_model_name == cli.DEFAULT_JUDGE_MODEL_NAME
+    assert service.calls[1] == ("judge", f"resolved:{cli.DEFAULT_JUDGE_MODEL_NAME}")
+    assert service.scenarios_dir == tmp_path / "scenarios"
+    assert "run summary" in capsys.readouterr().out
+
+
+def test_eval_run_defaults_to_the_built_in_prompt_and_a_versioned_output_directory(eval_service: type[FakeEvalService], monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(cli, "EVAL_RUNS_DIR", tmp_path / "eval-runs")
+
+    cli.main(["eval", "run", "--no-judge"])
+
+    service = eval_service.instances[0]
+    request = service.calls[0][1]
+    assert isinstance(request, RunRequest)
+    assert request.instructions == WRITER_INSTRUCTIONS
+    assert request.out_dir.parent == tmp_path / "eval-runs"
+    assert request.out_dir.name.endswith(prompt_version(WRITER_INSTRUCTIONS))
+    assert request.judge_model_name is None
+    assert service.calls[1] == ("judge", None)
+
+
+def test_eval_errors_exit_with_a_usage_error(eval_service: type[FakeEvalService], capsys: pytest.CaptureFixture[str], tmp_path) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["eval", "compare", str(tmp_path / "a"), str(tmp_path / "b")])
+
+    assert exit_info.value.code == 2
+    assert "no cases in common" in capsys.readouterr().err
+    out_file = eval_service.instances[0].calls[0][1][2]
+    assert out_file == cli.EVAL_RUNS_DIR / "compare-a-vs-b.md"

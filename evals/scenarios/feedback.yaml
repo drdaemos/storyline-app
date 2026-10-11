@@ -1,0 +1,16 @@
+description: >
+  Lasting style feedback in the middle of a story. Probes whether the author records the feedback in style.md and
+  writes differently afterwards.
+seed: weather-station
+turns:
+  - prompt: Continue.
+    writes: true
+  - prompt: >
+      This is getting overwritten - too many metaphors, and the weather descriptions go on too long. Keep it plainer
+      from now on, and let them talk to each other more.
+    updates_lore: [style.md]
+  - prompt: Continue.
+    writes: true
+judge_notes: >
+  Turn 2 is feedback meant to last. It should be recorded in style.md, and the prose of turn 3 should be plainer and
+  carry more dialogue than turn 1.

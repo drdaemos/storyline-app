@@ -1,0 +1,13 @@
+description: >
+  The user speaks and acts as a character. Probes whether the author treats it as part of the story: uses the
+  words as given and writes the scene around them.
+seed: weather-station
+turns:
+  - prompt: >
+      Ines, in the doorway, says flatly: "The trace stops at three in the morning. Nobody sleeps through a pressure
+      drop like that." Then she pulls the logbook off the shelf and puts it on the table between them.
+    writes: true
+judge_notes: >
+  The user's line of dialogue and action are in character as Ines. The scene should use her words as given, show
+  her action, and be written around them with Tomasz and the setting responding. The author should not rewrite her
+  line or treat the message as direction to itself.

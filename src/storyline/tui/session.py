@@ -2,19 +2,13 @@
 
 import asyncio
 import sys
-from collections.abc import AsyncIterable, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import pydantic_ai
-from pydantic_ai import Agent, AgentRun
-from pydantic_ai.exceptions import RunCancelled
 from pydantic_ai.messages import (
-    AgentStreamEvent,
-    EnqueuedMessagesEvent,
     FunctionToolCallEvent,
     FunctionToolResultEvent,
-    HandleResponseEvent,
-    ModelMessage,
     PartDeltaEvent,
     PartStartEvent,
     TextPart,
@@ -22,13 +16,22 @@ from pydantic_ai.messages import (
 )
 from textual.app import App, ComposeResult
 
-from storyline.agent import DEFAULT_MODEL_NAME, create_writer_agent, resolve_model, turn_prompt
+from storyline.agent import (
+    DEFAULT_MODEL_NAME,
+    PromptDelivered,
+    TurnEvent,
+    TurnOutcome,
+    WritingSession,
+    WritingTurn,
+    create_writer_agent,
+)
+from storyline.tui.agenda_panel import AgendaPanel
 from storyline.tui.message_log import AgentReply, MessageLog
 from storyline.tui.models import MessageKind, PromptCommand, TuiConfig, TuiState
 from storyline.tui.prompt import PromptBlock
 from storyline.tui.status_line import StatusLine
 from storyline.tui.transcript import tool_result_summary, transcript_entries
-from storyline.workspace import ConversationHistoryError, Story, StoryLibrary, StorySelectionError, Workspace
+from storyline.workspace import AgendaError, Story, StoryLibrary, StorySelectionError, Workspace
 
 if sys.platform == "win32":
     from storyline.tui.windows_input import ModifierAwareWindowsDriver
@@ -40,6 +43,7 @@ pydantic_ai.BANNER_ENABLED = False
 WRITING_STATUS = "Writing…"
 INTERRUPTED_NOTICE = "Interrupted."
 RESTORED_ENTRY_LIMIT = 40
+AGENDA_TOOL_NAMES = frozenset({"set_agenda", "update_agenda_item"})
 STORY_HINT = "/story <name> opens a story · /new <name> creates one"
 
 
@@ -71,9 +75,9 @@ class StorylineTui(App[None]):
         # Native ANSI colors let the terminal's own (possibly transparent) background show through.
         super().__init__(ansi_color=True)
         self._config = config
-        self._state = TuiState(model_name=config.initial_model_name)
+        self._state = TuiState(default_model_name=config.initial_model_name)
         self._busy = False
-        self._run: AgentRun[Story, str] | None = None
+        self._turn: WritingTurn | None = None
         self._reply: AgentReply | None = None
         self._queue: list[QueuedPrompt] = []
         self._activity = ""
@@ -87,12 +91,14 @@ class StorylineTui(App[None]):
                 SlashCommand(name="/new", description="Create a story and switch to it", run=self._new_command),
                 SlashCommand(name="/script", description="Show the story text", run=self._script_command),
                 SlashCommand(name="/lore", description="List lore files", run=self._lore_command),
+                SlashCommand(name="/undo", description="Remove the last exchange and put your message back to edit", run=self._undo_command),
                 SlashCommand(name="/clear", description="Start a new conversation", run=self._clear_command),
                 SlashCommand(name="/quit", description="Exit Storyline", run=self._quit_command),
             )
         }
 
     def compose(self) -> ComposeResult:
+        yield AgendaPanel(id="agenda")
         yield MessageLog(id="messages")
         yield PromptBlock(commands=tuple(self._commands.values()))
         yield StatusLine(id="footer")
@@ -135,10 +141,8 @@ class StorylineTui(App[None]):
         if not self._busy:
             self._prompt.clear()
             self._prompt.focus_input()
-        elif self._run is not None:
-            self._run.cancel()
-        else:
-            self.workers.cancel_group(self, "agent")
+        elif self._turn is not None:
+            self._turn.cancel()
 
     # Slash commands
 
@@ -166,7 +170,10 @@ class StorylineTui(App[None]):
         if not argument:
             await self._message_log.add_message(MessageKind.SYSTEM, f"Active model: {self._state.model_name}")
             return
-        self._state.model_name = argument
+        if self._state.session is not None:
+            await self._state.session.set_model(argument)
+        else:
+            self._state.default_model_name = argument
         self._prompt.placeholder = self._prompt_placeholder()
         note = " (from the next turn)" if self._busy else ""
         await self._message_log.add_message(MessageKind.SYSTEM, f"Model set to: {argument}{note}")
@@ -226,12 +233,26 @@ class StorylineTui(App[None]):
         await self._message_log.add_message(MessageKind.SYSTEM, "\n".join(lines) or "No lore files.")
 
     async def _clear_command(self, _: str) -> None:
-        story = await self._require_story()
-        if story is None or await self._refuse_while_busy():
+        if await self._require_story() is None or await self._refuse_while_busy():
             return
-        await self._save_message_history(story, [])
+        assert self._state.session is not None
+        await self._state.session.clear()
         await self._message_log.clear()
         await self._message_log.add_message(MessageKind.SYSTEM, "Started a new conversation. Story and lore are unchanged.")
+
+    async def _undo_command(self, _: str) -> None:
+        if await self._require_story() is None or await self._refuse_while_busy():
+            return
+        assert self._state.session is not None
+        prompt = await self._state.session.undo_last_turn()
+        if prompt is None:
+            await self._message_log.add_message(MessageKind.SYSTEM, "Nothing to undo.")
+            return
+        await self._message_log.clear()
+        await self._show_transcript(self._state.session)
+        await self._message_log.add_message(MessageKind.SYSTEM, "Removed the last exchange; your message is back in the input. Story files are unchanged.")
+        self._prompt.value = prompt
+        self._prompt.focus_input()
 
     async def _quit_command(self, _: str) -> None:
         self.exit()
@@ -256,11 +277,14 @@ class StorylineTui(App[None]):
 
     async def _activate(self, story: Story) -> None:
         """Make ``story`` the active one and show its own conversation."""
-        self._state.story = story
-        self._state.message_history = []
+        session = await WritingSession.open(story=story, agent=self._config.agent, default_model_name=self._state.model_name)
+        self._state.session = session
         self._prompt.placeholder = self._prompt_placeholder()
         await self._message_log.clear()
-        await self._restore_history(story)
+        await self._show_history(session)
+        await self._refresh_agenda()
+        if session.model_from_story:
+            await self._message_log.add_message(MessageKind.SYSTEM, f"Using {session.model_name}, the model last used with {story.name}.")
 
     async def _require_story(self) -> Story | None:
         """Return the active story, or explain how to open one."""
@@ -279,105 +303,88 @@ class StorylineTui(App[None]):
     # Agent turns
 
     def _start_turn(self, prompt: str) -> None:
-        story = self._state.story
-        if story is None:
+        session = self._state.session
+        if session is None:
             return
         self._busy = True
+        self._turn = session.turn(prompt)
         self._set_activity(THINKING_STATUS)
-        self.run_worker(self._run_turn(story, prompt), group="agent", exclusive=True)
+        self.run_worker(self._run_turn(self._turn), group="agent", exclusive=True)
 
-    async def _run_turn(self, story: Story, prompt: str) -> None:
+    async def _run_turn(self, turn: WritingTurn) -> None:
         log = self._message_log
-        completed = False
+        self._enqueue_waiting_prompts()
         try:
-            async with self._config.agent.iter(
-                await turn_prompt(story, prompt),
-                deps=story,
-                message_history=self._state.message_history,
-                model=resolve_model(self._state.model_name),
-            ) as run:
-                self._run = run
-                self._enqueue_waiting_prompts()
-                async for node in run:
-                    if Agent.is_model_request_node(node) or Agent.is_call_tools_node(node):
-                        async with node.stream(run.ctx) as events:
-                            await self._show_events(events)
-                    if Agent.is_call_tools_node(node):
-                        await self._save_message_history(story, run.all_messages())
-                self._run = None
-            await self._save_message_history(story, run.all_messages())
-            completed = True
-        except RunCancelled as error:
-            await self._save_message_history(story, error.all_messages())
-            await log.add_message(MessageKind.SYSTEM, INTERRUPTED_NOTICE)
+            async for event in turn.events():
+                await self._show_event(event)
+            if turn.outcome is TurnOutcome.INTERRUPTED:
+                await log.add_message(MessageKind.SYSTEM, INTERRUPTED_NOTICE)
+            elif turn.error is not None:
+                await log.add_message(MessageKind.ERROR, str(turn.error))
         except asyncio.CancelledError:
             await log.add_message(MessageKind.SYSTEM, INTERRUPTED_NOTICE)
             raise
-        except Exception as error:
-            await log.add_message(MessageKind.ERROR, str(error))
         finally:
-            self._run = None
+            self._turn = None
             await self._finish_reply()
             self._busy = False
             self._set_activity("")
-            await self._handle_undelivered_prompts(start_follow_up=completed)
+            await self._refresh_agenda()
+            await self._handle_undelivered_prompts(turn)
 
-    async def _show_events(self, events: AsyncIterable[AgentStreamEvent | HandleResponseEvent]) -> None:
+    async def _show_event(self, event: TurnEvent) -> None:
         log = self._message_log
-        async for event in events:
-            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
-                self._set_activity(WRITING_STATUS)
-                await self._finish_reply()
+        if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+            self._set_activity(WRITING_STATUS)
+            await self._finish_reply()
+            self._reply = await log.add_reply()
+            await log.append_to_reply(self._reply, event.part.content)
+        elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+            if self._reply is None:
                 self._reply = await log.add_reply()
-                await log.append_to_reply(self._reply, event.part.content)
-            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                if self._reply is None:
-                    self._reply = await log.add_reply()
-                await log.append_to_reply(self._reply, event.delta.content_delta)
-            elif isinstance(event, FunctionToolCallEvent):
-                await self._finish_reply()
-                self._set_activity(f"Using {event.part.tool_name}…")
-                await log.add_tool_call(
-                    tool_call_id=event.part.tool_call_id,
-                    tool_name=event.part.tool_name,
-                    arguments=event.part.args_as_json_str(),
-                )
-            elif isinstance(event, FunctionToolResultEvent):
-                self._set_activity(THINKING_STATUS)
-                result, outcome = tool_result_summary(event.part)
-                log.complete_tool_call(tool_call_id=event.part.tool_call_id, result=result, outcome=outcome)
-            elif isinstance(event, EnqueuedMessagesEvent):
-                await self._show_delivered_prompt(event.enqueue_id)
+            await log.append_to_reply(self._reply, event.delta.content_delta)
+        elif isinstance(event, FunctionToolCallEvent):
+            await self._finish_reply()
+            self._set_activity(f"Using {event.part.tool_name}…")
+            await log.add_tool_call(
+                tool_call_id=event.part.tool_call_id,
+                tool_name=event.part.tool_name,
+                arguments=event.part.args_as_json_str(),
+            )
+        elif isinstance(event, FunctionToolResultEvent):
+            self._set_activity(THINKING_STATUS)
+            result, outcome = tool_result_summary(event.part)
+            log.complete_tool_call(tool_call_id=event.part.tool_call_id, result=result, outcome=outcome)
+            if event.part.tool_name in AGENDA_TOOL_NAMES:
+                await self._refresh_agenda()
+        elif isinstance(event, PromptDelivered):
+            await self._show_delivered_prompt(event.enqueue_id)
 
     async def _finish_reply(self) -> None:
         if self._reply is not None:
             await self._reply.finish()
             self._reply = None
 
-    async def _save_message_history(self, story: Story, message_history: list[ModelMessage]) -> None:
-        self._state.message_history = message_history
-        await story.write_message_history(message_history=message_history)
-
-    async def _restore_history(self, story: Story) -> None:
-        try:
-            history = await story.read_message_history()
-        except ConversationHistoryError as error:
-            archive_name = await story.archive_message_history()
-            await self._message_log.add_message(MessageKind.ERROR, f"{error}\nMoved it to {archive_name} and started a new conversation.")
+    async def _show_history(self, session: WritingSession) -> None:
+        archived = session.archived_history
+        if archived is not None:
+            await self._message_log.add_message(MessageKind.ERROR, f"{archived.reason}\nMoved it to {archived.archive_name} and started a new conversation.")
             return
-        self._state.message_history = history
-        entries = transcript_entries(history)
+        await self._show_transcript(session)
+
+    async def _show_transcript(self, session: WritingSession) -> None:
+        entries = transcript_entries(session.message_history)
         shown = entries[-RESTORED_ENTRY_LIMIT:]
         await self._message_log.show_transcript(shown, hidden_count=len(entries) - len(shown))
 
     # Steering queue
 
     def _enqueue_waiting_prompts(self) -> None:
-        """Hand queued prompts to the running agent, which reads them at its next model request."""
-        if self._run is not None:
+        """Hand queued prompts to the running turn, which reads them at the agent's next model request."""
+        if self._turn is not None:
             for queued in self._queue:
                 if queued.enqueue_id is None:
-                    queued.enqueue_id = self._run.enqueue(queued.text)
+                    queued.enqueue_id = self._turn.enqueue(queued.text)
         self._prompt.show_queued(tuple(queued.text for queued in self._queue))
 
     async def _show_delivered_prompt(self, enqueue_id: str) -> None:
@@ -388,20 +395,30 @@ class StorylineTui(App[None]):
             await self._message_log.add_message(MessageKind.USER, queued.text)
         self._prompt.show_queued(tuple(queued.text for queued in self._queue))
 
-    async def _handle_undelivered_prompts(self, *, start_follow_up: bool) -> None:
-        """Send prompts the finished run never read as a new turn, or return them to the input after an interruption."""
-        undelivered = "\n\n".join(queued.text for queued in self._queue)
+    async def _handle_undelivered_prompts(self, turn: WritingTurn) -> None:
+        """Send prompts the finished turn never read as a new turn, or return them to the input after an interruption."""
+        undelivered = "\n\n".join(turn.undelivered_prompts)
         self._queue.clear()
         self._prompt.show_queued(())
         if not undelivered:
             return
-        if start_follow_up:
+        if turn.outcome is TurnOutcome.COMPLETED:
             await self._message_log.add_message(MessageKind.USER, undelivered)
             self._start_turn(undelivered)
         else:
             self._prompt.value = "\n\n".join(part for part in (undelivered, self._prompt.value) if part)
 
     # Presentation helpers
+
+    async def _refresh_agenda(self) -> None:
+        """Show the active story's agenda, or hide the panel when there is none."""
+        story = self._state.story
+        try:
+            items = await story.read_agenda() if story is not None else ()
+        except AgendaError as error:
+            await self._message_log.add_message(MessageKind.ERROR, str(error))
+            items = ()
+        await self._agenda_panel.show_items(items)
 
     def _set_activity(self, activity: str) -> None:
         self._activity = activity
@@ -417,6 +434,10 @@ class StorylineTui(App[None]):
     @property
     def _message_log(self) -> MessageLog:
         return self.query_one(MessageLog)
+
+    @property
+    def _agenda_panel(self) -> AgendaPanel:
+        return self.query_one(AgendaPanel)
 
     @property
     def _prompt(self) -> PromptBlock:

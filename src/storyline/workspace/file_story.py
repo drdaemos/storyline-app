@@ -1,24 +1,33 @@
 """Filesystem adapter for one story package."""
 
 import asyncio
-import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
 from storyline.workspace.atomic_file import atomic_write
-from storyline.workspace.contracts import ConversationHistoryError, LoreEditError, LoreFile, TextEdit
+from storyline.workspace.contracts import AgendaError, AgendaItem, ConversationHistoryError, LoreEditError, LoreFile, TextEdit
+from storyline.workspace.lore_format import lore_metadata
 from storyline.workspace.text_edit import TextChange, append_text, replace_unique, snippet
 
 SCRIPT_FILENAME = "script.md"
+AGENDA_FILENAME = "agenda.json"
 CONVERSATION_HISTORY_FILENAME = ".storyline-history.json"
-LORE_HEADER_DELIMITER = re.compile(r"-{3,}\s*")
-LORE_HEADER_PROPERTY = re.compile(r"(?P<key>[^:\s][^:]*):\s*(?P<value>.*)")
+STORY_SETTINGS_FILENAME = ".storyline-settings.json"
+_AGENDA_ADAPTER = TypeAdapter(tuple[AgendaItem, ...])
+
+
+class StorySettings(BaseModel):
+    """Session settings a story keeps between runs."""
+
+    model: str | None = None
+
 
 type TextChanger = Callable[[str], TextChange]
 
@@ -44,6 +53,11 @@ class FileStory:
     def conversation_history_path(self) -> Path:
         """Return the persisted Pydantic AI history location within this story."""
         return self.root / CONVERSATION_HISTORY_FILENAME
+
+    @property
+    def agenda_path(self) -> Path:
+        """Return the agenda location within this story."""
+        return self.root / AGENDA_FILENAME
 
     async def read_script(self) -> str:
         """Return an empty script until the first edit creates it."""
@@ -81,6 +95,42 @@ class FileStory:
     async def delete_lore(self, *, filename: str) -> None:
         """Remove an existing lore file."""
         await self._locked(partial(self._delete_lore, filename))
+
+    async def read_agenda(self) -> tuple[AgendaItem, ...]:
+        """Read the agenda; a story without one has an empty agenda."""
+        return await self._locked(self._read_agenda)
+
+    async def write_agenda(self, *, items: Sequence[AgendaItem]) -> None:
+        """Replace the whole agenda."""
+        await self._locked(partial(self._write_agenda, tuple(items)))
+
+    async def change_agenda(self, *, change: Callable[[tuple[AgendaItem, ...]], Sequence[AgendaItem]]) -> tuple[AgendaItem, ...]:
+        """Read, change and write the agenda under the write lock, so parallel tool calls apply one after another."""
+
+        def read_change_write() -> tuple[AgendaItem, ...]:
+            items = tuple(change(self._read_agenda()))
+            self._write_agenda(items)
+            return items
+
+        return await self._locked(read_change_write)
+
+    @property
+    def settings_path(self) -> Path:
+        """Return the location of per-story session settings, such as the last model used."""
+        return self.root / STORY_SETTINGS_FILENAME
+
+    async def read_model_name(self) -> str | None:
+        """Return the last model used with this story; unreadable settings count as none, since they only set a default."""
+        return (await asyncio.to_thread(self._read_settings)).model
+
+    async def write_model_name(self, *, model_name: str) -> None:
+        """Remember the model, keeping any other settings."""
+
+        def update() -> None:
+            settings = self._read_settings().model_copy(update={"model": model_name})
+            atomic_write(self.settings_path, settings.model_dump_json(indent=2).encode("utf-8"))
+
+        await self._locked(update)
 
     async def read_message_history(self) -> list[ModelMessage]:
         """Read the complete persisted Pydantic AI conversation history."""
@@ -120,7 +170,7 @@ class FileStory:
         for path in sorted(self.root.glob("*.md")):
             if path.name == SCRIPT_FILENAME:
                 continue
-            metadata = _lore_metadata(path.read_text(encoding="utf-8"))
+            metadata = lore_metadata(path.read_text(encoding="utf-8"))
             lore_files.append(
                 LoreFile(
                     filename=path.name,
@@ -145,7 +195,7 @@ class FileStory:
             existing = self._read_existing_lore(path)
 
         result = change(existing)
-        metadata = _lore_metadata(result.text)
+        metadata = lore_metadata(result.text)
         if metadata is None or not metadata.get("summary") or not metadata.get("keywords"):
             raise LoreEditError("Lore files must start with a hyphen-delimited header containing non-empty summary and keywords properties.")
         atomic_write(path, result.text.encode("utf-8"))
@@ -155,6 +205,25 @@ class FileStory:
         path = self._lore_path(filename)
         self._read_existing_lore(path)
         path.unlink()
+
+    def _write_agenda(self, items: tuple[AgendaItem, ...]) -> None:
+        atomic_write(self.agenda_path, _AGENDA_ADAPTER.dump_json(items, indent=2))
+
+    def _read_settings(self) -> StorySettings:
+        try:
+            return StorySettings.model_validate_json(self.settings_path.read_bytes())
+        except (FileNotFoundError, ValidationError):
+            return StorySettings()
+
+    def _read_agenda(self) -> tuple[AgendaItem, ...]:
+        try:
+            serialized = self.agenda_path.read_bytes()
+        except FileNotFoundError:
+            return ()
+        try:
+            return _AGENDA_ADAPTER.validate_json(serialized)
+        except ValidationError as error:
+            raise AgendaError(f"{AGENDA_FILENAME} is not a valid agenda (a JSON list of items with id and title): {error}") from error
 
     def _read_message_history(self) -> list[ModelMessage]:
         try:
@@ -200,26 +269,3 @@ def _text_edit(filename: str, original: str, change: TextChange) -> TextEdit:
         new_length=len(change.text),
         snippet=snippet(change.text, change.start, change.end),
     )
-
-
-def _lore_metadata(content: str) -> dict[str, str] | None:
-    lines = content.splitlines()
-    if not lines or LORE_HEADER_DELIMITER.fullmatch(lines[0]) is None:
-        return None
-
-    properties: dict[str, str] = {}
-    for line in lines[1:]:
-        if LORE_HEADER_DELIMITER.fullmatch(line):
-            if properties:
-                return properties
-            return None
-        if not line.strip():
-            continue
-        property_match = LORE_HEADER_PROPERTY.fullmatch(line)
-        if property_match is None:
-            return None
-        key = property_match.group("key").strip().lower()
-        if key in properties:
-            return None
-        properties[key] = property_match.group("value").strip()
-    return None
