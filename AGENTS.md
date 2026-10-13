@@ -38,6 +38,7 @@ Run commands from the repository root.
 - Build for production (locked backend deps, frontend into `static/`): `./build.sh`
 - Check a deployment can start (frontend built, auth and workspace configuration valid): `./predeploy.sh`
 - Serve a production build: `uv run -m storyline.cli serve --host 0.0.0.0 --port <port>`
+- Build the production image locally: `docker build -t storyline .` (Railway builds the same `Dockerfile`, configured by `railway.json`; setup is in `README.md`)
 - Regenerate the frontend's `protocol.json` from the Python protocol: `uv run python -m storyline.room.export`
 - Evaluate the writer prompt (real LLM calls, costs money; see `evals/README.md`): `uv run storyline eval run [SCENARIO...]`
 
