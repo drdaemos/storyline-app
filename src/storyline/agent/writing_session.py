@@ -14,12 +14,12 @@ from uuid import uuid4
 
 from pydantic_ai import Agent, AgentRun
 from pydantic_ai.exceptions import RunCancelled
-from pydantic_ai.messages import AgentStreamEvent, EnqueuedMessagesEvent, HandleResponseEvent, ModelMessage
+from pydantic_ai.messages import AgentStreamEvent, EnqueuedMessagesEvent, HandleResponseEvent, ModelMessage, ModelRequest, UserPromptPart
 from pydantic_ai.models import Model
 from pydantic_ai.usage import RunUsage
 
 from storyline.agent.history import actionable_history, without_last_turn
-from storyline.agent.models import resolve_model
+from storyline.agent.models import resolve_model, validate_model_name
 from storyline.agent.story_context import turn_prompt
 from storyline.agent.writer import DEFAULT_MODEL_NAME
 from storyline.workspace import ConversationHistoryError, Story
@@ -166,12 +166,11 @@ class WritingTurn:
             if self._model_override is None:
                 await self._story.write_model_name(model_name=self._model_name)
             model = self._model_override if self._model_override is not None else resolve_model(self._model_name)
-            async with self._agent.iter(
-                await turn_prompt(self._story, self._prompt),
-                deps=self._story,
-                message_history=self._history.messages,
-                model=model,
-            ) as run:
+            prompt = await turn_prompt(self._story, self._prompt)
+            previous = self._history.messages
+            # The prompt is kept from the start, so a turn that dies before it saves anything still leaves what the user asked.
+            await self._history.save([*previous, ModelRequest(parts=[UserPromptPart(content=prompt)])])
+            async with self._agent.iter(prompt, deps=self._story, message_history=previous, model=model) as run:
                 self._run = run
                 for prompt in self._enqueued:
                     self._hand_over(prompt)
@@ -291,7 +290,8 @@ class WritingSession:
         return self._history.messages
 
     async def set_model(self, model_name: str) -> None:
-        """Use a model from the next turn on and remember it in the story."""
+        """Use a model from the next turn on and remember it in the story; raise ``ModelNameError`` for a name no turn could run on."""
+        validate_model_name(model_name)
         self._model_name = model_name
         await self._story.write_model_name(model_name=model_name)
 

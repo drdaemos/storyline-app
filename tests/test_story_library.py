@@ -118,6 +118,34 @@ async def test_story_names_must_be_single_visible_directory_names(tmp_path, name
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["CON", "nul", "Aux", "PRN", "COM1", "lpt9", "aux.txt", "con.tar.gz", "NUL .md"])
+async def test_story_names_must_not_be_windows_device_names(tmp_path, name: str) -> None:
+    with pytest.raises(StorySelectionError, match="reserved by Windows"):
+        await _library(tmp_path).create(name=name)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["console", "contact", "aux-notes", "nullable", "com10", "lpt", "the con"])
+async def test_story_names_that_only_resemble_device_names_are_fine(tmp_path, name: str) -> None:
+    story = await _library(tmp_path).create(name=name)
+
+    assert story.name == name
+
+
+@pytest.mark.asyncio
+async def test_story_names_are_limited_in_length(tmp_path) -> None:
+    library = _library(tmp_path)
+
+    with pytest.raises(StorySelectionError, match="at most 100 characters"):
+        await library.create(name="a" * 101)
+    story = await library.create(name="b" * 100)
+
+    assert story.name == "b" * 100
+
+
+@pytest.mark.asyncio
 async def test_existing_stories_are_not_created_again(tmp_path) -> None:
     library = _library(tmp_path)
     story = await library.create(name="attic")

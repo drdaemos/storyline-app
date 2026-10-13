@@ -1,0 +1,901 @@
+{
+  "event_schema": {
+    "$defs": {
+      "Activity": {
+        "enum": [
+          "idle",
+          "thinking",
+          "writing",
+          "using_tool"
+        ],
+        "type": "string"
+      },
+      "ActivityChanged": {
+        "description": "What the writer is doing now; ``idle`` means it is the user's move.",
+        "properties": {
+          "activity": {
+            "$ref": "#/$defs/Activity"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tool Name"
+          },
+          "type": {
+            "const": "activity_changed",
+            "default": "activity_changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "activity"
+        ],
+        "title": "ActivityChanged",
+        "type": "object"
+      },
+      "AgendaChanged": {
+        "description": "The agenda as it is now.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/AgendaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "type": {
+            "const": "agenda_changed",
+            "default": "agenda_changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AgendaChanged",
+        "type": "object"
+      },
+      "AgendaItem": {
+        "description": "One thing the writer and the user still have to work through, or have worked through.",
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "outcome": {
+            "default": "",
+            "title": "Outcome",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/AgendaStatus",
+            "default": "open"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "AgendaItem",
+        "type": "object"
+      },
+      "AgendaStatus": {
+        "enum": [
+          "open",
+          "working",
+          "waiting",
+          "settled",
+          "dropped"
+        ],
+        "type": "string"
+      },
+      "ConversationReplaced": {
+        "description": "The conversation changed as a whole (undo, clear); show these entries instead of what was shown.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/$defs/Entry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "hidden_entries": {
+            "default": 0,
+            "title": "Hidden Entries",
+            "type": "integer"
+          },
+          "type": {
+            "const": "conversation_replaced",
+            "default": "conversation_replaced",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "ConversationReplaced",
+        "type": "object"
+      },
+      "DraftRestored": {
+        "description": "Text handed back to the user's input: an undone prompt, or queued prompts an interrupted turn never read.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "draft_restored",
+            "default": "draft_restored",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "DraftRestored",
+        "type": "object"
+      },
+      "Entry": {
+        "discriminator": {
+          "mapping": {
+            "message": "#/$defs/MessageEntry",
+            "tool_call": "#/$defs/ToolCallEntry"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/MessageEntry"
+          },
+          {
+            "$ref": "#/$defs/ToolCallEntry"
+          }
+        ]
+      },
+      "MessageEntry": {
+        "description": "Something the user or the writer said.",
+        "properties": {
+          "kind": {
+            "const": "message",
+            "default": "message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "reply_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply Id"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "writer"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "MessageEntry",
+        "type": "object"
+      },
+      "ModelChanged": {
+        "description": "The story's model changed; a running turn finishes on the previous one.",
+        "properties": {
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "type": {
+            "const": "model_changed",
+            "default": "model_changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_name"
+        ],
+        "title": "ModelChanged",
+        "type": "object"
+      },
+      "Notice": {
+        "description": "Something the room has to tell the user that is not part of the conversation.",
+        "properties": {
+          "level": {
+            "enum": [
+              "info",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "notice",
+            "default": "notice",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "text"
+        ],
+        "title": "Notice",
+        "type": "object"
+      },
+      "QueueChanged": {
+        "description": "The prompts sent while the writer works that it has not read yet.",
+        "properties": {
+          "prompts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Prompts",
+            "type": "array"
+          },
+          "type": {
+            "const": "queue_changed",
+            "default": "queue_changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompts"
+        ],
+        "title": "QueueChanged",
+        "type": "object"
+      },
+      "ReplyDelta": {
+        "description": "More text for a reply that has started.",
+        "properties": {
+          "reply_id": {
+            "title": "Reply Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "reply_delta",
+            "default": "reply_delta",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reply_id",
+          "text"
+        ],
+        "title": "ReplyDelta",
+        "type": "object"
+      },
+      "ReplyFinished": {
+        "description": "A reply is complete.",
+        "properties": {
+          "reply_id": {
+            "title": "Reply Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "reply_finished",
+            "default": "reply_finished",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reply_id"
+        ],
+        "title": "ReplyFinished",
+        "type": "object"
+      },
+      "ReplyStarted": {
+        "description": "The writer began a reply.",
+        "properties": {
+          "reply_id": {
+            "title": "Reply Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "reply_started",
+            "default": "reply_started",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reply_id"
+        ],
+        "title": "ReplyStarted",
+        "type": "object"
+      },
+      "StoryFilesChanged": {
+        "description": "The writer changed the story's files; an interface showing them should read them again.",
+        "properties": {
+          "lore": {
+            "default": false,
+            "title": "Lore",
+            "type": "boolean"
+          },
+          "script": {
+            "default": false,
+            "title": "Script",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "story_files_changed",
+            "default": "story_files_changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "StoryFilesChanged",
+        "type": "object"
+      },
+      "ToolCallEntry": {
+        "description": "A tool the writer used, with its result once there is one.",
+        "properties": {
+          "arguments": {
+            "title": "Arguments",
+            "type": "string"
+          },
+          "kind": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "default": "working",
+            "title": "Outcome",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_call_id",
+          "tool_name",
+          "arguments"
+        ],
+        "title": "ToolCallEntry",
+        "type": "object"
+      },
+      "ToolCallFinished": {
+        "description": "A tool call returned.",
+        "properties": {
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "result": {
+            "title": "Result",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_call_finished",
+            "default": "tool_call_finished",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_call_id",
+          "result",
+          "outcome"
+        ],
+        "title": "ToolCallFinished",
+        "type": "object"
+      },
+      "ToolCallStarted": {
+        "description": "The writer called a tool.",
+        "properties": {
+          "arguments": {
+            "title": "Arguments",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_call_started",
+            "default": "tool_call_started",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_call_id",
+          "tool_name",
+          "arguments"
+        ],
+        "title": "ToolCallStarted",
+        "type": "object"
+      },
+      "TurnFinished": {
+        "description": "The writer's turn ended.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "outcome": {
+            "enum": [
+              "completed",
+              "interrupted",
+              "failed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn_finished",
+            "default": "turn_finished",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "TurnFinished",
+        "type": "object"
+      },
+      "UserMessageAdded": {
+        "description": "A prompt from the user entered the conversation: sent to start a turn, or read by the writer from the queue.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "user_message_added",
+            "default": "user_message_added",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "UserMessageAdded",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "activity_changed": "#/$defs/ActivityChanged",
+        "agenda_changed": "#/$defs/AgendaChanged",
+        "conversation_replaced": "#/$defs/ConversationReplaced",
+        "draft_restored": "#/$defs/DraftRestored",
+        "model_changed": "#/$defs/ModelChanged",
+        "notice": "#/$defs/Notice",
+        "queue_changed": "#/$defs/QueueChanged",
+        "reply_delta": "#/$defs/ReplyDelta",
+        "reply_finished": "#/$defs/ReplyFinished",
+        "reply_started": "#/$defs/ReplyStarted",
+        "story_files_changed": "#/$defs/StoryFilesChanged",
+        "tool_call_finished": "#/$defs/ToolCallFinished",
+        "tool_call_started": "#/$defs/ToolCallStarted",
+        "turn_finished": "#/$defs/TurnFinished",
+        "user_message_added": "#/$defs/UserMessageAdded"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/UserMessageAdded"
+      },
+      {
+        "$ref": "#/$defs/ReplyStarted"
+      },
+      {
+        "$ref": "#/$defs/ReplyDelta"
+      },
+      {
+        "$ref": "#/$defs/ReplyFinished"
+      },
+      {
+        "$ref": "#/$defs/ToolCallStarted"
+      },
+      {
+        "$ref": "#/$defs/ToolCallFinished"
+      },
+      {
+        "$ref": "#/$defs/ActivityChanged"
+      },
+      {
+        "$ref": "#/$defs/QueueChanged"
+      },
+      {
+        "$ref": "#/$defs/AgendaChanged"
+      },
+      {
+        "$ref": "#/$defs/StoryFilesChanged"
+      },
+      {
+        "$ref": "#/$defs/TurnFinished"
+      },
+      {
+        "$ref": "#/$defs/ConversationReplaced"
+      },
+      {
+        "$ref": "#/$defs/DraftRestored"
+      },
+      {
+        "$ref": "#/$defs/ModelChanged"
+      },
+      {
+        "$ref": "#/$defs/Notice"
+      }
+    ]
+  },
+  "events": [
+    "user_message_added",
+    "reply_started",
+    "reply_delta",
+    "reply_finished",
+    "tool_call_started",
+    "tool_call_finished",
+    "activity_changed",
+    "queue_changed",
+    "agenda_changed",
+    "story_files_changed",
+    "turn_finished",
+    "conversation_replaced",
+    "draft_restored",
+    "model_changed",
+    "notice"
+  ],
+  "operations": [
+    "list_stories",
+    "create_story",
+    "open_story",
+    "send_prompt",
+    "interrupt",
+    "set_model",
+    "undo_last_turn",
+    "clear_conversation",
+    "read_script",
+    "list_lore",
+    "read_lore"
+  ],
+  "snapshot_schema": {
+    "$defs": {
+      "Activity": {
+        "enum": [
+          "idle",
+          "thinking",
+          "writing",
+          "using_tool"
+        ],
+        "type": "string"
+      },
+      "AgendaItem": {
+        "description": "One thing the writer and the user still have to work through, or have worked through.",
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "outcome": {
+            "default": "",
+            "title": "Outcome",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/AgendaStatus",
+            "default": "open"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "AgendaItem",
+        "type": "object"
+      },
+      "AgendaStatus": {
+        "enum": [
+          "open",
+          "working",
+          "waiting",
+          "settled",
+          "dropped"
+        ],
+        "type": "string"
+      },
+      "ArchivedConversation": {
+        "description": "Saved history that could not be read and was moved aside when the story was opened.",
+        "properties": {
+          "archive_name": {
+            "title": "Archive Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "archive_name"
+        ],
+        "title": "ArchivedConversation",
+        "type": "object"
+      },
+      "Entry": {
+        "discriminator": {
+          "mapping": {
+            "message": "#/$defs/MessageEntry",
+            "tool_call": "#/$defs/ToolCallEntry"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/MessageEntry"
+          },
+          {
+            "$ref": "#/$defs/ToolCallEntry"
+          }
+        ]
+      },
+      "MessageEntry": {
+        "description": "Something the user or the writer said.",
+        "properties": {
+          "kind": {
+            "const": "message",
+            "default": "message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "reply_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply Id"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "writer"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "MessageEntry",
+        "type": "object"
+      },
+      "ToolCallEntry": {
+        "description": "A tool the writer used, with its result once there is one.",
+        "properties": {
+          "arguments": {
+            "title": "Arguments",
+            "type": "string"
+          },
+          "kind": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "default": "working",
+            "title": "Outcome",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_call_id",
+          "tool_name",
+          "arguments"
+        ],
+        "title": "ToolCallEntry",
+        "type": "object"
+      }
+    },
+    "description": "Everything an interface needs to draw a room as it is right now; events carry it forward from there.",
+    "properties": {
+      "activity": {
+        "$ref": "#/$defs/Activity",
+        "default": "idle"
+      },
+      "agenda": {
+        "items": {
+          "$ref": "#/$defs/AgendaItem"
+        },
+        "title": "Agenda",
+        "type": "array"
+      },
+      "agenda_error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Agenda Error"
+      },
+      "archived_conversation": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ArchivedConversation"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "entries": {
+        "items": {
+          "$ref": "#/$defs/Entry"
+        },
+        "title": "Entries",
+        "type": "array"
+      },
+      "hidden_entries": {
+        "title": "Hidden Entries",
+        "type": "integer"
+      },
+      "model_from_story": {
+        "title": "Model From Story",
+        "type": "boolean"
+      },
+      "model_name": {
+        "title": "Model Name",
+        "type": "string"
+      },
+      "queue": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "title": "Queue",
+        "type": "array"
+      },
+      "story": {
+        "title": "Story",
+        "type": "string"
+      },
+      "tool_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Tool Name"
+      }
+    },
+    "required": [
+      "story",
+      "model_name",
+      "model_from_story",
+      "entries",
+      "hidden_entries",
+      "agenda"
+    ],
+    "title": "RoomSnapshot",
+    "type": "object"
+  }
+}

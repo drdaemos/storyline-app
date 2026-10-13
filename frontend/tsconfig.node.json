@@ -5,11 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    "paths": {
-      "#build/ui": [
-        "./node_modules/@nuxt/ui/.nuxt/ui"
-      ]
-    }
+    "types": ["node"]
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts"]
 }

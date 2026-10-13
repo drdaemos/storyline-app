@@ -1,12 +1,16 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.2.5/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["src/**/*.{js,ts,vue,json}"]
+    "includes": [
+      "src/**/*.{js,ts,vue,css}",
+      "*.{ts,json}",
+      "!src/protocol/protocol.json"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -24,8 +28,8 @@
         "useImportType": "error"
       },
       "suspicious": {
-        "noExplicitAny": "warn",
-        "noConsole": "warn",
+        "noExplicitAny": "error",
+        "noConsole": "error",
         "noAssignInExpressions": "off"
       },
       "correctness": {
@@ -45,7 +49,18 @@
       "semicolons": "asNeeded",
       "quoteStyle": "single",
       "trailingCommas": "es5"
-    }
+    },
+    "globals": [
+      "describe",
+      "it",
+      "test",
+      "expect",
+      "vi",
+      "beforeEach",
+      "afterEach",
+      "beforeAll",
+      "afterAll"
+    ]
   },
   "json": {
     "formatter": {
@@ -54,7 +69,9 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.vue"],
+      "includes": [
+        "**/*.vue"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -69,7 +86,11 @@
       }
     },
     {
-      "includes": ["**/*.test.{js,ts}", "**/*.spec.{js,ts}", "**/vitest.config.ts"],
+      "includes": [
+        "**/*.test.{js,ts}",
+        "**/*.spec.{js,ts}",
+        "**/vitest.config.ts"
+      ],
       "linter": {
         "rules": {
           "suspicious": {

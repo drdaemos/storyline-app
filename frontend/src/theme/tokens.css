@@ -1,0 +1,217 @@
+/*
+ * Every colour, font, texture, shadow and radius of the interface, as custom properties.
+ * Components use these names and nothing else, so a new look is a new version of this folder.
+ * Direction: a writer's desk, an open book on dark wood under a lamp.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Type */
+  --font-manuscript: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  --font-typewriter: 'Courier Prime', 'Courier New', Courier, monospace;
+  --font-ui: var(--font-manuscript);
+
+  --size-small: 0.875rem;
+  --size-body: 1.0625rem;
+  --size-note: 0.9375rem;
+  --size-manuscript: 1.25rem;
+  --size-heading: 1.75rem;
+  --size-title: 2.125rem;
+  --size-bookmark: 1rem;
+  --line-body: 1.5;
+  --line-note: 1.55;
+  --line-manuscript: 1.62;
+  --measure-manuscript: 36rem;
+  --align-manuscript: justify;
+  --tracking-caps: 0.1em;
+
+  /* Materials: photographed wood and leather, and generated paper grain */
+  --image-desk: url('./assets/desk.jpg');
+  --image-blotter: url('./assets/blotter.jpg');
+  --image-leather: url('./assets/leather.jpg');
+  --texture-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .36  0 0 0 0 .26  0 0 0 0 .12  .32 0 0 0 -.07'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --texture-mottle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45  0 0 0 0 .32  0 0 0 0 .14  .26 0 0 0 -.09'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E");
+  --texture-weave:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.08) 0 1px, rgba(0, 0, 0, 0) 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.14) 0 1px, rgba(0, 0, 0, 0) 1px 3px);
+
+  /* Wood desk and lamp */
+  --wood-dark: #1a0f08;
+  --wood-light: #3b2616;
+  --lamp-glow: rgba(255, 214, 150, 0.26);
+  --ground:
+    radial-gradient(ellipse 58% 62% at 70% 14%, var(--lamp-glow), rgba(255, 214, 150, 0) 72%),
+    radial-gradient(ellipse 115% 105% at 52% 38%, rgba(0, 0, 0, 0) 42%, rgba(6, 3, 1, 0.78) 100%),
+    var(--image-desk) center / cover no-repeat, var(--wood-dark);
+
+  /* The leather pad the conversation lies on */
+  --surface-blotter:
+    radial-gradient(ellipse 120% 80% at 80% 0%, rgba(255, 236, 190, 0.1), rgba(0, 0, 0, 0) 60%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.38)), var(--image-blotter) center / cover no-repeat;
+  --blotter-tooling: rgba(216, 184, 118, 0.42);
+  --shadow-blotter:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 0 38px rgba(0, 0, 0, 0.35),
+    0 22px 44px rgba(0, 0, 0, 0.6), 0 3px 6px rgba(0, 0, 0, 0.5);
+  --radius-blotter: 10px;
+  --desk-hover: rgba(255, 240, 205, 0.1);
+
+  /* Text on the desk */
+  --ink-on-desk: #ecdcb8;
+  --ink-on-desk-muted: #c4b290;
+  --link-on-desk: #e3c283;
+  --link-on-desk-hover: #f6dfaa;
+  --desk-rule: rgba(236, 220, 184, 0.28);
+
+  /* Paper and ink */
+  --paper: #f4ecd6;
+  --paper-aged: #efe6d0;
+  --paper-shade: #e4d8bb;
+  --paper-fold: #d9cdb0;
+  --paper-fold-dark: #c9bc9c;
+  --paper-rule: #c3cdd8;
+  --paper-rule-warm: #b9ad8f;
+  --paper-rule-dotted: #9c8f73;
+  --page-surface:
+    linear-gradient(90deg, rgba(70, 46, 16, 0.3) 0, rgba(70, 46, 16, 0.1) 1.6%, rgba(70, 46, 16, 0) 5.5%),
+    linear-gradient(270deg, rgba(70, 46, 16, 0.12) 0, rgba(70, 46, 16, 0) 2.5%), var(--texture-grain), var(--texture-mottle),
+    radial-gradient(130% 105% at 74% 0%, #fdf8ea 0%, #f7efdb 48%, #ebdfc3 100%);
+  --page-fade: linear-gradient(180deg, #f9f2df, rgba(249, 242, 223, 0));
+  --surface-card: var(--texture-grain), var(--texture-mottle), linear-gradient(180deg, #fbf5e4, #f0e6cd);
+  --surface-note-writer: var(--texture-grain), linear-gradient(180deg, #f8f1dd, #eee3c9);
+  --surface-note-user: var(--texture-grain), linear-gradient(180deg, #f9efb4, #eedf8d);
+  --surface-ticket: var(--texture-grain), linear-gradient(180deg, #e9dfc4, #dccfae);
+  --surface-sheet: var(--texture-grain), var(--texture-mottle), linear-gradient(180deg, #fcf6e6, #f2e8d0);
+  --ink: #2b2118;
+  --ink-muted: #5c5039;
+  --ink-faint: #6a5e46;
+  --ink-fresh: #1d3f86;
+  --ink-fresh-rule: rgba(29, 63, 134, 0.55);
+  --highlight: #f2dc6b;
+
+  /* Accents */
+  --accent: #8e2219;
+  --accent-soft: #b5483c;
+  --accent-ink: #fbeedd;
+  --success: #3f5a2a;
+  --error: #8e2219;
+  --error-wash: #f3dcd3;
+
+  /* Notes, cards and stamps */
+  --note-user: #f4e7a1;
+  --note-writer: var(--paper-aged);
+  --note-system: #e6dcc2;
+  --note-error: var(--error-wash);
+  --card: #f4ecd6;
+  --stamp-ground: #e6dcc2;
+  --stamp-ink: #5b3a1c;
+  --stamp-edge: #8a6b47;
+  --stamp-edge-done: #4c6b36;
+  --stamp-edge-retry: #8e2219;
+  --pin-top: #f6dc9a;
+  --pin-bottom: #8a6420;
+
+  /* The book */
+  --leather-top: #55331f;
+  --leather-bottom: #3c2315;
+  --bookmark-script: #7a2a24;
+  --bookmark-lore: #3f5236;
+  --bookmark-plan: #2f3f5c;
+  --bookmark-style: #7c5616;
+  --bookmark-agreement: #55304a;
+  --bookmark-ink: #f6e9cf;
+  --cover-1: var(--bookmark-script);
+  --cover-2: var(--bookmark-lore);
+  --cover-3: var(--bookmark-plan);
+  --cover-4: var(--bookmark-style);
+  --cover-5: var(--bookmark-agreement);
+  --cover-ink: var(--bookmark-ink);
+  --cover-trim: #d9b676;
+  --cover-gilt: #ecd195;
+  --cover-shade:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.42) 0,
+      rgba(255, 255, 255, 0.1) 4%,
+      rgba(0, 0, 0, 0.2) 8%,
+      rgba(0, 0, 0, 0) 14%
+    ),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.3)), var(--texture-grain);
+  --cover-tooling: rgba(232, 200, 138, 0.6);
+  --text-emboss: 0 1px 0 rgba(0, 0, 0, 0.55), 0 -1px 0 rgba(255, 255, 255, 0.12);
+  --text-on-desk-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  --shelf-board: linear-gradient(180deg, #6b4428, #4a2d1a 70%, #36200f);
+  --surface-leather:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.34)), var(--image-leather) center / cover no-repeat;
+  --leather-stitch: rgba(226, 190, 128, 0.4);
+  --page-stack:
+    1px 0 0 #d6c9ab, 2px 1px 0 #f3ead5, 3px 1px 0 #cdbfa0, 4px 2px 0 #f0e6cf, 5px 2px 0 #c7b998, 6px 3px 0 #ece1c8,
+    7px 3px 0 #b5a684, 0 1px 0 #d6c9ab, 1px 2px 0 #f3ead5, 2px 3px 0 #cdbfa0, 3px 4px 0 #f0e6cf, 4px 5px 0 #c7b998,
+    5px 6px 0 #b5a684, 12px 14px 22px rgba(0, 0, 0, 0.5);
+  --bookmark-shade: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.2) 0,
+    rgba(255, 255, 255, 0.04) 22%,
+    rgba(0, 0, 0, 0) 55%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+
+  /* Controls */
+  --field: #f4ecd6;
+  --field-edge: #8a6b47;
+  --field-placeholder: #6b5e49;
+  --button-ground: #e6dcc2;
+  --button-ground-hover: #f4ecd6;
+  --button-edge: #8a6b47;
+  --button-ink: #2b2118;
+  --send-top: #4f6c3b;
+  --send-bottom: #2f4423;
+  --send-ink: #f7f4e2;
+  --surface-brass: linear-gradient(180deg, #ecd08c 0%, #cfa655 46%, #b0852f 54%, #c39845 100%);
+  --surface-brass-hover: linear-gradient(180deg, #f6dda0 0%, #dab464 46%, #bd923a 54%, #cfa654 100%);
+  --brass-ink: #2a1a05;
+  --surface-wax: linear-gradient(180deg, #c9503f 0%, #a2301f 50%, #84221a 100%);
+  --surface-wax-hover: linear-gradient(180deg, #d85f4d 0%, #b23a28 50%, #93281f 100%);
+  --surface-dull: linear-gradient(180deg, #a09472, #8a7e5f);
+  --dull-ink: #2a2415;
+  --stop-top: #b23c2f;
+  --stop-bottom: #7a1f17;
+  --stop-ink: #fff3e6;
+  --disabled-ground: #cfc6ad;
+  --disabled-ink: #5a513d;
+  --menu-ground: #f4ecd6;
+  --menu-hover: #e6dcc2;
+  --veil: rgba(20, 12, 6, 0.62);
+
+  /* Focus: one ring for the desk, one for paper */
+  --focus-ring-on-desk: #ffd47a;
+  --focus-ring-on-paper: #1b4e9a;
+  --focus-ring: var(--focus-ring-on-desk);
+
+  /* Shadows */
+  --shadow-note: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 7px 14px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 12px 22px rgba(0, 0, 0, 0.48), 0 2px 3px rgba(0, 0, 0, 0.4);
+  --shadow-stamp: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 3px 6px rgba(0, 0, 0, 0.4);
+  --shadow-book:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 30px 60px rgba(0, 0, 0, 0.7),
+    0 6px 12px rgba(0, 0, 0, 0.5);
+  --shadow-bookmark: inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 -1px 4px rgba(0, 0, 0, 0.4);
+  --shadow-button: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.28), 0 3px 7px rgba(0, 0, 0, 0.45);
+  --shadow-pin: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 2px 5px 5px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 14px 30px rgba(0, 0, 0, 0.55);
+  --shadow-cover:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18), 2px 0 0 #e9dfc6, 3px 1px 0 #c9bb9c, 4px 1px 0 #efe5ce, 5px 2px 0 #b5a684,
+    1px 2px 0 #c9bb9c, 2px 3px 0 #efe5ce, 3px 4px 0 #b5a684, 14px 18px 26px rgba(0, 0, 0, 0.6);
+  --shadow-cover-raised:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18), 2px 0 0 #e9dfc6, 3px 1px 0 #c9bb9c, 4px 1px 0 #efe5ce, 5px 2px 0 #b5a684,
+    1px 2px 0 #c9bb9c, 2px 3px 0 #efe5ce, 3px 4px 0 #b5a684, 20px 28px 36px rgba(0, 0, 0, 0.6);
+  --shadow-shelf: 0 10px 14px rgba(0, 0, 0, 0.5);
+  --shadow-field: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 12px 22px rgba(0, 0, 0, 0.5), 0 2px 3px rgba(0, 0, 0, 0.4);
+
+  /* Radii */
+  --radius-paper: 3px;
+  --radius-leather: 6px;
+  --radius-stamp: 3px;
+  --radius-button: 4px;
+  --radius-bookmark: 4px 4px 0 0;
+  --radius-round: 50%;
+}

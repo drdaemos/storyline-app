@@ -26,6 +26,11 @@ from storyline.workspace.text_edit import paragraphs
 WRITER_TOOLSET = FunctionToolset[Story](id="writer_workspace")
 """The writer agent's registered story tools."""
 
+SCRIPT_WRITING_TOOL_NAMES = frozenset({"append_to_script", "edit_script"})
+LORE_WRITING_TOOL_NAMES = frozenset({"write_lore", "append_lore", "edit_lore", "delete_lore"})
+AGENDA_TOOL_NAMES = frozenset({"set_agenda", "update_agenda_item"})
+"""Tools grouped by what they change, so an interface knows what to show again after one runs."""
+
 
 @WRITER_TOOLSET.tool
 async def append_to_script(ctx: RunContext[Story], text: str) -> str:

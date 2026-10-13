@@ -113,6 +113,7 @@ def test_help_command_prints_available_commands(capsys: pytest.CaptureFixture[st
     assert "--story" in output
     assert "--port" in output
     assert "--reload" in output
+    assert "--data-dir" in output
 
 
 def test_serve_command_starts_web_server_with_its_options(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,7 +122,41 @@ def test_serve_command_starts_web_server_with_its_options(monkeypatch: pytest.Mo
 
     cli.main(["serve", "--port", "8123", "--reload"])
 
-    run_server.assert_called_once_with(port=8123, reload=True)
+    run_server.assert_called_once_with(port=8123, reload=True, host="127.0.0.1", workspace=None, data_dir=None)
+
+
+def test_serve_command_takes_the_address_workspace_and_data_directory(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    run_server = Mock()
+    monkeypatch.setattr(cli, "run_server", run_server)
+
+    cli.main(["serve", "--host", "0.0.0.0", "--workspace", str(tmp_path / "stories"), "--data-dir", str(tmp_path / "data")])
+
+    run_server.assert_called_once_with(port=8000, reload=False, host="0.0.0.0", workspace=str(tmp_path / "stories"), data_dir=str(tmp_path / "data"))
+
+
+def test_serve_command_without_a_workspace_exits_with_a_usage_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(cli, "load_dotenv", Mock())
+    monkeypatch.setenv("STORYLINE_WORKSPACE", "")
+    monkeypatch.setenv("AUTH_ENABLED", "")
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["serve"])
+
+    assert exit_info.value.code == 2
+    assert "--workspace" in capsys.readouterr().err
+
+
+def test_serve_command_with_authentication_but_no_clerk_key_exits_with_a_usage_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path) -> None:
+    monkeypatch.setattr(cli, "load_dotenv", Mock())
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("CLERK_SECRET_KEY", "")
+    monkeypatch.setenv("CLERK_JWT_KEY", "")
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["serve", "--data-dir", str(tmp_path)])
+
+    assert exit_info.value.code == 2
+    assert "CLERK_SECRET_KEY" in capsys.readouterr().err
 
 
 def test_commands_configure_tracing_but_help_does_not(start_session: Mock, configure_tracing: Mock, tmp_path) -> None:

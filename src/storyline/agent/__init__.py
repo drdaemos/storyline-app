@@ -1,7 +1,7 @@
 """Writing agent package."""
 
 from storyline.agent.history import RemovedTurn, actionable_history, without_last_turn
-from storyline.agent.models import resolve_model
+from storyline.agent.models import ModelNameError, resolve_model, validate_model_name
 from storyline.agent.story_context import story_snapshot, turn_prompt, visible_prompt_text
 from storyline.agent.writer import DEFAULT_MODEL_NAME, WRITER_INSTRUCTIONS, create_writer_agent, prompt_version
 from storyline.agent.writing_session import ArchivedHistory, PromptDelivered, TurnEvent, TurnOutcome, WritingSession, WritingTurn
@@ -9,6 +9,7 @@ from storyline.agent.writing_session import ArchivedHistory, PromptDelivered, Tu
 __all__ = (
     "ArchivedHistory",
     "DEFAULT_MODEL_NAME",
+    "ModelNameError",
     "WRITER_INSTRUCTIONS",
     "PromptDelivered",
     "TurnEvent",
@@ -23,5 +24,6 @@ __all__ = (
     "resolve_model",
     "story_snapshot",
     "turn_prompt",
+    "validate_model_name",
     "visible_prompt_text",
 )

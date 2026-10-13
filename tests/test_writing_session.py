@@ -8,7 +8,7 @@ from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, Too
 from pydantic_ai.messages import ModelMessage, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 
-from storyline.agent import PromptDelivered, TurnOutcome, WritingSession, WritingTurn, create_writer_agent, visible_prompt_text
+from storyline.agent import ModelNameError, PromptDelivered, TurnOutcome, WritingSession, WritingTurn, create_writer_agent, visible_prompt_text
 from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, FileStory
 
 DEFAULT_MODEL = "openrouter:default/model"
@@ -116,6 +116,39 @@ async def test_a_failed_turn_keeps_the_users_message_in_an_actionable_history(tm
 
 
 @pytest.mark.asyncio
+async def test_the_users_prompt_is_saved_before_the_model_answers(tmp_path) -> None:
+    story = _story(tmp_path)
+    agent = create_writer_agent()
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    saved_while_answering: list[ModelMessage] = []
+
+    async def answer(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
+        saved_while_answering.extend(await story.read_message_history())
+        yield "Done."
+
+    with agent.override(model=FunctionModel(stream_function=answer)):
+        turn = session.turn("Open with the storm.")
+        await _consume(turn)
+
+    assert turn.outcome is TurnOutcome.COMPLETED
+    assert _user_prompts(saved_while_answering) == ["Open with the storm."]
+    assert _user_prompts(await story.read_message_history()) == ["Open with the storm."]
+    assert len(session.message_history) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_turn_that_cannot_start_a_run_still_keeps_the_users_prompt(tmp_path) -> None:
+    story = _story(tmp_path)
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name="not-a-model")
+
+    turn = session.turn("Continue the scene.")
+    await _consume(turn)
+
+    assert turn.outcome is TurnOutcome.FAILED
+    assert _user_prompts(await story.read_message_history()) == ["Continue the scene."]
+
+
+@pytest.mark.asyncio
 async def test_open_repairs_a_history_with_an_unanswered_tool_call_and_writes_it_back(tmp_path) -> None:
     story = _story(tmp_path)
     await story.write_message_history(
@@ -166,6 +199,19 @@ async def test_set_model_is_remembered_in_the_story(tmp_path) -> None:
 
     assert session.model_name == "openrouter:other/model"
     assert await story.read_model_name() == "openrouter:other/model"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["not-a-valid-model", "nosuchprovider:model", "openrouter:", ":model", "  "])
+async def test_set_model_refuses_names_no_turn_could_run_on(tmp_path, name: str) -> None:
+    story = _story(tmp_path)
+    session = await _open(story)
+
+    with pytest.raises(ModelNameError):
+        await session.set_model(name)
+
+    assert session.model_name == DEFAULT_MODEL
+    assert await story.read_model_name() is None
 
 
 @pytest.mark.asyncio

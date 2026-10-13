@@ -1,90 +1,48 @@
-# Storyline Frontend
+# Storyline web interface
 
-Vue.js 3 frontend application for the Storyline.
+Vue 3, TypeScript and Vite. It is the hosted counterpart of the terminal UI: it offers the same operations and renders the same events of the room protocol, and a test keeps it that way.
 
-## Features
+## Run
 
-- **Character Management**: Browse, select, and create new characters
-- **Session Management**: Start new conversations or continue existing ones
-- **Real-time Chat**: Stream responses using Server-Sent Events
-- **YAML Import**: Create characters from YAML definitions
-- **Settings**: Configure AI processor and preferences
-- **Mobile Responsive**: Works on desktop and mobile devices
+Run everything from the repository root.
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 24+ and npm
-- Backend server running on port 8000
-
-### Installation
-
-```bash
-cd frontend
-npm install
+```
+npm --prefix frontend install
+npm --prefix frontend run dev          # http://localhost:3000, proxies /api and /health to localhost:8000
+npm --prefix frontend run lint
+npm --prefix frontend run type-check
+npm --prefix frontend run test:run
+npm --prefix frontend run build        # writes ../static
 ```
 
-### Development
+Sign-in uses Clerk only when `VITE_CLERK_PUBLISHABLE_KEY` is set (see `.env.default`). Without it the app runs with no auth and sends no token.
 
-```bash
-npm run dev
+## Structure
+
+```
+src/
+  protocol/   protocol.json (generated), types.ts, parity.test.ts
+  api/        client.ts (one function per operation), sse.ts (stream parser, reconnecting stream), auth.ts
+  room/       roomState.ts (state + reducers, pure), useRoom.ts, useStoryFiles.ts, format.ts
+  markdown/   Markdown rendering (HTML disabled), fresh ink, lore header stripping
+  components/ the room's parts; they read room state and call the client, with no protocol logic
+  views/      ShelfView (/), RoomView (/stories/:name)
+  auth/       Clerk gate, token bridge, sign-in screen
+  theme/      the look, and nothing else does
 ```
 
-The frontend will be available at `http://localhost:3000` with API proxy to `http://localhost:8000`.
+## The protocol
 
-### Build for Production
+`src/protocol/protocol.json` comes from the Python source of truth. Regenerate it from the repository root:
 
-```bash
-npm run build
+```
+uv run python -m storyline.room.export
 ```
 
-The built files will be in the `dist/` directory.
+`src/protocol/types.ts` is written by hand. `parity.test.ts` fails when `protocol.json` gains an event with no reducer in `EVENT_REDUCERS` (`room/roomState.ts`), an operation with no function in `OPERATION_CLIENT` (`api/client.ts`), or a field that `types.ts` does not list, and when the reverse is true. Fix the failure by adding the reducer, client function or type, not by editing the test.
 
-## Configuration
+## The theme rule
 
-The application uses Vite with the following configuration:
+Every colour, font, texture, shadow and radius is a CSS custom property defined in `src/theme/tokens.css`. Fonts are loaded in `src/theme/fonts.css`. Page-wide and Markdown styles are in `base.css` and `prose.css`, all drawn from the tokens. Components use `var(--name)` and never a literal colour, font family or shadow; `theme/theme.test.ts` fails if one does, or if a component uses a variable the theme does not define.
 
-- **Development Server**: Port 3000
-- **API Proxy**: All API calls are proxied to localhost:8000
-- **TypeScript**: Full TypeScript support with strict mode
-- **Vue 3**: Composition API with `<script setup>` syntax
-
-## Key Technologies
-
-- **Vue 3**: Progressive JavaScript framework
-- **TypeScript**: Type-safe JavaScript
-- **Vue Router**: Client-side routing
-- **Vite**: Fast build tool and dev server
-- **Native APIs**: Fetch API and EventSource for SSE
-
-## API Integration
-
-The frontend communicates with the backend through:
-
-- REST API calls for character and session management
-- Server-Sent Events for real-time chat streaming
-- JSON payloads for all data exchange
-
-## Settings
-
-User preferences are stored in localStorage:
-
-- `storyline_ai_processor`: Selected AI model
-- `storyline_theme`: UI theme preference
-- `storyline_last_character`: Last selected character
-
-## Browser Support
-
-- Modern browsers with ES2020+ support
-- EventSource API for streaming
-- Fetch API for HTTP requests
-- LocalStorage for settings persistence
-
-## Development Notes
-
-- Uses CSS custom properties for theming
-- Mobile-first responsive design
-- Accessibility-friendly with proper ARIA labels
-- Error boundaries and loading states
-- Debounced inputs for performance
+To change the look, replace the `src/theme/` folder with one that defines the same variable names and exports `clerkAppearance` from `index.ts`. No component changes.

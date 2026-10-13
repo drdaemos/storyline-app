@@ -35,6 +35,18 @@ async def test_model_command_updates_the_active_model(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_model_command_refuses_a_name_no_turn_could_run_on(tmp_path) -> None:
+    app = _build_app(tmp_path)
+
+    async with app.run_test() as pilot:
+        before = app._state.model_name
+        await _submit(pilot, app, "/model not-a-valid-model")
+
+        assert any("not-a-valid-model" in body for body in _bodies(app, MessageKind.ERROR))
+        assert app._state.model_name == before
+
+
+@pytest.mark.asyncio
 async def test_unknown_command_is_reported(tmp_path) -> None:
     app = _build_app(tmp_path)
 
@@ -70,6 +82,20 @@ async def test_script_and_lore_commands_show_the_active_story(tmp_path) -> None:
         script_text, lore_text = _bodies(app, MessageKind.SYSTEM)[-2:]
         assert "INT. ROOM" in script_text
         assert "city.md" in lore_text and "The city." in lore_text
+
+
+@pytest.mark.asyncio
+async def test_lore_command_with_a_filename_shows_that_file_or_explains_why_not(tmp_path) -> None:
+    await _story(tmp_path).write_lore(filename="city.md", content="---\nsummary: The city.\nkeywords: city\n---\nBuffalo, 1970s.\n")
+    app = _build_app(tmp_path)
+
+    async with app.run_test() as pilot:
+        await _submit(pilot, app, "/lore city.md")
+        await _submit(pilot, app, "/lore missing.md")
+
+        assert "Buffalo, 1970s." in _bodies(app, MessageKind.SYSTEM)[-1]
+        assert len(_bodies(app, MessageKind.ERROR)) == 1
+        assert "missing.md" in _bodies(app, MessageKind.ERROR)[0]
 
 
 @pytest.mark.asyncio
@@ -146,7 +172,7 @@ async def test_restored_history_is_shown_on_startup(tmp_path) -> None:
     app = _build_app(tmp_path)
 
     async with app.run_test():
-        assert app._state.session.message_history == history
+        assert await _story(tmp_path).read_message_history() == history
         assert _bodies(app, MessageKind.USER) == ["Add an opening."]
         assert [entry.title for entry in app.query(ToolLogEntry)] == ["edit_script · success"]
         assert [reply.body for reply in app.query(AgentReply)] == ["Added an **opening**."]
@@ -170,7 +196,7 @@ async def test_unreadable_history_is_archived_and_reported(tmp_path) -> None:
     (tmp_path / STORY_NAME / CONVERSATION_HISTORY_FILENAME).write_text("not json", encoding="utf-8")
 
     async with app.run_test():
-        assert app._state.session.message_history == []
+        assert await _story(tmp_path).read_message_history() == []
         assert any("started a new conversation" in body for body in _bodies(app, MessageKind.ERROR))
         assert not (tmp_path / STORY_NAME / CONVERSATION_HISTORY_FILENAME).exists()
         assert len(list((tmp_path / STORY_NAME).glob("*.broken.json"))) == 1
@@ -242,8 +268,7 @@ async def test_agent_turn_streams_a_markdown_reply_and_persists_history(tmp_path
             await pilot.pause()
 
             assert [reply.body for reply in app.query(AgentReply)] == ["## Scene\nDone."]
-            assert await _story(tmp_path).read_message_history() == app._state.session.message_history
-            assert len(app._state.session.message_history) == 2
+            assert len(await _story(tmp_path).read_message_history()) == 2
 
 
 @pytest.mark.asyncio

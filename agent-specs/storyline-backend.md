@@ -7,13 +7,33 @@ src/
         agent/              - writer agent, its prompt and skills, per-turn story snapshot, model resolution, and WritingSession (one story's conversation: history repair, remembered model, running turns)
         workspace/          - stories in a workspace (one package per subdirectory), story selection, script and lore operations
         evals/              - scenario evaluations of the writer: runner, mechanical checks, behaviour and craft judges
-        tui/                - terminal interface for writing stories; presentation only, turns run through WritingSession
-        web/                - web server for the Storyline UI
+        room/               - the interface-agnostic layer: the room protocol (operations, events, snapshot) and StoryRoom, which runs one story's conversation for any interface
+        tui/                - terminal interface; maps commands and keys to room operations and draws room events
+        web/                - hosted web API: the room protocol over HTTP and server-sent events, Clerk auth, one workspace per user
         observability.py    - Logfire tracing of agent runs
         cli.py              - main application entrypoint with CLI options
 
 evals/                      - evaluation scenarios (scenarios/*.yaml) and the seed stories they start from (seeds/)
 eval-runs/                  - output of `storyline eval` (git-ignored); each run directory is also a workspace
+
+frontend/                   - Vue web interface (shelf, writing room); the look lives only in frontend/src/theme/
+
+## Interface parity
+
+- `room/protocol.py` is the single definition of what a person can do (`Operation`) and what an interface is told
+  (`RoomEvent`, `RoomSnapshot`). `StoryRoom` owns the steering queue, follow-up turns and the mapping from agent
+  events to room events; interfaces hold no conversation logic.
+- A new capability is added to the protocol first. Each interface has a parity test that then fails until it offers
+  the operation and renders the event: `tests/test_tui_parity.py`, `tests/test_web_parity.py` and
+  `frontend/src/protocol/parity.test.ts`.
+- The frontend is checked against `frontend/src/protocol/protocol.json`; regenerate it with
+  `uv run python -m storyline.room.export` after changing the protocol (`tests/test_room_protocol.py` fails when it
+  is out of date).
+- A room keeps running a turn with no interface attached. A web client that connects to
+  `GET /api/stories/{story}/events` first receives a snapshot, then events; reconnecting replaces its state with a
+  new snapshot. The route for each operation is listed in `web/operations.py`.
+- With `AUTH_ENABLED` off the web serves the ordinary local workspace as one user; with it on, each Clerk user gets
+  `STORYLINE_DATA_DIR/users/<id>`.
 
 ## Writer prompt conventions
 

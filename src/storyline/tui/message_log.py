@@ -11,8 +11,8 @@ from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 from textual.widgets.markdown import MarkdownStream
 
+from storyline.room import Entry, MessageEntry
 from storyline.tui.models import MessageKind
-from storyline.tui.transcript import TranscriptEntry, TranscriptMessage
 
 
 class ChatMessage(Static):
@@ -157,14 +157,14 @@ class MessageLog(VerticalScroll):
             entry.complete(result=result, outcome=outcome)
             self._content_changed()
 
-    async def show_transcript(self, entries: Sequence[TranscriptEntry], *, hidden_count: int = 0) -> None:
+    async def show_transcript(self, entries: Sequence[Entry], *, hidden_count: int = 0) -> None:
         """Add entries restored from a saved conversation."""
         widgets: list[Widget] = []
         if hidden_count:
             widgets.append(ChatMessage(MessageKind.SYSTEM, f"… {hidden_count} earlier entries not shown"))
         for entry in entries:
-            if isinstance(entry, TranscriptMessage):
-                widgets.append(AgentReply(entry.body) if entry.kind == MessageKind.AGENT else ChatMessage(entry.kind, entry.body))
+            if isinstance(entry, MessageEntry):
+                widgets.append(AgentReply(entry.text) if entry.role == "writer" else ChatMessage(MessageKind.USER, entry.text))
             else:
                 widgets.append(
                     ToolLogEntry(

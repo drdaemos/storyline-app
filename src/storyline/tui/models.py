@@ -5,7 +5,8 @@ from enum import StrEnum
 
 from pydantic_ai import Agent
 
-from storyline.agent import DEFAULT_MODEL_NAME, WritingSession
+from storyline.agent import DEFAULT_MODEL_NAME
+from storyline.room import StoryRoom
 from storyline.workspace import Story, StoryLibrary
 
 
@@ -43,12 +44,12 @@ class TuiState:
 
     default_model_name: str
     """The model for stories that do not remember one; changed by ``/model`` while no story is open."""
-    session: WritingSession | None = None
+    room: StoryRoom | None = None
 
     @property
     def story(self) -> Story | None:
-        return self.session.story if self.session is not None else None
+        return self.room.story if self.room is not None else None
 
     @property
     def model_name(self) -> str:
-        return self.session.model_name if self.session is not None else self.default_model_name
+        return self.room.model_name if self.room is not None else self.default_model_name

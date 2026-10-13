@@ -1,7 +1,7 @@
 {
   "name": "storyline-frontend",
   "version": "0.1.0",
-  "description": "Vue.js 3 frontend for Storyline character chat application",
+  "description": "Vue 3 web interface for the Storyline writer room",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,9 +16,7 @@
   },
   "dependencies": {
     "@clerk/vue": "^1.14.3",
-    "@nuxt/ui": "^4.0.1",
-    "lucide-vue-next": "^0.544.0",
-    "uuid": "^13.0.0",
+    "markdown-it": "^15.0.2",
     "vue": "^3.4.0",
     "vue-router": "^4.2.0"
   },

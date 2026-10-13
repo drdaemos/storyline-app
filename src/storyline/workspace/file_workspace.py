@@ -15,6 +15,9 @@ from storyline.workspace.file_story import FileStory
 STATE_DIRECTORY = ".storyline"
 STATE_FILENAME = "state.json"
 INVALID_STORY_NAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+MAX_STORY_NAME_LENGTH = 100
+RESERVED_STORY_NAME = re.compile(r"(con|prn|aux|nul|com[0-9]|lpt[0-9])\s*(\..*)?$", re.IGNORECASE)
+"""Windows device names, which it treats as devices whatever the extension: ``CON``, ``nul.txt``, ``COM1``."""
 
 
 class WorkspaceState(BaseModel):
@@ -85,4 +88,8 @@ def _valid_story_name(name: str) -> str:
     stripped = name.strip()
     if not stripped or stripped.startswith(".") or stripped.endswith(".") or INVALID_STORY_NAME.search(stripped) is not None:
         raise StorySelectionError('Story names must not be empty, start or end with a dot, or contain \\ / : * ? " < > |.')
+    if len(stripped) > MAX_STORY_NAME_LENGTH:
+        raise StorySelectionError(f"Story names must be at most {MAX_STORY_NAME_LENGTH} characters long.")
+    if RESERVED_STORY_NAME.match(stripped) is not None:
+        raise StorySelectionError(f"{stripped!r} is reserved by Windows and cannot be used as a story name.")
     return stripped

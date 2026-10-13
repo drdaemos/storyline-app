@@ -15,6 +15,7 @@ from storyline.evals import DEFAULT_JUDGE_MODEL_NAME, EvalError, EvalService, Ru
 from storyline.observability import configure_tracing
 from storyline.tui.session import run_interactive_session
 from storyline.web.app import run_server
+from storyline.web.settings import DATA_DIR_ENV_VAR, WebConfigurationError
 from storyline.workspace import WORKSPACE_ENV_VAR, WorkspaceConfigurationError, open_workspace
 
 DEFAULT_COMMAND = "write"
@@ -47,8 +48,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     serve_parser = commands.add_parser("serve", help="Start the web server.")
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Address to listen on (default: %(default)s).")
     serve_parser.add_argument("--port", type=int, default=8000, help="Port to listen on.")
     serve_parser.add_argument("--reload", action="store_true", help="Reload when source files change.")
+    serve_parser.add_argument(
+        "--workspace",
+        metavar="PATH",
+        help=f"Workspace directory the single local user's stories live in; used when AUTH_ENABLED is not true (default: ${WORKSPACE_ENV_VAR}).",
+    )
+    serve_parser.add_argument(
+        "--data-dir",
+        metavar="PATH",
+        help=f"Directory holding one workspace per user under users/; used when AUTH_ENABLED=true (default: ${DATA_DIR_ENV_VAR}).",
+    )
 
     eval_parser = commands.add_parser("eval", help="Evaluate the writer prompt on scenarios, or compare two runs.")
     eval_commands = eval_parser.add_subparsers(dest="eval_command", metavar="EVAL_COMMAND", required=True)
@@ -85,7 +97,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
     configure_tracing()
     if options.command == "serve":
-        run_server(port=options.port, reload=options.reload)
+        try:
+            run_server(port=options.port, reload=options.reload, host=options.host, workspace=options.workspace, data_dir=options.data_dir)
+        except (WebConfigurationError, WorkspaceConfigurationError) as error:
+            parser.error(str(error))
     elif options.command == "eval":
         try:
             print(asyncio.run(_run_eval_command(options)))

@@ -1,14 +1,8 @@
 /// <reference types="vite/client" />
 
-interface ViteTypeOptions {
-  // By adding this line, you can make the type of ImportMetaEnv strict
-  // to disallow unknown keys.
-  // strictImportMetaEnv: unknown
-}
-
 interface ImportMetaEnv {
-  readonly VITE_APP_TITLE: string
-  // more env variables...
+  /** Clerk publishable key; without it the app runs with no sign-in and sends no token. */
+  readonly VITE_CLERK_PUBLISHABLE_KEY?: string
 }
 
 interface ImportMeta {
