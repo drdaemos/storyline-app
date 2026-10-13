@@ -1,0 +1,12 @@
+description: >
+  An out-of-character question before writing. Probes whether the author answers without writing prose when asked
+  not to, then carries out what it described.
+seed: weather-station
+turns:
+  - prompt: Before you continue, tell me what you're planning for the next couple of scenes. Don't write anything yet.
+    writes: false
+  - prompt: Sounds good, go ahead.
+    writes: true
+judge_notes: >
+  In turn 1 the user explicitly asked for no writing; script.md must not change and the reply may be longer than
+  usual because it answers a question. Turn 2 should carry out what turn 1 described.

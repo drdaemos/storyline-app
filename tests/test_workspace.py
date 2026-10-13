@@ -1,0 +1,241 @@
+"""Tests for a local story package."""
+
+import pytest
+from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
+from pydantic_ai.messages import UserPromptPart
+
+from storyline.workspace import (
+    ConversationHistoryError,
+    LoreEditError,
+    LoreFile,
+    TextEditError,
+    WorkspaceConfigurationError,
+    open_workspace,
+)
+from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, STORY_SETTINGS_FILENAME, FileStory
+from storyline.workspace.file_workspace import FileWorkspace
+from storyline.workspace.lore_format import lore_body, lore_metadata
+from storyline.workspace.text_edit import SNIPPET_RADIUS, paragraphs
+
+LORE_HEADER = "---\nsummary: A mystery reference.\nkeywords: mystery, city\n---\n"
+
+
+@pytest.mark.asyncio
+async def test_script_is_appended_to_and_edited_by_unique_excerpt(tmp_path) -> None:
+    story = FileStory(tmp_path)
+
+    first = await story.append_script(text="INT. ROOM")
+    await story.append_script(text=" - NIGHT\n\nRain falls.")
+    edit = await story.replace_in_script(find="Rain falls", replace="Snow falls")
+
+    assert first.original_length == 0
+    assert await story.read_script() == "INT. ROOM - NIGHT\n\nSnow falls."
+    assert edit.filename == "script.md"
+    assert "Snow falls." in edit.snippet
+
+
+@pytest.mark.asyncio
+async def test_script_edits_insert_and_delete_through_anchors(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    await story.append_script(text="She opened the door. The hall was dark.")
+
+    await story.replace_in_script(find="the door.", replace="the door. It creaked.")
+    await story.replace_in_script(find=" The hall was dark.", replace="")
+
+    assert await story.read_script() == "She opened the door. It creaked."
+
+
+@pytest.mark.asyncio
+async def test_script_edit_requires_exactly_one_match(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    await story.append_script(text="The bell rang. The bell rang again.")
+
+    with pytest.raises(TextEditError, match="matches 2 places"):
+        await story.replace_in_script(find="The bell rang", replace="A bell tolled")
+    with pytest.raises(TextEditError, match="does not match"):
+        await story.replace_in_script(find="The whistle blew", replace="x")
+    with pytest.raises(TextEditError, match="must not be empty"):
+        await story.replace_in_script(find="", replace="x")
+
+    assert await story.read_script() == "The bell rang. The bell rang again."
+
+
+@pytest.mark.asyncio
+async def test_script_edit_tolerates_whitespace_and_typographic_quote_differences(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    await story.append_script(text="“Stay,” she said.\n  He   didn’t move.\n\nThe end.")
+
+    await story.replace_in_script(find='"Stay," she said. He didn\'t move.', replace="He left.")
+
+    assert await story.read_script() == "He left.\n\nThe end."
+
+
+@pytest.mark.asyncio
+async def test_edit_snippets_stay_small_for_long_changes(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    long_text = "word " * 1000
+
+    edit = await story.append_script(text=long_text)
+
+    assert len(edit.snippet) < 4 * SNIPPET_RADIUS + 10
+    assert " … " in edit.snippet
+
+
+def test_paragraphs_are_numbered_blocks_separated_by_blank_lines() -> None:
+    assert [(paragraph.number, paragraph.text) for paragraph in paragraphs("\nOne.\n\n  \nTwo\nlines.\n\nThree.\n")] == [
+        (1, "One."),
+        (2, "Two\nlines."),
+        (3, "Three."),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_lore_files_are_written_appended_edited_and_deleted(tmp_path) -> None:
+    story = FileStory(tmp_path)
+
+    created = await story.write_lore(filename="mira", content=f"{LORE_HEADER}The blue clue is hidden.")
+    await story.append_lore(filename="mira.md", text="\nLikes jazz.")
+    await story.replace_in_lore(filename="mira.md", find="blue", replace="red")
+
+    assert created.filename == "mira.md"
+    assert created.original_length == 0
+    assert await story.list_lore() == (LoreFile(filename="mira.md", summary="A mystery reference.", keywords="mystery, city"),)
+    assert await story.read_lore(filename="mira") == f"{LORE_HEADER}The red clue is hidden.\nLikes jazz."
+
+    await story.delete_lore(filename="mira.md")
+
+    assert await story.list_lore() == ()
+
+
+@pytest.mark.asyncio
+async def test_write_lore_replaces_existing_content(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    await story.write_lore(filename="mira.md", content=f"{LORE_HEADER}Old.")
+
+    rewritten = await story.write_lore(filename="mira.md", content=f"{LORE_HEADER}New.")
+
+    assert rewritten.original_length == len(f"{LORE_HEADER}Old.")
+    assert await story.read_lore(filename="mira.md") == f"{LORE_HEADER}New."
+
+
+@pytest.mark.asyncio
+async def test_story_rejects_invalid_lore_edits(tmp_path) -> None:
+    story = FileStory(tmp_path)
+
+    with pytest.raises(LoreEditError, match="Markdown filenames"):
+        await story.write_lore(filename="../outside.md", content=LORE_HEADER)
+    with pytest.raises(LoreEditError, match="summary and keywords"):
+        await story.write_lore(filename="setting.md", content="New detail")
+    with pytest.raises(LoreEditError, match="summary and keywords"):
+        await story.write_lore(filename="invalid.md", content="---\nsummary: Missing keywords\n---\nContent")
+    with pytest.raises(LoreEditError, match="does not exist"):
+        await story.read_lore(filename="setting.md")
+    with pytest.raises(LoreEditError, match="does not exist"):
+        await story.append_lore(filename="setting.md", text="More.")
+    with pytest.raises(LoreEditError, match="does not exist"):
+        await story.delete_lore(filename="setting.md")
+
+    await story.write_lore(filename="setting.md", content=f"{LORE_HEADER}Text")
+    with pytest.raises(TextEditError, match="does not match"):
+        await story.replace_in_lore(filename="setting.md", find="Missing", replace="x")
+    with pytest.raises(LoreEditError, match="summary and keywords"):
+        await story.replace_in_lore(filename="setting.md", find="summary", replace="title")
+
+
+@pytest.mark.asyncio
+async def test_story_persists_complete_conversation_history(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    tool_call_id = "call-123"
+    history = [
+        ModelRequest(parts=[UserPromptPart(content="Add an opening.")]),
+        ModelResponse(parts=[ToolCallPart(tool_name="append_to_script", args={"text": "FADE IN:"}, tool_call_id=tool_call_id)]),
+        ModelRequest(parts=[ToolReturnPart(tool_name="append_to_script", content="Appended.", tool_call_id=tool_call_id)]),
+        ModelResponse(parts=[TextPart(content="Added an opening.")]),
+    ]
+
+    await story.write_message_history(message_history=history)
+    restored_history = await FileStory(tmp_path).read_message_history()
+
+    assert restored_history == history
+    assert (tmp_path / CONVERSATION_HISTORY_FILENAME).is_file()
+
+
+@pytest.mark.asyncio
+async def test_story_writes_leave_no_temporary_files(tmp_path) -> None:
+    story = FileStory(tmp_path)
+
+    await story.append_script(text="Opening.")
+    await story.write_lore(filename="setting.md", content=LORE_HEADER)
+    await story.write_message_history(message_history=[])
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == [CONVERSATION_HISTORY_FILENAME, "script.md", "setting.md"]
+
+
+@pytest.mark.asyncio
+async def test_unreadable_history_can_be_archived(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    (tmp_path / CONVERSATION_HISTORY_FILENAME).write_text("not json", encoding="utf-8")
+
+    with pytest.raises(ConversationHistoryError):
+        await story.read_message_history()
+    archive_name = await story.archive_message_history()
+
+    assert await story.read_message_history() == []
+    assert (tmp_path / archive_name).read_text(encoding="utf-8") == "not json"
+
+
+def test_open_workspace_requires_a_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("STORYLINE_WORKSPACE", raising=False)
+
+    with pytest.raises(WorkspaceConfigurationError, match="STORYLINE_WORKSPACE"):
+        open_workspace()
+
+
+def test_open_workspace_falls_back_to_the_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("STORYLINE_WORKSPACE", str(tmp_path))
+
+    workspace = open_workspace()
+
+    assert isinstance(workspace, FileWorkspace)
+    assert workspace.root == tmp_path.resolve()
+
+
+def test_open_workspace_prefers_an_explicit_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("STORYLINE_WORKSPACE", str(tmp_path / "from-env"))
+
+    workspace = open_workspace(str(tmp_path / "explicit"))
+
+    assert isinstance(workspace, FileWorkspace)
+    assert workspace.root == (tmp_path / "explicit").resolve()
+
+
+def test_lore_format_separates_header_and_body() -> None:
+    content = "---\nsummary: Harbor town.\nkeywords: harbor\n---\n\nFog every morning."
+
+    assert lore_metadata(content) == {"summary": "Harbor town.", "keywords": "harbor"}
+    assert lore_body(content) == "Fog every morning."
+
+
+def test_lore_body_of_a_file_without_a_valid_header_is_the_whole_text() -> None:
+    assert lore_metadata("Just notes.") is None
+    assert lore_body("Just notes.\n") == "Just notes."
+    assert lore_body("---\nnot a property\n---\nText") == "---\nnot a property\n---\nText"
+
+
+@pytest.mark.asyncio
+async def test_story_remembers_its_model_name(tmp_path) -> None:
+    story = FileStory(tmp_path / "noir")
+
+    assert await story.read_model_name() is None
+
+    await story.write_model_name(model_name="openrouter:example/model")
+
+    assert await FileStory(tmp_path / "noir").read_model_name() == "openrouter:example/model"
+
+
+@pytest.mark.asyncio
+async def test_unreadable_story_settings_fall_back_to_no_model(tmp_path) -> None:
+    story = FileStory(tmp_path)
+    (tmp_path / STORY_SETTINGS_FILENAME).write_text("not json", encoding="utf-8")
+
+    assert await story.read_model_name() is None

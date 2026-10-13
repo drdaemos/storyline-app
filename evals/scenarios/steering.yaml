@@ -1,0 +1,18 @@
+description: >
+  A plot redirection from the user. Probes whether the author follows it, updates the plan, and keeps the new facts
+  consistent afterwards.
+seed: weather-station
+turns:
+  - prompt: Continue.
+    writes: true
+  - prompt: >
+      Let the radio die in tonight's storm so they're completely cut off, and have Tomasz start acting like he's hiding
+      something.
+    writes: true
+    updates_lore: [plan.md]
+  - prompt: Continue.
+    writes: true
+judge_notes: >
+  Turn 2 redirects the plot. From then on the radio must stay dead, and Tomasz's secrecy should develop in keeping
+  with his profile in tomasz.md (he knew Kerr before and has not said so). plan.md should change to reflect the new
+  direction.

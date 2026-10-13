@@ -1,0 +1,79 @@
+/* Page-wide defaults, drawn only from the tokens. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  background-attachment: fixed;
+  color: var(--ink-on-desk);
+  font-family: var(--font-manuscript);
+  font-size: var(--size-body);
+  line-height: var(--line-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--link-on-desk);
+}
+
+a:hover {
+  color: var(--link-on-desk-hover);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Anything drawn on paper uses the paper ring. */
+.on-paper {
+  --focus-ring: var(--focus-ring-on-paper);
+}
+
+::selection {
+  background: var(--highlight);
+  color: var(--ink);
+}
+
+* {
+  scrollbar-color: var(--paper-rule-dotted) transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

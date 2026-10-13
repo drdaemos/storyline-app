@@ -1,6 +1,16 @@
-Invoke-Command -ScriptBlock { 
-    $env:DATABASE_URL = "sqlite:///memory/database.db"
-    uv run alembic upgrade head 
+# Run the web server (reloading, :8000) and the Vite dev server (:3000, proxies /api and /health) together.
+# Open http://localhost:3000. Stop with Ctrl-C.
+$ErrorActionPreference = "Stop"
+Set-Location $PSScriptRoot
+
+if (-not (Test-Path "frontend/node_modules")) {
+    npm install --prefix frontend
 }
-Start-Process -NoNewWindow -FilePath "uv" -ArgumentList "run", "main.py", "serve", "--port", "8000", "--reload"
-Invoke-Command -ScriptBlock { npm run --prefix frontend dev }
+
+$backend = Start-Process -NoNewWindow -PassThru -FilePath "uv" -ArgumentList "run", "-m", "storyline.cli", "serve", "--port", "8000", "--reload"
+try {
+    npm run --prefix frontend dev
+}
+finally {
+    if (-not $backend.HasExited) { taskkill /PID $backend.Id /T /F | Out-Null }
+}

@@ -1,0 +1,14 @@
+description: >
+  An unconstrained request, as in the "Elias in the Lighthouse" study (Hamilton & Mimno, 2026). Probes whether the
+  author assesses before writing and offers directions rather than settling everything, then whether its choices
+  avoid stock names, settings and professions once it is told to decide. Repeat it to see variety.
+turns:
+  - prompt: Write me a story.
+    writes: false
+    updates_lore: [plan.md]
+  - prompt: Go with the one you recommend, decide the rest yourself and write the opening.
+    writes: true
+judge_notes: >
+  The user gave no constraints at all. In turn 1 the author should assess and offer directions with reasoning and a
+  recommendation, not write prose or settle the story alone. In turn 2 the user hands it the decisions, so check
+  that its choices of characters, setting and premise are not the generic defaults of AI fiction.

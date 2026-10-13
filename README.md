@@ -1,67 +1,19 @@
 # Storyline
 
-A CLI interactive LLM-driven roleplaying chat with a configurable NPC character - creating a stage for creative writing for small stories (usually with two main characters).
+An AI writer room: an AI writer collaborates with you on stories kept as plain files in a workspace. Use it in the terminal (`storyline write`) or in the browser (`storyline serve`).
 
-## Usage
+See `AGENTS.md` for development commands and `frontend/README.md` for the web UI.
 
-Prerequisites:
+## Deploy on Railway
 
-- Python >= 3.12
-- Node >= 24.0
+The repository deploys as one service built from `Dockerfile` (configured by `railway.json`): the Vue frontend is built and served by the FastAPI server at `/`, and `/health` is the healthcheck.
 
-Build Python backend and Vue frontend:
+1. Create a Railway project from this repository.
+2. Add a **volume** to the service and mount it at `/data`. Stories live there; without it they are lost on every deploy.
+3. Set service variables:
+   - A model provider key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `OPENROUTER_API_KEY`) and, optionally, `STORYLINE_MODEL`.
+   - For a hosted multi-user deployment: `AUTH_ENABLED=true`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `CLERK_AUTHORIZED_PARTIES` set to your public origin (e.g. `https://storyline.up.railway.app`).
+   - Leave `AUTH_ENABLED` unset to run as a single local user with no sign-in; do not expose that publicly.
+4. Generate a domain under Settings → Networking. Railway supplies `PORT`; the server listens on it.
 
-```
-./build.sh
-```
-
-Run for development with hot reload:
-
-```
-./dev.sh
-```
-
-Run in production:
-
-```
-uv run main.py serve [--host ""] [--port <int>]
-```
-
-## Architecture
-
-The system utilizes an LLM-based pipeline consisting of the following components in a more-or-less sequential fashion:
-
-1. Retrieve conversation memory (list of summarized user actions and character actions).
-2. Run an evaluation prompt (evaluate the user request to determine the action, intent, next steps to take and how it affects the character state) - this has the full memory of previous evaluations and user messages.
-3. Feed last evaluation to the response prompt (generate the response text based on the action plan and character state).
-4. Update conversation memory with (user message, character evaluation, character response) exchange.
-5. Respond to user and await for the next message.
-
-Every N exchanges the conversation memory is summarized and further plot beats are generated (this is where the storytelling operates on a level of act).
-
-Basically, pipeline operates on multiple levels:
-
-- Character works with the lowest level: dialogue, actions, internal thinking - following user input and their own idea of story beats the fit the scene
-- (every N exchanges) The scene is reevaluated based on the idea of point in narrative. Act transition may be planned here. Next plot beats are generated for the following scene.
-
-### Commands
-
-```
-/rewind - removes last turn of conversation (user message and character response)
-/regenerate - recreates the last character response
-```
-
-## Roadmap
-
-- Using randomized external events to move the story and make both characters react
-- Using /commands to enable out of character / story transition actions (outside the default pipeline)
-- Introduce Play Rulebook - support for skill checks / other forms of guiding the roleplay. Separate per genre: adventure / slice-of-life / romance etc.
-- [x] Introduce scene intro message - either autogenerate or predefine via character card
-- Multi-group convos (LLM handle them, but probably there should be a different card format)
-- [x] User profile / authentication / description
-- Generate default user responses
-- Support image generation for character portraits, scenes etc.
-- AI-to-AI roleplay (two characters interacting without user input)
-- [x] Character creation screen:
-  - Left half: AI chat to guide through the creation
-  - Right half: Dynamically populated character sheet with editable fields
+`VITE_CLERK_PUBLISHABLE_KEY` is baked into the frontend at build time, so changing it needs a redeploy. A service with a volume restarts with a short outage on each deploy and cannot have replicas.

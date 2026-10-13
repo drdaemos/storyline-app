@@ -1,0 +1,190 @@
+/* Rendered Markdown: replies, script and lore. Applied to v-html content, so these are global classes. */
+.prose {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose pre,
+.prose table {
+  margin: 0 0 0.8em;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  margin: 1.1em 0 0.4em;
+  line-height: 1.25;
+  font-weight: 500;
+}
+
+.prose h1 {
+  font-size: var(--size-heading);
+  font-style: italic;
+}
+
+.prose h2 {
+  font-size: 1.35em;
+  font-variant: small-caps;
+  letter-spacing: var(--tracking-caps);
+}
+
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-size: 1.1em;
+  font-style: italic;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.5em;
+}
+
+.prose li + li {
+  margin-top: 0.25em;
+}
+
+.prose blockquote {
+  padding-left: 1em;
+  border-left: 3px solid var(--paper-rule-warm);
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.prose code,
+.prose pre {
+  font-family: var(--font-typewriter);
+  font-size: 0.9em;
+}
+
+.prose code {
+  padding: 0 0.25em;
+  background: var(--note-system);
+  border-radius: var(--radius-paper);
+}
+
+.prose pre {
+  padding: 0.7em 0.9em;
+  overflow-x: auto;
+  background: var(--note-system);
+  border-radius: var(--radius-paper);
+}
+
+.prose pre code {
+  padding: 0;
+  background: none;
+}
+
+.prose hr {
+  margin: 1.2em auto;
+  width: 30%;
+  border: 0;
+  border-top: 1px solid var(--paper-rule-warm);
+}
+
+.prose a {
+  color: var(--accent);
+}
+
+.prose a:hover {
+  color: var(--ink);
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+.prose th,
+.prose td {
+  padding: 0.45em 0.7em;
+  border-bottom: 1px solid var(--paper-rule-warm);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.prose th {
+  border-bottom: 1.5px solid var(--ink-muted);
+  font-weight: 500;
+  font-variant: small-caps;
+  letter-spacing: var(--tracking-caps);
+  white-space: nowrap;
+}
+
+/* The writer's replies and the user's notes. */
+.prose--note {
+  font-size: var(--size-note);
+  line-height: var(--line-note);
+}
+
+.prose--note h1,
+.prose--note h2,
+.prose--note h3 {
+  font-family: var(--font-typewriter);
+  font-size: 1em;
+  font-style: normal;
+  font-variant: normal;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* The script and the lore: type for reading. */
+.prose--page {
+  font-size: var(--size-manuscript);
+  line-height: var(--line-manuscript);
+  max-width: var(--measure-manuscript);
+  margin-inline: auto;
+  font-variant-numeric: oldstyle-nums;
+}
+
+.prose--manuscript p {
+  margin: 0;
+  text-align: var(--align-manuscript);
+  hyphens: auto;
+}
+
+.prose--manuscript p + p {
+  text-indent: 1.4em;
+}
+
+.prose--manuscript h1,
+.prose--manuscript h2,
+.prose--manuscript h3 {
+  text-align: center;
+  margin: 1.4em 0 0.8em;
+}
+
+.prose--manuscript hr {
+  margin: 1.4em auto;
+}
+
+/* Text the writer added during the current or most recent turn: fresh ink and a pencil line in the margin. */
+.prose .fresh {
+  color: var(--ink-fresh);
+  padding-left: 0.9em;
+  margin-left: -1em;
+  border-left: 1.5px solid var(--ink-fresh-rule);
+}
+
+.prose .fresh a {
+  color: var(--ink-fresh);
+}

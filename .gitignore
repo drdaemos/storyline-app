@@ -23,3 +23,8 @@ memory/**
 # runtime
 runs/
 examples/
+# local research notes and downloaded articles
+research/
+
+# prompt evaluation runs
+eval-runs/
