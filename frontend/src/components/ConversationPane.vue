@@ -79,13 +79,16 @@ const activity = computed(() => activityLabel(state.value))
 }
 
 @media (max-width: 760px) {
+  /* The pad fills the screen: it is the ground the notes lie on, not another box around them. */
   .conversation {
-    padding: 0.55rem 0.7rem 0.7rem;
+    padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom));
     gap: 0.5rem;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .conversation::before {
-    inset: 4px;
+    display: none;
   }
 
   .conversation__status {

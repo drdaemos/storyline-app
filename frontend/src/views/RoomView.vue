@@ -138,13 +138,14 @@ watchEffect(() => {
   .room {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 0.5rem;
-    padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom));
+    gap: 0;
+    padding: 0;
   }
 
   /* One segmented control: the shown pane is the lit half. */
   .room__tabs {
     display: flex;
+    margin: 0.4rem 0.5rem;
     padding: 3px;
     border: 1px solid var(--desk-rule);
     border-radius: var(--radius-button);

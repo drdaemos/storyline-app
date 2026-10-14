@@ -268,28 +268,48 @@ function onTabKeydown(event: KeyboardEvent, index: number): void {
 
 @media (max-width: 760px) {
   .bookmarks {
-    margin-inline: 0.5rem;
     gap: 0.25rem;
+    height: 3.6rem;
+    margin: 0 0.5rem -1.5rem;
   }
 
   .bookmark {
     flex-basis: 0;
     flex-grow: 1;
-    padding-inline: 0.1rem;
+    height: 2.9rem;
+    padding: 0.4rem 0.1rem 0;
     font-size: 0.75rem;
     letter-spacing: 0;
   }
 
-  .bookmarks {
-    margin: 0 0.75rem -2.75rem 1rem;
+  .bookmark:hover {
+    height: 3.2rem;
   }
 
+  .bookmark--active,
+  .bookmark--active:hover {
+    height: 3.6rem;
+  }
+
+  /* The page fills the screen: the cover around it would only take width. */
   .cover {
-    padding: 0.8rem 0.9rem 1rem 0.45rem;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .cover::before {
+    display: none;
+  }
+
+  .page {
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .panel {
-    inset: 0 0.25rem 0 1rem;
+    inset: 0 0.5rem env(safe-area-inset-bottom) 0.9rem;
   }
 }
 </style>
