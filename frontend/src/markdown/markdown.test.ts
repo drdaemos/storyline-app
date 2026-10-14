@@ -1,6 +1,11 @@
 import { freshInkStart, renderMarkdown, stripLoreHeader } from './markdown'
 
 describe('renderMarkdown', () => {
+  it('joins single line breaks in documents and keeps them in chat', () => {
+    expect(renderMarkdown('One\nTwo')).not.toContain('<br')
+    expect(renderMarkdown('One\nTwo', { chat: true })).toContain('<br')
+  })
+
   it('renders Markdown', () => {
     const html = renderMarkdown('# Title\n\nSome *emphasis* and a [link](https://example.com).')
     expect(html).toContain('<h1>Title</h1>')

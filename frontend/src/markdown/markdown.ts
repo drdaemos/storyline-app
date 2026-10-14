@@ -22,8 +22,8 @@ function markFreshBlocks(state: StateCore, freshFrom: number): void {
   }
 }
 
-function createRenderer(): Markdown {
-  const md = new MarkdownIt({ html: false, linkify: true, breaks: false, typographer: true })
+function createRenderer(breaks: boolean): Markdown {
+  const md = new MarkdownIt({ html: false, linkify: true, breaks, typographer: true })
 
   const defaultLinkOpen =
     md.renderer.rules.link_open ??
@@ -44,17 +44,21 @@ function createRenderer(): Markdown {
   return md
 }
 
-const renderer = createRenderer()
+const renderer = createRenderer(false)
+const chatRenderer = createRenderer(true)
 
 /**
  * Render Markdown to HTML. Raw HTML in `text` is shown as text. With `freshFrom`, every top-level block that
- * contains text from that offset on gets the `fresh` class.
+ * contains text from that offset on gets the `fresh` class. With `chat`, a single line break in `text` stays a line break.
  */
-export function renderMarkdown(text: string, options: { freshFrom?: number | null } = {}): string {
+export function renderMarkdown(
+  text: string,
+  options: { freshFrom?: number | null; chat?: boolean } = {},
+): string {
   // `freshFrom` travels to the core rule through the render environment.
   const env: Env = {}
   if (options.freshFrom !== undefined && options.freshFrom !== null) env.freshFrom = options.freshFrom
-  return renderer.render(normalise(text), env)
+  return (options.chat ? chatRenderer : renderer).render(normalise(text), env)
 }
 
 /**

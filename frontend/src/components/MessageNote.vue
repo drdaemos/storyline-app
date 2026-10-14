@@ -6,7 +6,7 @@ import type { MessageEntry } from '@/protocol/types'
 const props = defineProps<{ entry: MessageEntry }>()
 
 const streaming = computed(() => props.entry.reply_id !== null)
-const html = computed(() => (props.entry.role === 'writer' ? renderMarkdown(props.entry.text) : ''))
+const html = computed(() => (props.entry.role === 'writer' ? renderMarkdown(props.entry.text, { chat: true }) : ''))
 const empty = computed(() => props.entry.text.trim() === '')
 </script>
 
