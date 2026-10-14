@@ -91,6 +91,18 @@
   background: none;
 }
 
+.prose details {
+  margin: 0 0 0.8em;
+  padding-left: 1em;
+  border-left: 3px solid var(--paper-rule-warm);
+}
+
+.prose summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
 .prose hr {
   margin: 1.2em auto;
   width: 30%;
