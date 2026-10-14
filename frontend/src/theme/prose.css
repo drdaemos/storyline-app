@@ -139,7 +139,7 @@
 .prose--note h1,
 .prose--note h2,
 .prose--note h3 {
-  font-family: var(--font-typewriter);
+  font-family: var(--font-note);
   font-size: 1em;
   font-style: normal;
   font-variant: normal;

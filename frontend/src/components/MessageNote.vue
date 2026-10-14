@@ -41,7 +41,7 @@ const empty = computed(() => props.entry.text.trim() === '')
 .note--writer {
   align-self: stretch;
   background: var(--surface-note-writer);
-  font-family: var(--font-typewriter);
+  font-family: var(--font-note);
 }
 
 .note__user {

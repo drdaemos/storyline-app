@@ -10,10 +10,14 @@
   --font-manuscript: 'EB Garamond', Georgia, 'Times New Roman', serif;
   --font-typewriter: 'Courier Prime', 'Courier New', Courier, monospace;
   --font-ui: var(--font-manuscript);
+  /* The writer's replies, and the agenda and queue lists: typed on a wide screen. */
+  --font-note: var(--font-typewriter);
+  --font-list: var(--font-typewriter);
 
   --size-small: 0.875rem;
   --size-body: 1.0625rem;
   --size-note: 0.9375rem;
+  --size-list: var(--size-small);
   --size-manuscript: 1.25rem;
   --size-heading: 1.75rem;
   --size-title: 2.125rem;
@@ -214,4 +218,22 @@
   --radius-button: 4px;
   --radius-bookmark: 4px 4px 0 0;
   --radius-round: 50%;
+}
+
+/*
+ * A phone: a monospace face fits about 35 characters on a line and doubles the height of every reply,
+ * so running text is set in the book face, a little tighter, and ragged-right on the narrow page.
+ */
+@media (max-width: 760px) {
+  :root {
+    --font-note: var(--font-manuscript);
+    --font-list: var(--font-manuscript);
+    --size-note: 1.0625rem;
+    --size-list: 1rem;
+    --size-manuscript: 1.125rem;
+    --line-body: 1.4;
+    --line-note: 1.42;
+    --line-manuscript: 1.5;
+    --align-manuscript: left;
+  }
 }

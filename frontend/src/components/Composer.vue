@@ -123,8 +123,8 @@ defineExpose({ focus })
   margin: 0;
   padding: 0;
   list-style: none;
-  font-family: var(--font-typewriter);
-  font-size: var(--size-small);
+  font-family: var(--font-list);
+  font-size: var(--size-list);
 }
 
 .queue__item {

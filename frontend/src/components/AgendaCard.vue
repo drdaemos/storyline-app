@@ -169,8 +169,8 @@ const focus = computed(() => {
   align-items: flex-start;
   gap: 0.65rem;
   margin: 0;
-  font-family: var(--font-typewriter);
-  font-size: var(--size-small);
+  font-family: var(--font-list);
+  font-size: var(--size-list);
   line-height: 1.4;
 }
 
@@ -198,8 +198,8 @@ const focus = computed(() => {
   padding: 0;
   overflow-y: auto;
   list-style: none;
-  font-family: var(--font-typewriter);
-  font-size: var(--size-small);
+  font-family: var(--font-list);
+  font-size: var(--size-list);
 }
 
 .item {
