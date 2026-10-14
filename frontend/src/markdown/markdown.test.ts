@@ -1,6 +1,11 @@
 import { freshInkStart, renderMarkdown, stripLoreHeader } from './markdown'
 
 describe('renderMarkdown', () => {
+  it('joins single line breaks in documents and keeps them in chat', () => {
+    expect(renderMarkdown('One\nTwo')).not.toContain('<br')
+    expect(renderMarkdown('One\nTwo', { chat: true })).toContain('<br')
+  })
+
   it('renders Markdown', () => {
     const html = renderMarkdown('# Title\n\nSome *emphasis* and a [link](https://example.com).')
     expect(html).toContain('<h1>Title</h1>')
@@ -13,6 +18,25 @@ describe('renderMarkdown', () => {
     expect(html).not.toContain('<script')
     expect(html).not.toContain('<img')
     expect(html).toContain('&lt;script&gt;')
+  })
+
+  it('renders details and summary, and shows other tags inside them as text', () => {
+    const html = renderMarkdown(
+      '<details> <summary>Why *lean*</summary> It is **mostly** chemistry. <script>alert(1)</script> </details>\n\nAfter.',
+    )
+    expect(html).toContain('<details>')
+    expect(html).toContain('<summary>')
+    expect(html).toContain('<em>lean</em>')
+    expect(html).toContain('<strong>mostly</strong>')
+    expect(html).toContain('</details>')
+    expect(html).not.toContain('<script')
+    expect(html).toContain('<p>After.</p>')
+  })
+
+  it('does not take attributes on details or summary', () => {
+    const html = renderMarkdown('<details onclick=alert(1)>text</details>')
+    expect(html).not.toContain('<details')
+    expect(html).toContain('&lt;details')
   })
 
   it('does not make links out of script URLs', () => {
