@@ -94,4 +94,26 @@ const { unseen, jumpToEnd } = useFollowScroll(scroller, () => [props.entries, pr
 .log__jump:hover {
   background: var(--button-ground-hover);
 }
+
+@media (max-width: 760px) {
+  .log {
+    padding: 0.6rem 0.25rem 0.25rem 0;
+    mask-image: linear-gradient(180deg, transparent 0, black 1rem);
+  }
+
+  .log__inner {
+    gap: 0.6rem;
+  }
+
+  /* A small pill in the middle, so it covers little of the text under it. */
+  .log__jump {
+    right: auto;
+    left: 50%;
+    min-height: 36px;
+    padding: 0 0.85rem;
+    transform: translateX(-50%);
+    font-size: var(--size-small);
+    border-radius: var(--radius-button);
+  }
+}
 </style>

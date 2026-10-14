@@ -1,9 +1,24 @@
 import { mount } from '@vue/test-utils'
 import Composer from './Composer.vue'
+import { TOUCH_SCREEN } from './useMediaQuery'
 
 function mountComposer(props: Partial<InstanceType<typeof Composer>['$props']> = {}) {
   return mount(Composer, { props: { draft: 'Make Ines older', working: false, queue: [], ...props } })
 }
+
+/** Make `matchMedia` answer true for the given queries, as on a phone. */
+function matchOnly(...queries: string[]): void {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: queries.includes(query),
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }))
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('Composer', () => {
   it('sends on Enter', async () => {
@@ -82,5 +97,17 @@ describe('Composer', () => {
 
   it('shows no queue when it is empty', () => {
     expect(mountComposer().find('.queue').exists()).toBe(false)
+  })
+
+  it('leaves Enter to start a new line on a touch screen, where the button sends', async () => {
+    matchOnly(TOUCH_SCREEN)
+    const wrapper = mountComposer()
+    const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true })
+    wrapper.get('textarea').element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(wrapper.emitted('send')).toBeUndefined()
+    expect(wrapper.text()).not.toContain('Enter sends')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('send')).toHaveLength(1)
   })
 })

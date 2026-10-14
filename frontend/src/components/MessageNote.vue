@@ -51,4 +51,18 @@ const empty = computed(() => props.entry.text.trim() === '')
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+@media (max-width: 760px) {
+  .note {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .note--user {
+    max-width: 92%;
+  }
+
+  .note__user {
+    font-size: 1.0625rem;
+  }
+}
 </style>

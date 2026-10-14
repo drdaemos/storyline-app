@@ -71,17 +71,26 @@ const activity = computed(() => activityLabel(state.value))
   position: relative;
 }
 
-@media (max-width: 760px) {
-  .conversation {
-    padding: 0.9rem 0.9rem 1rem;
-    gap: 0.75rem;
-  }
-}
-
 .conversation__status {
   flex: none;
   margin: 0;
   color: var(--ink-on-desk-muted);
   font-style: italic;
+}
+
+@media (max-width: 760px) {
+  .conversation {
+    padding: 0.55rem 0.7rem 0.7rem;
+    gap: 0.5rem;
+  }
+
+  .conversation::before {
+    inset: 4px;
+  }
+
+  .conversation__status {
+    margin-top: -0.25rem;
+    font-size: var(--size-small);
+  }
 }
 </style>

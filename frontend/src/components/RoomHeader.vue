@@ -61,7 +61,9 @@ function clear(): void {
 
 <template>
   <header class="header">
-    <RouterLink to="/" class="header__back">‹ The shelf</RouterLink>
+    <RouterLink to="/" class="header__back">
+      <span aria-hidden="true">‹</span><span class="header__back-words">The shelf</span>
+    </RouterLink>
     <h1 class="header__title">{{ story }}</h1>
 
     <div ref="modelRoot" class="popover-anchor">
@@ -163,6 +165,10 @@ function clear(): void {
 .header__back:hover {
   color: var(--link-on-desk-hover);
   text-decoration: underline;
+}
+
+.header__back-words {
+  margin-left: 0.3em;
 }
 
 .header__title {
@@ -338,5 +344,55 @@ function clear(): void {
 
 .menu-item:disabled {
   color: var(--disabled-ink);
+}
+
+/* A narrow screen puts the header on one row: the back arrow, the title over its model, the menu. */
+@media (max-width: 760px) {
+  .header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'back title more'
+      'back model more';
+    column-gap: 0.15rem;
+    padding: 0;
+  }
+
+  .header__back {
+    justify-content: center;
+    min-width: 40px;
+    min-height: 44px;
+    margin-left: -0.35rem;
+    font-size: 1.75rem;
+    line-height: 1;
+  }
+
+  .header__back:hover {
+    text-decoration: none;
+  }
+
+  .header__back-words {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .header__title {
+    margin: 0;
+    font-size: 1.375rem;
+    line-height: 1.15;
+  }
+
+  .header__model {
+    min-height: 24px;
+    font-size: 0.75rem;
+  }
+
+  .header__more {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 </style>
