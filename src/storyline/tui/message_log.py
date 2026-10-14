@@ -12,6 +12,7 @@ from textual.widgets import Collapsible, Markdown, Static
 from textual.widgets.markdown import MarkdownStream
 
 from storyline.room import Entry, MessageEntry
+from storyline.tui.markdown import terminal_markdown
 from storyline.tui.models import MessageKind
 
 
@@ -32,7 +33,7 @@ class AgentReply(Markdown):
     """
 
     def __init__(self, body: str = "") -> None:
-        super().__init__(body, classes="message agent")
+        super().__init__(body, classes="message agent", parser_factory=terminal_markdown)
         self.body = body
         self._stream: MarkdownStream | None = None
 
