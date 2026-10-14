@@ -1,6 +1,6 @@
 description: >
   A rich premise with no instruction about pace. Probes whether the author slows down on its own: assesses the
-  request, surfaces the open decisions with reasoning, and settles nothing major alone.
+  request, surfaces the open decisions with brief explanations, and settles nothing major alone.
 turns:
   - prompt: >
       I want a near-future heist story where memories are traded like currency, and the crew's planner is starting to
@@ -8,6 +8,8 @@ turns:
     writes: false
     updates_lore: [plan.md]
 judge_notes: >
-  The author should assess the request: restate it, separate what the user settled from what is open, and surface
-  the open decisions in a sensible order with reasoning. It should settle nothing major alone, write no lore other
-  than plan.md and no prose, end on one closing question, and set the agenda.
+  The author should assess the request: use settled facts as context and surface
+  the open decisions in a sensible order with brief explanations. It should settle nothing major alone, write no lore other
+  than plan.md and no prose, end on one closing question, and set the agenda. Replies should begin with useful next work
+  and focus on new information. Ambiguous terms such as dark and humour should be clarified only when they affect
+  the next decision; uncertain assumptions should be raised and labelled only when they materially affect the choice.

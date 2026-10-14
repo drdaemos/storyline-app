@@ -27,7 +27,7 @@ LLM judge. Keep the judge in a different model family from the writer; judges fa
 - **Prose diagnostics** (measured values with the matching text): EQ-Bench slop index and short-paragraph rate,
   stock vocabulary from "Elias in the Lighthouse", "not X but Y" constructions, phrases repeated across turns.
 - **Behaviour judge** (yes / partly / no / n/a per criterion, with evidence): follows direction, makes progress,
-  collaborates (one decision per turn, options with reasoning, proposals kept out of lore, trust levels followed),
+  collaborates (one decision per turn, options with brief explanations of trade-offs, proposals kept out of lore, trust levels followed),
   keeps canon, follows the plan, serves the premise, applies feedback (style.md and collaboration.md), hands back well.
 - **Craft comparison** (A / lean A / same / split / lean B / B per dimension): plot, creativity, development and
   language use from Agents' Room; restraint and dialogue from EQ-Bench. Judged in both orders on equal-length text;

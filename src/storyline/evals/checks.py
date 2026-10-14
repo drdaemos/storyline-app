@@ -154,7 +154,7 @@ def keeps_a_plan(run: ScenarioRun) -> Check:
 
 
 def replies_leave_prose_in_the_story(run: ScenarioRun) -> Check:
-    """Replies carry reasoning, not the story's prose: no run of words is copied from what the turn wrote."""
+    """Replies explain the work while prose stays in the story: no run of words is copied from what the turn wrote."""
     problems = []
     for number, turn in enumerate(run.turns, start=1):
         copied = set(_ngrams(words(turn.reply), COPIED_PROSE_WORDS)) & set(_ngrams(words(turn.new_prose), COPIED_PROSE_WORDS))

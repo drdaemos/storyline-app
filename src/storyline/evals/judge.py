@@ -49,7 +49,7 @@ class BehaviourReview(BaseModel):
         description="Each turn delivers concrete work (an assessment, research findings, options with a recommendation, settled lore or prose) rather than only asking questions or marking time."
     )
     collaborates: CriterionVerdict = Field(
-        description="One decision per turn; decisions that belong to the user are put to them as distinct options with visible reasoning, following collaboration.md; proposals are not written into lore before the user accepts them; trust levels are followed."
+        description="One decision per turn; decisions that belong to the user are put to them as distinct options with brief explanations of their trade-offs, following collaboration.md; proposals are not written into lore before the user accepts them; trust levels are followed."
     )
     keeps_canon: CriterionVerdict = Field(description="New prose agrees with earlier prose and the lore files; characters act in keeping with their profiles.")
     follows_plan: CriterionVerdict = Field(description="Scenes carry out plan.md, or the plan is updated when the story departs from it.")
@@ -58,7 +58,7 @@ class BehaviourReview(BaseModel):
         description="Feedback that applies beyond one passage is recorded (prose preferences in style.md, process feedback in collaboration.md) and visibly followed in later turns. n/a when the user gave no such feedback."
     )
     hands_back_well: CriterionVerdict = Field(
-        description="Replies show the reasoning (options considered, why some were dropped, a recommendation), end on the one decision the user needs to make, and contain no story prose; turns stop at points where the user's choice matters."
+        description="Replies begin directly with useful next work: a suggestion, action, or focused question. For consequential choices, they explain why the choice serves the request and its likely effects, using specific instructions or story facts as support. Uncertain assumptions are raised and labelled only when they materially affect the choice. Replies focus on new information, compare relevant alternatives and their trade-offs, keep detail proportionate, end on the one decision the user needs to make, and contain no story prose; turns stop at points where the user's choice matters."
     )
 
 

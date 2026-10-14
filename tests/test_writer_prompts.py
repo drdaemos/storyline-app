@@ -1,5 +1,6 @@
 """Tests for the writer's core prompt, its skills and how they are wired into the agent."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from storyline.agent import WRITER_INSTRUCTIONS, create_writer_agent
-from storyline.agent.writer import WRITER_MAX_OUTPUT_TOKENS, WRITER_SKILLS_PATH
+from storyline.agent.writer import WRITER_MAX_OUTPUT_TOKENS, WRITER_PROMPT_PATH, WRITER_SKILLS_PATH
 from storyline.workspace.file_story import FileStory
 
 SKILL_NAMES = ("assess-request", "research", "develop-element", "outline", "write-scene", "revise")
@@ -43,6 +44,47 @@ def test_core_prompt_names_the_fixed_role_files_and_agenda_tools() -> None:
 def test_core_prompt_points_at_every_skill() -> None:
     for name in SKILL_NAMES:
         assert name in WRITER_INSTRUCTIONS
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    [
+        r"\b(?:effect|effects|consequence|consequences)\b",
+        r"\bassum(?:e|ed|ption|ptions)\b",
+        r"\b(?:why|because)\b",
+        r"\b(?:request|instruction|instructions)\b",
+    ],
+    ids=["effects", "assumptions", "explanation", "request"],
+)
+def test_reply_guidance_makes_the_basis_of_suggestions_correctable(requirement: str) -> None:
+    reply_guidance = WRITER_INSTRUCTIONS.split("## Reply shape\n", 1)[1].split("\n## ", 1)[0]
+
+    assert re.search(requirement, reply_guidance, re.IGNORECASE), f"Reply guidance omits {requirement}"
+
+
+@pytest.mark.parametrize("path", [WRITER_PROMPT_PATH, *sorted(WRITER_SKILLS_PATH.glob("*/SKILL.md"))])
+def test_writer_guidance_avoids_request_recaps(path: Path) -> None:
+    guidance = path.read_text(encoding="utf-8")
+    recap_request = re.compile(
+        r"\b(?:restate|paraphrase|recap)\b"
+        r"|\b(?:state|say|explain)\b[^.\n]*\b(?:how|what)\b[^.\n]*\b(?:understood|heard)\b"
+        r"|\bwhat (?:i|you)(?:'ve| have)? heard\b",
+        re.IGNORECASE,
+    )
+
+    assert recap_request.search(guidance) is None, f"{path} asks for a request recap"
+
+
+@pytest.mark.parametrize("path", [WRITER_PROMPT_PATH, *sorted(WRITER_SKILLS_PATH.glob("*/SKILL.md"))])
+def test_writer_guidance_avoids_requests_to_expose_thinking(path: Path) -> None:
+    guidance = path.read_text(encoding="utf-8")
+    exposure_request = re.compile(
+        r"\b(?:show|see|follow|bring|carry|reproduce|reveal|expose|print|write out|include)\b[^.\n]*\b(?:reasoning|thinking|thought process|chain[- ]of[- ]thought|scratchpad)\b"
+        r"|\b(?:reasoning|thinking|thought process)\b[^.\n]*\bvisible\b",
+        re.IGNORECASE,
+    )
+
+    assert exposure_request.search(guidance) is None, f"{path.name} asks for a thinking transcript"
 
 
 @pytest.mark.asyncio

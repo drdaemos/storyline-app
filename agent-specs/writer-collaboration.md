@@ -9,7 +9,7 @@ even though the user had asked it not to rush.
 The user co-writes and directs. They mostly talk to the agent rather than writing themselves, as if dictating, and
 sometimes speak or act as a character. They edit files lightly at most. They want to:
 
-- see the agent's reasoning: why it suggests something and why it turned other options down, so they can align with it;
+- see why each suggestion serves the request, its likely effects and trade-offs, and any uncertain assumption that materially affects the choice, so misunderstandings can be corrected;
 - take one decision at a time, because five open items at once is too many to process;
 - build trust gradually: the agent starts careful, learns from their reactions, and takes on more where it has earned it;
 - see the agenda at all times, like a todo list with statuses.
@@ -31,13 +31,14 @@ and per writer. The system adapts through a negotiated, learned working agreemen
 Each turn:
 
 1. **Read the message and decide what kind it is:** a decision, an idea, a correction, a question, an in-character
-   contribution, or a signal about the collaboration ("just do it", praise, frustration). When it is ambiguous, say
-   how it was understood.
+   contribution, or a signal about the collaboration ("just do it", praise, frustration). If ambiguity affects the next
+   decision, ask one focused question about the uncertain point.
 2. **Remember:** story facts go into canon (lore, plan). The user's reaction goes into `collaboration.md`: accepted as
    offered, changed, or rejected, and what that suggests.
 3. **Pick one next thing** from the agenda.
-4. **Do it with the reasoning visible:** the options considered, why some were dropped, and the recommendation and
-   why.
+4. **Check why the next action serves the request:** identify the supporting instruction or story fact, the intended
+   effect and the assumptions it depends on. When presenting a consequential choice, explain why it fits and its likely
+   effects, and compare the options' main trade-offs. Raise uncertain assumptions only when they materially affect the choice.
 5. **Hand back:** end on the one question or decision the user needs to make, and update the agenda.
 
 Each turn does concrete work. A turn that only asks questions wastes the user's time; a turn that settles several
@@ -49,8 +50,8 @@ Trust is tracked per kind of decision. Each kind has a level:
 
 | Level | Behaviour |
 |---|---|
-| options | Bring two or three genuinely different options with reasoning and a recommendation, then wait. |
-| propose | Bring one recommendation with its reasoning, then wait for a yes. |
+| options | Bring two or three genuinely different options with brief explanations of their trade-offs and a recommendation, then wait. |
+| propose | Bring one recommendation with a brief explanation of how it serves the story, then wait for a yes. |
 | decide and tell | Decide, and say what was decided so the user can overrule it. |
 | decide quietly | Decide without mentioning it. |
 
@@ -115,9 +116,9 @@ Skills (`agent/skills/<name>/SKILL.md`, loaded by the model through `load_capabi
 
 | Skill | When |
 |---|---|
-| `assess-request` | A new story, or a request that changes the story's foundations: restate, separate settled from open, flag ambiguity, propose the agenda and the starting agreement. |
+| `assess-request` | A new story, or a request that changes the story's foundations: identify useful next decisions, clarify uncertainties that affect the work, propose the agenda and the starting agreement. |
 | `research` | Learning a genre, trope or setting: search, report what to use, twist or avoid, and record notes in lore. |
-| `develop-element` | Working out one element (setting, a character, conflict, voice) into options with reasoning. |
+| `develop-element` | Working out one element (setting, a character, conflict, voice) into options with brief explanations of their trade-offs. |
 | `outline` | Proposing the arc and the next scenes once the foundations are settled. |
 | `write-scene` | Drafting prose. |
 | `revise` | Changing existing prose after feedback. |

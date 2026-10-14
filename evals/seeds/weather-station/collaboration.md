@@ -4,7 +4,7 @@ keywords: collaboration, agreement, trust, working
 ---
 ## Working agreement
 
-The user directs; I write. One scene per turn. I say what I decided afterwards and the user can overrule it. Replies carry my reasoning and end on the one decision needed.
+The user directs; I write. One scene per turn. I say what I decided afterwards and the user can overrule it. Replies briefly explain my suggestions and their trade-offs using story facts and the user's goals, and end on the one decision needed.
 
 ## Trust
 
