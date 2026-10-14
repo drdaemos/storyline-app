@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { NARROW_SCREEN, TOUCH_SCREEN, useMediaQuery } from './useMediaQuery'
 
 const props = defineProps<{
   /** The text in the input. */
@@ -19,9 +20,14 @@ const emit = defineEmits<{
 
 const field = ref<HTMLTextAreaElement | null>(null)
 const canSend = computed(() => !props.disabled && props.draft.trim() !== '')
+/** A soft keyboard has no Shift+Enter, so on a touch screen Enter starts a new line and the button sends. */
+const touch = useMediaQuery(TOUCH_SCREEN)
+/** A narrow input fits a shorter placeholder on one line, beside Stop and Queue. */
+const narrow = useMediaQuery(NARROW_SCREEN)
+const placeholder = computed(() => (narrow.value ? 'Message the writer' : 'Tell the writer what you want'))
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  if (touch.value || event.key !== 'Enter' || event.shiftKey || event.isComposing) return
   event.preventDefault()
   if (canSend.value) emit('send')
 }
@@ -66,12 +72,15 @@ defineExpose({ focus })
         rows="1"
         :value="draft"
         :disabled="disabled"
-        placeholder="Tell the writer what you want"
+        :placeholder="placeholder"
+        :enterkeyhint="touch ? 'enter' : 'send'"
         @input="emit('update:draft', ($event.target as HTMLTextAreaElement).value)"
         @keydown="onKeydown"
       ></textarea>
       <div class="composer__row">
-        <p class="composer__hint">Enter sends. Shift+Enter starts a new line.</p>
+        <p class="composer__hint">
+          <template v-if="!touch">Enter sends. Shift+Enter starts a new line.</template>
+        </p>
         <button v-if="working" type="button" class="button button--stop" @click="emit('stop')">
           Stop
         </button>
@@ -114,8 +123,8 @@ defineExpose({ focus })
   margin: 0;
   padding: 0;
   list-style: none;
-  font-family: var(--font-typewriter);
-  font-size: var(--size-small);
+  font-family: var(--font-list);
+  font-size: var(--size-list);
 }
 
 .queue__item {
@@ -220,13 +229,47 @@ defineExpose({ focus })
   opacity: 0.55;
 }
 
-@media (max-width: 480px) {
+/* A narrow screen puts the buttons beside the input, so the conversation keeps the height. */
+@media (max-width: 760px) {
+  .composer {
+    gap: 0.4rem;
+  }
+
+  .queue {
+    max-height: 4.5rem;
+    padding: 0.35rem 0.75rem;
+  }
+
+  .composer__field {
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .composer__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 2.9rem;
+    max-height: 35vh;
+    padding: 0.7rem 0.5rem 0.6rem 0.85rem;
+    font-size: 1.0625rem;
+  }
+
+  .composer__row {
+    flex: none;
+    gap: 0.35rem;
+    padding: 0.35rem;
+  }
+
   .composer__hint {
     display: none;
   }
 
-  .composer__row {
-    justify-content: flex-end;
+  .button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 0.75rem;
+    font-size: 1rem;
+    letter-spacing: 0.06em;
   }
 }
 </style>

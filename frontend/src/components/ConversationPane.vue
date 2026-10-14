@@ -71,17 +71,29 @@ const activity = computed(() => activityLabel(state.value))
   position: relative;
 }
 
-@media (max-width: 760px) {
-  .conversation {
-    padding: 0.9rem 0.9rem 1rem;
-    gap: 0.75rem;
-  }
-}
-
 .conversation__status {
   flex: none;
   margin: 0;
   color: var(--ink-on-desk-muted);
   font-style: italic;
+}
+
+@media (max-width: 760px) {
+  /* The pad fills the screen: it is the ground the notes lie on, not another box around them. */
+  .conversation {
+    padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom));
+    gap: 0.5rem;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .conversation::before {
+    display: none;
+  }
+
+  .conversation__status {
+    margin-top: -0.25rem;
+    font-size: var(--size-small);
+  }
 }
 </style>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, toRef, watchEffect } from 'vue'
+import { computed, reactive, ref, toRef, watch, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import BookPane from '@/components/BookPane.vue'
 import ConversationPane from '@/components/ConversationPane.vue'
+import { isWorking } from '@/room/roomState'
 import { useRoom } from '@/room/useRoom'
 import { useStoryFiles } from '@/room/useStoryFiles'
 
@@ -25,6 +26,26 @@ const PANES = [
   { id: 'book', label: 'Book' },
 ] as const
 
+type PaneId = (typeof PANES)[number]['id']
+
+/** A pane that changed while the other one was shown gets a mark on its tab until it is shown. */
+const changed = reactive<Record<PaneId, boolean>>({ conversation: false, book: false })
+const working = computed(() => isWorking(state.value))
+
+// Files change during a turn; a reconnect's snapshot also bumps the revisions, and that is no news.
+watch([() => state.value.scriptRevision, () => state.value.loreRevision], () => {
+  if (working.value && pane.value !== 'book') changed.book = true
+})
+
+watch(working, (now, before) => {
+  if (before && !now && pane.value !== 'conversation') changed.conversation = true
+})
+
+function show(id: PaneId): void {
+  pane.value = id
+  changed[id] = false
+}
+
 watchEffect(() => {
   document.title = `${props.name} · Storyline`
 })
@@ -46,9 +67,14 @@ watchEffect(() => {
           type="button"
           class="room__tab"
           :aria-pressed="pane === item.id"
-          @click="pane = item.id"
+          :data-pane="item.id"
+          @click="show(item.id)"
         >
           {{ item.label }}
+          <template v-if="changed[item.id]">
+            <span class="room__tab-mark" aria-hidden="true"></span>
+            <span class="sr-only">, updated</span>
+          </template>
         </button>
       </nav>
 
@@ -112,29 +138,43 @@ watchEffect(() => {
   .room {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 0.75rem;
-    padding: 0.75rem 1rem 1rem;
+    gap: 0;
+    padding: 0;
   }
 
+  /* One segmented control: the shown pane is the lit half. */
   .room__tabs {
     display: flex;
-    gap: 0.5rem;
+    margin: 0.4rem 0.5rem;
+    padding: 3px;
+    border: 1px solid var(--desk-rule);
+    border-radius: var(--radius-button);
   }
 
   .room__tab {
+    position: relative;
     flex: 1 1 0;
-    min-height: 44px;
+    min-height: 40px;
     background: transparent;
     color: var(--ink-on-desk);
-    border: 1px solid var(--desk-rule);
-    border-radius: var(--radius-button);
+    border: 0;
+    border-radius: var(--radius-paper);
   }
 
   .room__tab[aria-pressed='true'] {
     background: var(--paper);
     color: var(--ink);
-    border-color: var(--paper);
     font-weight: 600;
+  }
+
+  .room__tab-mark {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-left: 0.4rem;
+    vertical-align: 0.15em;
+    background: var(--accent-soft);
+    border-radius: var(--radius-round);
   }
 
   .room__pane {

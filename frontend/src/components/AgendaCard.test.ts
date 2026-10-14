@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import type { AgendaItem } from '@/protocol/types'
 import AgendaCard from './AgendaCard.vue'
+import { NARROW_SCREEN } from './useMediaQuery'
 
 const ITEMS: AgendaItem[] = [
   { id: 'a', title: 'The island', status: 'settled', outcome: 'A station on a ferry line' },
@@ -13,6 +14,20 @@ const ITEMS: AgendaItem[] = [
 function row(wrapper: ReturnType<typeof mount>, status: string) {
   return wrapper.get(`[data-status="${status}"]`)
 }
+
+/** Make `matchMedia` answer true for the given queries, as on a phone. */
+function matchOnly(...queries: string[]): void {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: queries.includes(query),
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }))
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('AgendaCard', () => {
   it('renders nothing when there is nothing on the agenda', () => {
@@ -62,5 +77,36 @@ describe('AgendaCard', () => {
   it('shows an agenda error even with no items', () => {
     const wrapper = mount(AgendaCard, { props: { items: [], error: 'The agenda file is damaged.' } })
     expect(wrapper.get('[role="alert"]').text()).toBe('The agenda file is damaged.')
+  })
+
+  it('folds to its count and the item waiting on the user, and unfolds again', async () => {
+    const wrapper = mount(AgendaCard, { props: { items: ITEMS, error: null }, attachTo: document.body })
+    const toggle = wrapper.get('button[aria-expanded]')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('ul').isVisible()).toBe(false)
+    expect(toggle.text()).toContain('1 of 4 settled')
+    const focus = wrapper.get('.agenda__focus')
+    expect(focus.text()).toContain('What Tomasz knows')
+    expect(focus.text()).toContain('waiting on you')
+    await toggle.trigger('click')
+    expect(wrapper.get('ul').isVisible()).toBe(true)
+    expect(wrapper.find('.agenda__focus').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('names the item being worked on when nothing waits on the user', async () => {
+    const items = ITEMS.filter((item) => item.status !== 'waiting')
+    const wrapper = mount(AgendaCard, { props: { items, error: null } })
+    await wrapper.get('button[aria-expanded]').trigger('click')
+    expect(wrapper.get('.agenda__focus').text()).toContain('Scene one')
+  })
+
+  it('starts folded on a narrow screen', () => {
+    matchOnly(NARROW_SCREEN)
+    const wrapper = mount(AgendaCard, { props: { items: ITEMS, error: null } })
+    expect(wrapper.get('button[aria-expanded]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('ul').isVisible()).toBe(false)
   })
 })

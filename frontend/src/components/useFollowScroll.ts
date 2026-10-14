@@ -23,6 +23,8 @@ export function useFollowScroll(
   const following = ref(options.startAtEnd ?? true)
   const unseen = ref(false)
   let observer: ResizeObserver | null = null
+  /** Where the last scroll left the container, to tell the reader scrolling up from content growing. */
+  let lastTop = 0
 
   function isActive(): boolean {
     return options.active ? options.active.value : true
@@ -30,13 +32,21 @@ export function useFollowScroll(
 
   function scrollToEnd(): void {
     const element = container.value
-    if (element) element.scrollTop = element.scrollHeight
+    if (!element) return
+    element.scrollTop = element.scrollHeight
+    lastTop = element.scrollTop
   }
 
+  /**
+   * A scroll event arrives a frame after the scroll; content that grew meanwhile leaves the end out of
+   * reach without the reader moving, so only a move up stops following.
+   */
   function onScroll(): void {
     const element = container.value
     if (!element) return
-    following.value = distanceFromEnd(element) <= NEAR_END
+    const movedUp = element.scrollTop < lastTop
+    lastTop = element.scrollTop
+    following.value = distanceFromEnd(element) <= NEAR_END || (following.value && !movedUp)
     if (following.value) unseen.value = false
   }
 
@@ -65,6 +75,8 @@ export function useFollowScroll(
       observer = new ResizeObserver(() => {
         if (following.value && isActive()) scrollToEnd()
       })
+      // The container itself shrinks when something beside it grows, such as the agenda or the input.
+      observer.observe(element)
       for (const child of Array.from(element.children)) observer.observe(child)
     }
   })
