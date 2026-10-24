@@ -125,6 +125,13 @@ Skills (`agent/skills/<name>/SKILL.md`, loaded by the model through `load_capabi
 
 In-character input is handled in the core prompt because it can arrive at any time.
 
+## Presets
+
+This document describes the co-writing preset. Other kinds of story (roleplay, later storylets) are described in
+`story-presets.md`. Across all of them the trust system governs the *table*: premise, cast design, tone, content
+bounds and how the user and the agent work together. In roleplay it does not govern the *fiction*: what the cast does
+follows from their sheets, clocks and rolls, not from putting options to the user.
+
 ## Testing
 
 The user tests the collaboration by hand. Scripted evals keep the prose diagnostics and the checks for single moments
