@@ -55,6 +55,7 @@ async def test_writer_agent_exposes_the_anchored_editing_tools(tmp_path) -> None
         "append_lore",
         "edit_lore",
         "delete_lore",
+        "enable_mechanic",
         "set_agenda",
         "update_agenda_item",
     ]
@@ -179,7 +180,7 @@ def test_story_snapshot_cuts_one_oversized_final_paragraph() -> None:
     snapshot = story_snapshot("Start." + "y" * (TAIL_CHARACTERS * 2))
 
     assert "Start." not in snapshot
-    assert len(snapshot) < TAIL_CHARACTERS + 300
+    assert len(snapshot) < TAIL_CHARACTERS + 450
 
 
 def test_story_snapshot_of_an_empty_story() -> None:

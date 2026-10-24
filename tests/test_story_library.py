@@ -1,5 +1,7 @@
 """Tests for choosing, switching and creating stories in a workspace."""
 
+import shutil
+
 import pytest
 
 from storyline.workspace import StoryLibrary, StorySelectionError
@@ -83,7 +85,7 @@ async def test_a_removed_active_story_is_not_resumed(tmp_path) -> None:
     await library.create(name="attic")
     await library.create(name="harbor")
     await library.create(name="cellar")
-    (tmp_path / "cellar").rmdir()
+    shutil.rmtree(tmp_path / "cellar")
 
     assert await _library(tmp_path).open_initial() is None
 
@@ -168,4 +170,4 @@ async def test_each_story_keeps_its_own_script_lore_and_history(tmp_path) -> Non
 
     assert await harbor.read_script() == ""
     assert await harbor.list_lore() == ()
-    assert sorted(path.name for path in (tmp_path / "harbor").iterdir()) == []
+    assert sorted(path.name for path in (tmp_path / "harbor").iterdir()) == ["story.json"]

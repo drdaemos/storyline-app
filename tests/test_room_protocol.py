@@ -48,7 +48,7 @@ def test_event_type_names_are_unique() -> None:
 
 def test_events_and_snapshots_survive_a_trip_through_json() -> None:
     event = ConversationReplaced(entries=(MessageEntry(role="user", text="Hi."), ToolCallEntry(tool_call_id="c1", tool_name="list_lore", arguments="{}", result="None.", outcome="success")))
-    snapshot = RoomSnapshot(story="noir", model_name="m", model_from_story=False, entries=event.entries, hidden_entries=2, agenda=())
+    snapshot = RoomSnapshot(story="noir", preset="co-writing", model_name="m", model_from_story=False, entries=event.entries, hidden_entries=2, agenda=())
 
     assert TypeAdapter(RoomEvent).validate_json(event.model_dump_json()) == event
     assert RoomSnapshot.model_validate_json(snapshot.model_dump_json()) == snapshot

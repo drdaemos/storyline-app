@@ -1,9 +1,10 @@
 """What a signed-in user can do with their stories, independent of HTTP."""
 
 from storyline.agent import ModelNameError
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, PresetCatalog, PresetError, setup_for
 from storyline.web.errors import InvalidRequestError, LoreFileNotFoundError
 from storyline.web.room_host import RoomHost, RoomSubscription
-from storyline.web.schemas import LoreList, LoreSummary, StoryList
+from storyline.web.schemas import LoreList, LoreSummary, PresetInfo, PresetList, StoryList
 from storyline.web.user_workspaces import UserWorkspaces
 from storyline.workspace import LoreEditError, StoryLibrary, StorySelectionError
 
@@ -11,9 +12,13 @@ from storyline.workspace import LoreEditError, StoryLibrary, StorySelectionError
 class StoryService:
     """The room operations for one user at a time: every call names the user, and reaches only that user's stories."""
 
-    def __init__(self, *, workspaces: UserWorkspaces, rooms: RoomHost) -> None:
+    def __init__(self, *, workspaces: UserWorkspaces, rooms: RoomHost, presets: PresetCatalog = BUNDLED_PRESETS) -> None:
         self._workspaces = workspaces
         self._rooms = rooms
+        self._presets = presets
+
+    def list_presets(self) -> PresetList:
+        return PresetList(presets=[PresetInfo(id=preset.id, title=preset.title, description=preset.description) for preset in self._presets.summaries()])
 
     async def list_stories(self, user_id: str) -> StoryList:
         workspace = self._workspaces.workspace_for(user_id)
@@ -21,10 +26,14 @@ class StoryService:
         active = await workspace.read_active_story()
         return StoryList(stories=list(stories), active=active if active in stories else None)
 
-    async def create_story(self, user_id: str, name: str) -> str:
+    async def create_story(self, user_id: str, name: str, preset: str | None = None) -> str:
+        try:
+            setup = setup_for(self._presets.get(preset or DEFAULT_PRESET_ID))
+        except PresetError as error:
+            raise InvalidRequestError(str(error)) from error
         library = StoryLibrary(self._workspaces.workspace_for(user_id))
         try:
-            story = await library.create(name=name)
+            story = await library.create(name=name, setup=setup)
         except StorySelectionError as error:
             raise InvalidRequestError(str(error)) from error
         return story.name
@@ -67,7 +76,7 @@ class StoryService:
     async def list_lore(self, user_id: str, story: str) -> LoreList:
         async with self._rooms.use(user_id, story) as room:
             files = await room.list_lore()
-        return LoreList(files=[LoreSummary(filename=file.filename, summary=file.summary, keywords=file.keywords) for file in files])
+        return LoreList(files=[LoreSummary(filename=file.filename, summary=file.summary, keywords=file.keywords, sealed=file.sealed) for file in files])
 
     async def read_lore(self, user_id: str, story: str, filename: str) -> str:
         async with self._rooms.use(user_id, story) as room:

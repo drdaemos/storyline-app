@@ -14,6 +14,7 @@ type FieldsOf<T> = { [K in keyof T]-?: true }
 // Compile-time completeness: adding a field to a type in `types.ts` fails here until it is listed.
 const SNAPSHOT_FIELDS: FieldsOf<RoomSnapshot> = {
   story: true,
+  preset: true,
   model_name: true,
   model_from_story: true,
   entries: true,
@@ -31,8 +32,8 @@ const EVENT_FIELDS: { [T in RoomEventType]: FieldsOf<Omit<EventOf<T>, 'type'>> }
   reply_started: { reply_id: true },
   reply_delta: { reply_id: true, text: true },
   reply_finished: { reply_id: true },
-  tool_call_started: { tool_call_id: true, tool_name: true, arguments: true },
-  tool_call_finished: { tool_call_id: true, result: true, outcome: true },
+  tool_call_started: { tool_call_id: true, tool_name: true, arguments: true, sealed: true },
+  tool_call_finished: { tool_call_id: true, result: true, outcome: true, sealed: true },
   activity_changed: { activity: true, tool_name: true },
   queue_changed: { prompts: true },
   agenda_changed: { items: true },

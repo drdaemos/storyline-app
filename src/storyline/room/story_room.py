@@ -8,7 +8,7 @@ calls operations and renders events, so two interfaces on the same room cannot d
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from dataclasses import dataclass
 from typing import Self
 from uuid import uuid4
@@ -25,7 +25,9 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import Model
 
 from storyline.agent import DEFAULT_MODEL_NAME, PromptDelivered, TurnEvent, TurnOutcome, WritingSession, WritingTurn
+from storyline.agent.sealing import tool_call_is_sealed
 from storyline.agent.writer_tools import AGENDA_TOOL_NAMES, LORE_WRITING_TOOL_NAMES, SCRIPT_WRITING_TOOL_NAMES
+from storyline.presets import BUNDLED_PRESETS, PresetCatalog
 from storyline.room.protocol import (
     Activity,
     ActivityChanged,
@@ -111,7 +113,7 @@ class StoryRoom:
         self._tool_name: str | None = None
         self._agenda: tuple[AgendaItem, ...] = ()
         self._agenda_error: str | None = None
-        self._saved_entries: list[Entry] = transcript_entries(session.message_history)
+        self._saved_entries: list[Entry] = transcript_entries(session.message_history, self._is_sealed)
         self._live_entries: list[Entry] = []
         """Entries of the running turn; the saved conversation catches up with them when the turn ends."""
         self._reply: _LiveReply | None = None
@@ -127,9 +129,10 @@ class StoryRoom:
         model: Model | str | None = None,
         spawn: TaskSpawner | None = None,
         entry_limit: int = RESTORED_ENTRY_LIMIT,
+        presets: PresetCatalog = BUNDLED_PRESETS,
     ) -> Self:
-        """Open a story's room: restore its conversation and read its agenda."""
-        session = await WritingSession.open(story=story, agent=agent, default_model_name=default_model_name, model=model)
+        """Open a story's room: restore its conversation and read its agenda; ``presets`` are the kinds of story it may run as."""
+        session = await WritingSession.open(story=story, agent=agent, default_model_name=default_model_name, model=model, presets=presets)
         room = cls(session=session, spawn=spawn, entry_limit=entry_limit)
         await room._read_agenda()
         return room
@@ -156,6 +159,7 @@ class StoryRoom:
         archived = self._session.archived_history
         return RoomSnapshot(
             story=self.story.name,
+            preset=self._session.preset_id,
             model_name=self.model_name,
             model_from_story=self._session.model_from_story,
             entries=tuple(shown),
@@ -280,7 +284,7 @@ class StoryRoom:
         self._reply = None
         self._live_entries = []
         self._tool_entries = {}
-        self._saved_entries = transcript_entries(self._session.message_history)
+        self._saved_entries = transcript_entries(self._session.message_history, self._is_sealed)
 
     async def _settle_queue(self, outcome: TurnOutcome) -> None:
         """Deal with prompts nobody read: after a completed turn they start the next one, otherwise they go back to the user."""
@@ -306,17 +310,25 @@ class StoryRoom:
         elif isinstance(event, FunctionToolCallEvent):
             await self._finish_reply()
             await self._set_activity("using_tool", event.part.tool_name)
-            entry = ToolCallEntry(tool_call_id=event.part.tool_call_id, tool_name=event.part.tool_name, arguments=event.part.args_as_json_str())
+            entry = ToolCallEntry(
+                tool_call_id=event.part.tool_call_id,
+                tool_name=event.part.tool_name,
+                arguments=event.part.args_as_json_str(),
+                sealed=self._is_sealed(event.part.tool_name, event.part.args_as_dict()),
+            )
             self._tool_entries[entry.tool_call_id] = len(self._live_entries)
             self._live_entries.append(entry)
-            await self._emit(ToolCallStarted(tool_call_id=entry.tool_call_id, tool_name=entry.tool_name, arguments=entry.arguments))
+            await self._emit(ToolCallStarted(tool_call_id=entry.tool_call_id, tool_name=entry.tool_name, arguments=entry.arguments, sealed=entry.sealed))
         elif isinstance(event, FunctionToolResultEvent):
             await self._set_activity("thinking")
             result, outcome = tool_result_summary(event.part)
             index = self._tool_entries.get(event.part.tool_call_id)
+            sealed = False
             if index is not None:
-                self._live_entries[index] = self._live_entries[index].model_copy(update={"result": result, "outcome": outcome})
-            await self._emit(ToolCallFinished(tool_call_id=event.part.tool_call_id, result=result, outcome=outcome))
+                started = self._live_entries[index]
+                sealed = isinstance(started, ToolCallEntry) and started.sealed
+                self._live_entries[index] = started.model_copy(update={"result": result, "outcome": outcome})
+            await self._emit(ToolCallFinished(tool_call_id=event.part.tool_call_id, result=result, outcome=outcome, sealed=sealed))
             await self._after_tool(event.part.tool_name, outcome)
         elif isinstance(event, PromptDelivered):
             await self._deliver(event.enqueue_id)
@@ -373,12 +385,15 @@ class StoryRoom:
 
     # Helpers
 
+    def _is_sealed(self, tool_name: str, arguments: Mapping[str, object]) -> bool:
+        return tool_call_is_sealed(tool_name, arguments, self._session.mechanics)
+
     def _require_idle(self) -> None:
         if self._busy:
             raise RoomBusyError
 
     async def _replace_conversation(self) -> None:
-        self._saved_entries = transcript_entries(self._session.message_history)
+        self._saved_entries = transcript_entries(self._session.message_history, self._is_sealed)
         shown = self._saved_entries[-self._entry_limit :]
         await self._emit(ConversationReplaced(entries=tuple(shown), hidden_entries=len(self._saved_entries) - len(shown)))
 

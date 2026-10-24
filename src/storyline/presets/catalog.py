@@ -31,6 +31,15 @@ class Preset:
 
 
 @dataclass(frozen=True)
+class PresetSummary:
+    """What a picker shows of a preset."""
+
+    id: str
+    title: str
+    description: str
+
+
+@dataclass(frozen=True)
 class PresetCatalog:
     """A set of presets, listed with the default preset first and the rest by id."""
 
@@ -43,6 +52,10 @@ class PresetCatalog:
         except KeyError:
             known = ", ".join(self.presets) or "none"
             raise PresetError(f"Unknown story preset {preset_id!r}. Known presets: {known}.") from None
+
+    def summaries(self) -> tuple[PresetSummary, ...]:
+        """Every preset's picker text, the default preset first."""
+        return tuple(PresetSummary(id=preset.id, title=preset.title, description=preset.description) for preset in self)
 
     def __iter__(self) -> Iterator[Preset]:
         return iter(self.presets.values())

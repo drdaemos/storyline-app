@@ -6,6 +6,7 @@ from enum import StrEnum
 from pydantic_ai import Agent
 
 from storyline.agent import DEFAULT_MODEL_NAME
+from storyline.presets import BUNDLED_PRESETS, PresetCatalog
 from storyline.room import StoryRoom
 from storyline.workspace import Story, StoryLibrary
 
@@ -36,6 +37,8 @@ class TuiConfig:
     initial_model_name: str = DEFAULT_MODEL_NAME
     requested_story: str | None = None
     """The story named on the command line; without one, the session resumes the last active story."""
+    presets: PresetCatalog = BUNDLED_PRESETS
+    """The kinds of story ``/new --as`` offers."""
 
 
 @dataclass

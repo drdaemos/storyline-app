@@ -399,6 +399,11 @@
             "default": null,
             "title": "Result"
           },
+          "sealed": {
+            "default": false,
+            "title": "Sealed",
+            "type": "boolean"
+          },
           "tool_call_id": {
             "title": "Tool Call Id",
             "type": "string"
@@ -427,6 +432,11 @@
             "title": "Result",
             "type": "string"
           },
+          "sealed": {
+            "default": false,
+            "title": "Sealed",
+            "type": "boolean"
+          },
           "tool_call_id": {
             "title": "Tool Call Id",
             "type": "string"
@@ -452,6 +462,11 @@
           "arguments": {
             "title": "Arguments",
             "type": "string"
+          },
+          "sealed": {
+            "default": false,
+            "title": "Sealed",
+            "type": "boolean"
           },
           "tool_call_id": {
             "title": "Tool Call Id",
@@ -621,6 +636,7 @@
   ],
   "operations": [
     "list_stories",
+    "list_presets",
     "create_story",
     "open_story",
     "send_prompt",
@@ -789,6 +805,11 @@
             "default": null,
             "title": "Result"
           },
+          "sealed": {
+            "default": false,
+            "title": "Sealed",
+            "type": "boolean"
+          },
           "tool_call_id": {
             "title": "Tool Call Id",
             "type": "string"
@@ -862,6 +883,10 @@
         "title": "Model Name",
         "type": "string"
       },
+      "preset": {
+        "title": "Preset",
+        "type": "string"
+      },
       "queue": {
         "default": [],
         "items": {
@@ -889,6 +914,7 @@
     },
     "required": [
       "story",
+      "preset",
       "model_name",
       "model_from_story",
       "entries",

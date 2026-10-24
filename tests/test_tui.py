@@ -141,7 +141,7 @@ async def test_slash_opens_the_command_list_and_tab_completes(tmp_path) -> None:
         prompt = app.query_one(PromptBlock)
         prompt.value = "/"
         await pilot.pause()
-        assert prompt.command_count == 10
+        assert prompt.command_count == 12
 
         prompt.value = "/mo"
         await pilot.pause()

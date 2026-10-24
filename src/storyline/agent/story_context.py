@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 
 from pydantic_ai.messages import UserContent
 
+from storyline.mechanics import MECHANICS, Mechanic
 from storyline.workspace import AgendaItem, LoreFile, Story, render_agenda
 from storyline.workspace.lore_format import lore_body
 from storyline.workspace.text_edit import Paragraph, paragraphs
@@ -23,16 +24,29 @@ PLAN_FILENAME = "plan.md"
 STYLE_GUIDE_FILENAME = "style.md"
 COLLABORATION_FILENAME = "collaboration.md"
 GUIDE_FILENAMES = (COLLABORATION_FILENAME, PLAN_FILENAME, STYLE_GUIDE_FILENAME)
+_SEALED_MARK = " (sealed, hidden from the user)"
 GUIDE_CHARACTERS = 4000
 AGENDA_CHARACTERS = 3000
 
 
-async def turn_prompt(story: Story, prompt: str) -> list[UserContent]:
-    """Return the user content for one turn: a story snapshot followed by the user's prompt."""
+async def turn_prompt(story: Story, prompt: str, mechanics: Sequence[Mechanic] = (), registry: Mapping[str, Mechanic] = MECHANICS) -> list[UserContent]:
+    """Return the user content for one turn: a story snapshot followed by the user's prompt.
+
+    ``mechanics`` are the story's, in order; each adds its own section to the snapshot, and ``registry`` supplies the ones that could be enabled.
+    """
     lore = await story.list_lore()
     present = {lore_file.filename for lore_file in lore}
     guides = {filename: lore_body(await story.read_lore(filename=filename)) for filename in GUIDE_FILENAMES if filename in present}
-    snapshot = story_snapshot(await story.read_script(), lore=lore, guides=guides, agenda=await story.read_agenda())
+    mechanic_sections = [await mechanic.snapshot_section(story) for mechanic in mechanics]
+    snapshot = story_snapshot(
+        await story.read_script(),
+        lore=lore,
+        guides=guides,
+        agenda=await story.read_agenda(),
+        mechanics=mechanics,
+        registry=registry,
+        mechanic_sections=mechanic_sections,
+    )
     return [snapshot, prompt]
 
 
@@ -42,11 +56,16 @@ def story_snapshot(
     lore: Sequence[LoreFile] = (),
     guides: Mapping[str, str] | None = None,
     agenda: Sequence[AgendaItem] = (),
+    mechanics: Sequence[Mechanic] = (),
+    registry: Mapping[str, Mechanic] = MECHANICS,
+    mechanic_sections: Sequence[Sequence[str]] = (),
 ) -> str:
-    """Describe the story's size, headings, ending, lore, guiding files and agenda within a fixed budget."""
-    lines = [SNAPSHOT_OPEN, *_script_section(script), *_lore_section(lore)]
+    """Describe the story's size, headings, ending, lore, mechanics, guiding files, mechanic sections and agenda within a fixed budget."""
+    lines = [SNAPSHOT_OPEN, *_script_section(script), *_lore_section(lore), *_mechanics_section(mechanics, registry)]
     for filename in GUIDE_FILENAMES:
         lines.extend(_guide_section(filename, (guides or {}).get(filename)))
+    for section in mechanic_sections:
+        lines.extend(section)
     lines.extend(_agenda_section(agenda))
     lines.append(SNAPSHOT_CLOSE)
     return "\n".join(lines)
@@ -80,7 +99,17 @@ def _script_section(script: str) -> list[str]:
 def _lore_section(lore: Sequence[LoreFile]) -> list[str]:
     if not lore:
         return ["No lore files yet."]
-    return ["Lore files:", *(f"- {lore_file.filename}: {lore_file.summary or 'missing summary'}" for lore_file in lore)]
+    return ["Lore files:", *(f"- {lore_file.filename}{_SEALED_MARK if lore_file.sealed else ''}: {lore_file.summary or 'missing summary'}" for lore_file in lore)]
+
+
+def _mechanics_section(mechanics: Sequence[Mechanic], registry: Mapping[str, Mechanic]) -> list[str]:
+    used = {mechanic.id for mechanic in mechanics}
+    lines = [f"Mechanics in use: {', '.join(mechanic.id for mechanic in mechanics) or 'none'}."]
+    available = [mechanic for mechanic in registry.values() if mechanic.id not in used]
+    if available:
+        lines.append("Available to enable:")
+        lines.extend(f"- {mechanic.id}: {mechanic.description}" for mechanic in available)
+    return lines
 
 
 def _guide_section(filename: str, body: str | None) -> list[str]:

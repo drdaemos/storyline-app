@@ -18,7 +18,10 @@ class Operation(StrEnum):
     """Everything a person can do in Storyline, whichever interface they use."""
 
     LIST_STORIES = "list_stories"
+    LIST_PRESETS = "list_presets"
+    """The kinds of story a new story can be created as."""
     CREATE_STORY = "create_story"
+    """Create a story as one of the presets; the default preset when none is named."""
     OPEN_STORY = "open_story"
     SEND_PROMPT = "send_prompt"
     """Start a turn; while the writer works, queue the prompt for its next step."""
@@ -58,6 +61,8 @@ class ToolCallEntry(_Data):
     result: str | None = None
     outcome: str = "working"
     """``working`` until the tool returns; then the tool's outcome, ``retry`` or ``interrupted``."""
+    sealed: bool = False
+    """The call reads or changes what is hidden from the user; interfaces fold its arguments and result behind a spoiler warning."""
 
 
 type Entry = Annotated[MessageEntry | ToolCallEntry, Field(discriminator="kind")]
@@ -104,6 +109,8 @@ class ToolCallStarted(_Data):
     tool_call_id: str
     tool_name: str
     arguments: str
+    sealed: bool = False
+    """See ``ToolCallEntry.sealed``."""
 
 
 class ToolCallFinished(_Data):
@@ -113,6 +120,8 @@ class ToolCallFinished(_Data):
     tool_call_id: str
     result: str
     outcome: str
+    sealed: bool = False
+    """See ``ToolCallEntry.sealed``."""
 
 
 class ActivityChanged(_Data):
@@ -235,6 +244,8 @@ class RoomSnapshot(_Data):
     """Everything an interface needs to draw a room as it is right now; events carry it forward from there."""
 
     story: str
+    preset: str
+    """The id of the preset the story runs as, e.g. ``co-writing``."""
     model_name: str
     model_from_story: bool
     """Whether the model is the one remembered in the story rather than the default."""

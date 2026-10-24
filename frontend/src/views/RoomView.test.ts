@@ -16,6 +16,7 @@ vi.mock('@/api/client', async (importOriginal) => ({
 
 const SNAPSHOT: RoomSnapshot = {
   story: 'tale',
+  preset: 'default',
   model_name: 'muse-1',
   model_from_story: false,
   entries: [

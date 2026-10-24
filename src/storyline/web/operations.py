@@ -7,6 +7,7 @@ from storyline.room import Operation
 
 OPERATION_ROUTES: Mapping[Operation, tuple[str, str]] = MappingProxyType(
     {
+        Operation.LIST_PRESETS: ("GET", "/api/presets"),
         Operation.LIST_STORIES: ("GET", "/api/stories"),
         Operation.CREATE_STORY: ("POST", "/api/stories"),
         Operation.OPEN_STORY: ("GET", "/api/stories/{story}/events"),
@@ -17,6 +18,6 @@ OPERATION_ROUTES: Mapping[Operation, tuple[str, str]] = MappingProxyType(
         Operation.CLEAR_CONVERSATION: ("POST", "/api/stories/{story}/clear"),
         Operation.READ_SCRIPT: ("GET", "/api/stories/{story}/script"),
         Operation.LIST_LORE: ("GET", "/api/stories/{story}/lore"),
-        Operation.READ_LORE: ("GET", "/api/stories/{story}/lore/{filename}"),
+        Operation.READ_LORE: ("GET", "/api/stories/{story}/lore/{filename:path}"),
     }
 )

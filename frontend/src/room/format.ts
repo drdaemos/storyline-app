@@ -18,9 +18,9 @@ export function outcomeTone(outcome: string): OutcomeTone {
   return 'done'
 }
 
-/** The display name of a lore file: its filename without the extension. */
+/** The display name of a lore file: its filename without the extension, and without the `sealed/` folder. */
 export function loreTitle(filename: string): string {
-  return filename.replace(/\.md$/i, '')
+  return filename.replace(/^sealed\//, '').replace(/\.md$/i, '')
 }
 
 /** Keywords arrive as a list or as one string; show them as a list either way. */

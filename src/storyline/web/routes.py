@@ -14,6 +14,7 @@ from storyline.web.schemas import (
     LoreList,
     LoreText,
     ModelChoice,
+    PresetList,
     PromptRequest,
     ScriptText,
     StoryCreated,
@@ -37,13 +38,17 @@ def create_api_router(*, authenticator: Authenticator, service: StoryService, ke
         method, path = OPERATION_ROUTES[operation]
         return router.api_route(path, methods=[method], **options)
 
+    @route(Operation.LIST_PRESETS, response_model=PresetList)
+    async def list_presets(user_id: user) -> PresetList:
+        return service.list_presets()
+
     @route(Operation.LIST_STORIES, response_model=StoryList)
     async def list_stories(user_id: user) -> StoryList:
         return await service.list_stories(user_id)
 
     @route(Operation.CREATE_STORY, status_code=201, response_model=StoryCreated)
     async def create_story(body: CreateStoryRequest, user_id: user) -> StoryCreated:
-        return StoryCreated(name=await service.create_story(user_id, body.name))
+        return StoryCreated(name=await service.create_story(user_id, body.name, body.preset))
 
     @route(Operation.OPEN_STORY, status_code=200, response_class=EventStreamResponse)
     async def open_story(story: str, user_id: user) -> EventStreamResponse:

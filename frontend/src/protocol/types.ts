@@ -6,6 +6,7 @@ import protocol from './protocol.json'
 
 export type Operation =
   | 'list_stories'
+  | 'list_presets'
   | 'create_story'
   | 'open_story'
   | 'send_prompt'
@@ -45,6 +46,8 @@ export interface ToolCallEntry {
   result: string | null
   /** `working` until the tool returns; then the tool's outcome, `retry` or `interrupted`. */
   outcome: string
+  /** A call on sealed lore: its arguments and result are spoilers, shown only on request. */
+  sealed?: boolean
 }
 
 export type Entry = MessageEntry | ToolCallEntry
@@ -56,6 +59,7 @@ export interface ArchivedConversation {
 
 export interface RoomSnapshot {
   story: string
+  preset: string
   model_name: string
   model_from_story: boolean
   entries: Entry[]
@@ -77,8 +81,8 @@ export type RoomEvent =
   | { type: 'reply_started'; reply_id: string }
   | { type: 'reply_delta'; reply_id: string; text: string }
   | { type: 'reply_finished'; reply_id: string }
-  | { type: 'tool_call_started'; tool_call_id: string; tool_name: string; arguments: string }
-  | { type: 'tool_call_finished'; tool_call_id: string; result: string; outcome: string }
+  | { type: 'tool_call_started'; tool_call_id: string; tool_name: string; arguments: string; sealed?: boolean }
+  | { type: 'tool_call_finished'; tool_call_id: string; result: string; outcome: string; sealed?: boolean }
   | { type: 'activity_changed'; activity: Activity; tool_name: string | null }
   | { type: 'queue_changed'; prompts: string[] }
   | { type: 'agenda_changed'; items: AgendaItem[] }
@@ -103,6 +107,14 @@ export interface LoreFileSummary {
   filename: string
   summary: string | null
   keywords: string[] | string | null
+  /** Lore the writer sealed away from the story, named `sealed/<file>`; it spoils the story. */
+  sealed?: boolean
+}
+
+export interface PresetSummary {
+  id: string
+  title: string
+  description: string
 }
 
 const EVENT_TYPES: ReadonlySet<string> = new Set(protocol.events)

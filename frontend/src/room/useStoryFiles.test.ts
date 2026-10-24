@@ -131,6 +131,21 @@ describe('useStoryFiles', () => {
     stop()
   })
 
+  it('keeps sealed files out of the own lore index and reads none of them unasked', async () => {
+    listLore.mockResolvedValue({
+      files: [
+        { filename: 'ines.md', summary: null, keywords: null, sealed: false },
+        { filename: 'sealed/vera.md', summary: 'Secret', keywords: null, sealed: true },
+      ],
+    })
+    const { files, stop } = setup()
+    await settle()
+    expect(files.ownLoreIndex.value.files.map((file) => file.filename)).toEqual(['ines.md'])
+    expect(files.sealedLoreIndex.value.files.map((file) => file.filename)).toEqual(['sealed/vera.md'])
+    expect(readLore).not.toHaveBeenCalled()
+    stop()
+  })
+
   it('starts over when the story changes', async () => {
     const { files, story, stop } = setup()
     await settle()

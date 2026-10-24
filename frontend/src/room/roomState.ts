@@ -180,6 +180,7 @@ export const EVENT_REDUCERS: Reducers = {
         arguments: event.arguments,
         result: null,
         outcome: 'working',
+        sealed: event.sealed ?? false,
       },
     ]),
 
@@ -189,7 +190,9 @@ export const EVENT_REDUCERS: Reducers = {
       state,
       (entry) => entry === call,
       (entry) =>
-        entry.kind === 'tool_call' ? { ...entry, result: event.result, outcome: event.outcome } : entry
+        entry.kind === 'tool_call'
+          ? { ...entry, result: event.result, outcome: event.outcome, sealed: Boolean(entry.sealed || event.sealed) }
+          : entry
     )
   },
 

@@ -57,8 +57,11 @@ class LoreFile:
     """A discoverable Markdown lore file and its searchable metadata."""
 
     filename: str
+    """Relative to the story directory with ``/`` separators: ``city.md``, or ``sealed/vera.md`` for a sealed file."""
     summary: str | None
     keywords: str | None
+    sealed: bool = False
+    """Kept in ``sealed/``: read by the writer, hidden from the user unless they choose to peek."""
 
 
 type AgendaStatus = Literal["open", "working", "waiting", "settled", "dropped"]

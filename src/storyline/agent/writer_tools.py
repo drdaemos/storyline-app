@@ -9,10 +9,12 @@ from functools import partial
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_ai import FunctionToolset, RunContext, ToolFailed
 
+from storyline.mechanics import MECHANICS, MechanicError, resolve_mechanics
 from storyline.workspace import (
     AgendaItem,
     AgendaStatus,
     Story,
+    StorySetupError,
     TextEdit,
     WorkspaceEditError,
     render_agenda,
@@ -165,6 +167,27 @@ async def delete_lore(ctx: RunContext[Story], filename: str) -> str:
     except WorkspaceEditError as error:
         raise ToolFailed(str(error)) from error
     return f"Deleted {filename}."
+
+
+@WRITER_TOOLSET.tool
+async def enable_mechanic(ctx: RunContext[Story], mechanic_id: str) -> str:
+    """Add a mechanic to this story. Only after the user has agreed to it: it changes how the story runs.
+
+    Args:
+        mechanic_id: The id of a mechanic listed as available in the snapshot, such as sealed.
+    """
+    wanted = mechanic_id.strip()
+    try:
+        setup = await ctx.deps.read_setup()
+        current = [mechanic.id for mechanic in resolve_mechanics(setup.mechanics, MECHANICS)]
+        if wanted in current:
+            return f"The {wanted} mechanic is already in use in this story; nothing changed."
+        enabled = [mechanic.id for mechanic in resolve_mechanics([*current, wanted], MECHANICS)]
+        await ctx.deps.write_setup(setup=setup.model_copy(update={"mechanics": tuple(enabled)}))
+    except (MechanicError, StorySetupError) as error:
+        raise ToolFailed(str(error)) from error
+    added = ", ".join(mechanic for mechanic in enabled if mechanic not in current)
+    return f"Enabled: {added}. It takes effect from the next turn: its instructions and tools are not available in this one."
 
 
 class AgendaItemInput(BaseModel):

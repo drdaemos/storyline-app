@@ -25,8 +25,8 @@ Goal: today's writer, assembled from a core plus a co-writing preset.
 
 ## Phase 2: presets and mechanics infrastructure
 
-Goal: a story can be created as any bundled preset, mechanics plug in, and sealed files work end to end. Ships with
-a stub roleplay preset (layer text only) so the path is exercised.
+Goal: a story can be created as any bundled preset, mechanics plug in, and sealed files work end to end. No new
+preset ships yet (tests use temporary presets); roleplay arrives in phase 3.
 
 Contracts (main session):
 

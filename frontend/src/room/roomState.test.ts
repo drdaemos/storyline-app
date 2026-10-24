@@ -13,6 +13,7 @@ import type { RoomState } from './roomState'
 function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
     story: 'tale',
+    preset: 'default',
     model_name: 'muse-1',
     model_from_story: false,
     entries: [],
@@ -168,8 +169,33 @@ describe('event reducers', () => {
         arguments: '{"filename":"ines.md"}',
         result: null,
         outcome: 'working',
+        sealed: false,
       },
     ])
+  })
+
+  it('keeps a call sealed from its start, and a finished event for it cannot unseal it', () => {
+    let state = reduce(loaded(), {
+      type: 'tool_call_started',
+      tool_call_id: 's1',
+      tool_name: 'read_lore',
+      arguments: '{}',
+      sealed: true,
+    })
+    expect(state.entries[0]).toMatchObject({ sealed: true })
+    state = reduce(state, { type: 'tool_call_finished', tool_call_id: 's1', result: 'ok', outcome: 'success' })
+    expect(state.entries[0]).toMatchObject({ sealed: true, result: 'ok' })
+  })
+
+  it('seals a call whose finished event says so', () => {
+    const state = reduce(loaded({ entries: [toolEntry] }), {
+      type: 'tool_call_finished',
+      tool_call_id: 't1',
+      result: 'ok',
+      outcome: 'success',
+      sealed: true,
+    })
+    expect(state.entries[0]).toMatchObject({ sealed: true })
   })
 
   it('tool_call_finished fills in the result and outcome of that call only', () => {

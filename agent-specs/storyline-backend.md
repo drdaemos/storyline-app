@@ -5,6 +5,7 @@ Backend is composed of Python packages, each serving a different responsibility.
 src/
     storyline/
         agent/              - writer agent, its core prompt and skills, the per-run assembly of a story's preset, per-turn story snapshot, model resolution, and WritingSession (one story's conversation: history repair, remembered model, running turns)
+        mechanics/          - the Mechanic contract and registry (`sealed` first): prompt section, toolset, skills and snapshot section a story can run with, chosen per story
         presets/            - bundled story presets (<id>/preset.md plus optional skills/): the relationship layer of the prompt for each kind of story
         workspace/          - stories in a workspace (one package per subdirectory), story selection, script and lore operations
         evals/              - scenario evaluations of the writer: runner, mechanical checks, behaviour and craft judges
@@ -53,7 +54,23 @@ frontend/                   - Vue web interface (shelf, writing room); the look 
 - A story's kind is recorded in `story.json` beside `script.md` (`StorySetup`: preset id and mechanics, read and
   written through `Story.read_setup` / `write_setup`). A story without one is a default co-writing story; an unreadable
   file or an unknown preset raises `StorySetupError` when the story's room opens: the terminal UI reports it and stays
-  on the story list, and the web answers 422.
+  on the story list, and the web answers 422. Presets are listed with `BUNDLED_PRESETS.summaries()` (web:
+  `GET /api/presets`, `LIST_PRESETS`). A story is created as a preset with
+  `StoryLibrary.create(name=..., setup=setup_for(BUNDLED_PRESETS.get(id)))`, which writes `story.json` with the
+  preset's mechanics resolved in full; an unknown id is refused before anything is created (web: 400).
+- Mechanics (`mechanics/`, one `Mechanic` subclass per unit, registered in `_ALL_MECHANICS`) add to a story's runs:
+  `assemble(preset, mechanics)` appends each mechanic's prompt section after the preset layer, adds its skills as
+  further `Skills` capabilities and its toolset as run `toolsets`; the snapshot lists the mechanics in use and the
+  others available, then each mechanic's `snapshot_section` lines before the agenda. The setup is re-read when every
+  turn starts and re-assembled only if it changed (`WritingSession.refresh_setup`), so a mechanic enabled during one
+  turn (the `enable_mechanic` tool, after the user agrees) applies from the next. A setup that has become unusable
+  fails that turn only.
+- Sealed files: lore files in `sealed/` (`sealed/<name>.md`, exactly one level), through the same lore tools and
+  `Story` methods; `LoreFile.sealed` marks them, `list_lore` returns the story's own lore first. The workspace always
+  supports them; the `sealed` mechanic is what tells the writer to use them. Tool calls that touch hidden content are
+  marked `sealed` on `ToolCallEntry`, `ToolCallStarted` and `ToolCallFinished` (`agent/sealing.py`
+  `tool_call_is_sealed`: a core lore tool naming `sealed/...`, or a call one of the story's mechanics `seals`), live
+  and in the restored transcript, so interfaces fold them. Lore tools on sealed files still emit `StoryFilesChanged`.
 - `plan.md` (direction), `style.md` (lasting prose preferences) and `collaboration.md` (working agreement, trust table,
   what is learned about the user) are lore files with fixed roles. Their bodies travel in every turn's story snapshot
   together with the lore index, the agenda and the end of the story. The agenda lives in `agenda.json` and is edited

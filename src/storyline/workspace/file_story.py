@@ -21,6 +21,8 @@ AGENDA_FILENAME = "agenda.json"
 CONVERSATION_HISTORY_FILENAME = ".storyline-history.json"
 STORY_SETTINGS_FILENAME = ".storyline-settings.json"
 SETUP_FILENAME = "story.json"
+SEALED_DIRNAME = "sealed"
+_LORE_NAME_RULE = "Lore filenames must be Markdown filenames beside script.md, or in the sealed folder as sealed/<name>.md."
 _AGENDA_ADAPTER = TypeAdapter(tuple[AgendaItem, ...])
 
 
@@ -73,7 +75,7 @@ class FileStory:
         return await self._locked(partial(self._change_script, partial(replace_unique, find=find, replace=replace)))
 
     async def list_lore(self) -> tuple[LoreFile, ...]:
-        """List Markdown lore files with their summary and keywords."""
+        """List Markdown lore files with their summary and keywords: the story's own, then the sealed ones."""
         return await asyncio.to_thread(self._list_lore)
 
     async def read_lore(self, *, filename: str) -> str:
@@ -180,29 +182,29 @@ class FileStory:
         if not self.root.is_dir():
             return ()
 
-        lore_files: list[LoreFile] = []
-        for path in sorted(self.root.glob("*.md")):
-            if path.name == SCRIPT_FILENAME:
-                continue
-            metadata = lore_metadata(path.read_text(encoding="utf-8"))
-            lore_files.append(
-                LoreFile(
-                    filename=path.name,
-                    summary=metadata.get("summary") if metadata else None,
-                    keywords=metadata.get("keywords") if metadata else None,
-                )
-            )
+        lore_files = [self._lore_file(path, sealed=False) for path in sorted(self.root.glob("*.md")) if path.name != SCRIPT_FILENAME]
+        lore_files.extend(self._lore_file(path, sealed=True) for path in sorted((self.root / SEALED_DIRNAME).glob("*.md")) if path.is_file())
         return tuple(lore_files)
+
+    def _lore_file(self, path: Path, *, sealed: bool) -> LoreFile:
+        metadata = lore_metadata(path.read_text(encoding="utf-8"))
+        return LoreFile(
+            filename=path.relative_to(self.root).as_posix(),
+            summary=metadata.get("summary") if metadata else None,
+            keywords=metadata.get("keywords") if metadata else None,
+            sealed=sealed,
+        )
 
     def _read_existing_lore(self, path: Path) -> str:
         if not path.is_file():
-            raise LoreEditError(f"Lore file does not exist: {path.name}. Use write_lore to create it.")
+            raise LoreEditError(f"Lore file does not exist: {path.relative_to(self.root).as_posix()}. Use write_lore to create it.")
         return path.read_text(encoding="utf-8")
 
     def _change_lore(self, filename: str, change: TextChanger, *, create: bool) -> TextEdit:
         path = self._lore_path(filename)
+        name = self._lore_name(filename)
         if path.exists() and not path.is_file():
-            raise LoreEditError(f"Lore path is not a file: {path.name}")
+            raise LoreEditError(f"Lore path is not a file: {name}")
         if create:
             existing = path.read_text(encoding="utf-8") if path.is_file() else ""
         else:
@@ -212,8 +214,9 @@ class FileStory:
         metadata = lore_metadata(result.text)
         if metadata is None or not metadata.get("summary") or not metadata.get("keywords"):
             raise LoreEditError("Lore files must start with a hyphen-delimited header containing non-empty summary and keywords properties.")
+        path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(path, result.text.encode("utf-8"))
-        return _text_edit(path.name, existing, result)
+        return _text_edit(name, existing, result)
 
     def _delete_lore(self, filename: str) -> None:
         path = self._lore_path(filename)
@@ -267,19 +270,26 @@ class FileStory:
         return archive_path.name
 
     def _lore_path(self, filename: str) -> Path:
-        relative_path = Path(filename.strip())
-        if relative_path.suffix == "":
-            relative_path = relative_path.with_suffix(".md")
-        if (
-            not filename.strip()
-            or relative_path.is_absolute()
-            or relative_path.drive
-            or len(relative_path.parts) != 1
-            or relative_path.suffix.lower() != ".md"
-            or relative_path.name.lower() == SCRIPT_FILENAME
-        ):
-            raise LoreEditError("Lore filenames must be Markdown filenames beside script.md.")
-        return self.root.joinpath(relative_path)
+        return self.root.joinpath(*_lore_parts(filename))
+
+    def _lore_name(self, filename: str) -> str:
+        """The filename as reported: relative to the story with ``/`` separators."""
+        return "/".join(_lore_parts(filename))
+
+
+def _lore_parts(filename: str) -> tuple[str, ...]:
+    """Split a lore filename into its path parts: ``(name,)`` or ``("sealed", name)``; raise ``LoreEditError`` for anything else."""
+    parts = filename.strip().replace("\\", "/").split("/")
+    directory, name = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
+    if len(parts) > 2 or (len(parts) == 2 and directory != SEALED_DIRNAME):
+        raise LoreEditError(_LORE_NAME_RULE)
+    if not name.strip() or name in {".", ".."}:
+        raise LoreEditError(_LORE_NAME_RULE)
+    if Path(name).suffix == "":
+        name = f"{name}.md"
+    if Path(name).suffix.lower() != ".md" or ":" in name or name.lower() == SCRIPT_FILENAME:
+        raise LoreEditError(_LORE_NAME_RULE)
+    return (directory, name) if directory else (name,)
 
 
 def _overwrite(_: str, *, content: str) -> TextChange:

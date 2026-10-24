@@ -153,14 +153,16 @@ needs a way to offer choices and to pick one, alongside free text. Specified whe
 
 Notes only the agent reads by default: cast sheets, the plans behind clocks, the review's verdicts.
 
-- Sealed files live in `sealed/` inside the story, in the lore format (summary and keywords header). The lore tools
-  accept `sealed/<name>.md` filenames when the story has this mechanic.
-- The snapshot lists sealed files in their own section, marked hidden from the user.
+- Sealed files live in `sealed/` inside the story, in the lore format (summary and keywords header), and the lore
+  tools take `sealed/<name>.md` filenames. The workspace always supports the folder; the mechanic is what tells the
+  writer to use it.
+- The snapshot's lore index lists sealed files with the rest, each marked sealed and hidden from the user.
 - Interfaces show a sealed bookmark with a count. Opening it takes a deliberate step past a spoiler warning (peek);
   there is no further protection. Editing is through the narrator or the file itself, like any lore today.
-- Tool calls that touch sealed content (sealed lore writes, hidden clocks, oracle questions, review verdicts) are
-  marked sealed in the protocol, and interfaces fold their arguments and results behind the same warning. Otherwise
-  the tool stamps in the conversation would leak everything the sealed folder hides.
+- Tool calls that touch sealed content (any lore tool on a `sealed/` file, listing the lore in a story with this
+  mechanic, hidden clocks, oracle questions, review verdicts) are marked sealed in the protocol, and interfaces fold
+  their arguments and results behind the same warning. Otherwise the tool stamps in the conversation would leak
+  everything the sealed folder hides.
 
 ### persona
 
