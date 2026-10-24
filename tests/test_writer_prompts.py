@@ -1,6 +1,7 @@
 """Tests for the writer's core prompt, its skills and how they are wired into the agent."""
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -9,11 +10,15 @@ from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, Too
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from storyline.agent import WRITER_INSTRUCTIONS, create_writer_agent
+from storyline.agent import WRITER_INSTRUCTIONS, assemble, create_writer_agent
 from storyline.agent.writer import WRITER_MAX_OUTPUT_TOKENS, WRITER_PROMPT_PATH, WRITER_SKILLS_PATH
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, PRESETS_PATH
 from storyline.workspace.file_story import FileStory
 
 SKILL_NAMES = ("assess-request", "research", "develop-element", "outline", "write-scene", "revise")
+
+
+GUIDANCE_FILES = [WRITER_PROMPT_PATH, *sorted(WRITER_SKILLS_PATH.glob("*/SKILL.md")), *sorted(PRESETS_PATH.glob("*/preset.md")), *sorted(PRESETS_PATH.glob("*/skills/*/SKILL.md"))]
 
 
 def _skill_files() -> list[Path]:
@@ -62,7 +67,7 @@ def test_reply_guidance_makes_the_basis_of_suggestions_correctable(requirement: 
     assert re.search(requirement, reply_guidance, re.IGNORECASE), f"Reply guidance omits {requirement}"
 
 
-@pytest.mark.parametrize("path", [WRITER_PROMPT_PATH, *sorted(WRITER_SKILLS_PATH.glob("*/SKILL.md"))])
+@pytest.mark.parametrize("path", GUIDANCE_FILES, ids=lambda path: f"{path.parent.name}/{path.name}")
 def test_writer_guidance_avoids_request_recaps(path: Path) -> None:
     guidance = path.read_text(encoding="utf-8")
     recap_request = re.compile(
@@ -87,6 +92,11 @@ def test_writer_guidance_avoids_requests_to_expose_thinking(path: Path) -> None:
     assert exposure_request.search(guidance) is None, f"{path.name} asks for a thinking transcript"
 
 
+async def _run_with_default_assembly(tmp_path: Path, respond: Callable[[list[ModelMessage], AgentInfo], ModelResponse]) -> None:
+    assembly = assemble(BUNDLED_PRESETS.get(DEFAULT_PRESET_ID))
+    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(respond), capabilities=list(assembly.capabilities))
+
+
 @pytest.mark.asyncio
 async def test_writer_offers_load_capability_with_each_skill_in_the_catalog(tmp_path: Path) -> None:
     tool_names: list[str] = []
@@ -97,7 +107,7 @@ async def test_writer_offers_load_capability_with_each_skill_in_the_catalog(tmp_
         catalog[:] = [str(info.instructions)]
         return ModelResponse(parts=[TextPart(content="Ready.")])
 
-    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(respond))
+    await _run_with_default_assembly(tmp_path, respond)
 
     assert "load_capability" in tool_names
     for name in SKILL_NAMES:
@@ -116,7 +126,7 @@ async def test_loading_a_skill_returns_its_instructions(tmp_path: Path, name: st
             return ModelResponse(parts=[ToolCallPart(tool_name="load_capability", args={"id": name})])
         return ModelResponse(parts=[TextPart(content="Loaded.")])
 
-    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(respond))
+    await _run_with_default_assembly(tmp_path, respond)
 
     _, body = _frontmatter(WRITER_SKILLS_PATH / name / "SKILL.md")
     assert returned

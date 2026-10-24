@@ -18,11 +18,13 @@ from pydantic_ai.messages import AgentStreamEvent, EnqueuedMessagesEvent, Handle
 from pydantic_ai.models import Model
 from pydantic_ai.usage import RunUsage
 
+from storyline.agent.assembly import RunAssembly, assemble
 from storyline.agent.history import actionable_history, without_last_turn
 from storyline.agent.models import resolve_model, validate_model_name
 from storyline.agent.story_context import turn_prompt
 from storyline.agent.writer import DEFAULT_MODEL_NAME
-from storyline.workspace import ConversationHistoryError, Story
+from storyline.presets import BUNDLED_PRESETS, PresetCatalog, PresetError
+from storyline.workspace import ConversationHistoryError, Story, StorySetupError
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,7 @@ class WritingTurn:
         *,
         story: Story,
         agent: Agent[Story, str],
+        assembly: RunAssembly,
         history: SavedHistory,
         prompt: str,
         model_name: str,
@@ -92,6 +95,7 @@ class WritingTurn:
     ) -> None:
         self._story = story
         self._agent = agent
+        self._assembly = assembly
         self._history = history
         self._prompt = prompt
         self._model_name = model_name
@@ -170,7 +174,14 @@ class WritingTurn:
             previous = self._history.messages
             # The prompt is kept from the start, so a turn that dies before it saves anything still leaves what the user asked.
             await self._history.save([*previous, ModelRequest(parts=[UserPromptPart(content=prompt)])])
-            async with self._agent.iter(prompt, deps=self._story, message_history=previous, model=model) as run:
+            async with self._agent.iter(
+                prompt,
+                deps=self._story,
+                message_history=previous,
+                model=model,
+                instructions=self._assembly.instructions,
+                capabilities=list(self._assembly.capabilities),
+            ) as run:
                 self._run = run
                 for prompt in self._enqueued:
                     self._hand_over(prompt)
@@ -227,6 +238,8 @@ class WritingSession:
         *,
         story: Story,
         agent: Agent[Story, str],
+        assembly: RunAssembly,
+        preset_id: str,
         history: SavedHistory,
         model_name: str,
         model_from_story: bool,
@@ -235,9 +248,12 @@ class WritingSession:
     ) -> None:
         self._story = story
         self._agent = agent
+        self._assembly = assembly
         self._history = history
         self._model_name = model_name
         self._model_override = model
+        self.preset_id = preset_id
+        """The preset the story was created with."""
         self.model_from_story = model_from_story
         """Whether the model was the one remembered in the story rather than the default."""
         self.archived_history = archived_history
@@ -251,11 +267,18 @@ class WritingSession:
         agent: Agent[Story, str],
         default_model_name: str = DEFAULT_MODEL_NAME,
         model: Model | str | None = None,
+        presets: PresetCatalog = BUNDLED_PRESETS,
     ) -> Self:
         """Open a story's conversation, repairing or archiving saved history that a run could not continue from.
 
         ``model`` runs turns on that model instead of the one ``model_name`` names, and the story does not remember it.
+        Raise ``StorySetupError`` when the story's setup is unreadable or names a preset that ``presets`` does not have.
         """
+        setup = await story.read_setup()
+        try:
+            preset = presets.get(setup.preset)
+        except PresetError as error:
+            raise StorySetupError(f"story.json names a preset this version does not have: {error}") from error
         archived: ArchivedHistory | None = None
         try:
             saved = await story.read_message_history()
@@ -269,6 +292,8 @@ class WritingSession:
         return cls(
             story=story,
             agent=agent,
+            assembly=assemble(preset),
+            preset_id=preset.id,
             history=history,
             model_name=remembered or default_model_name,
             model_from_story=remembered is not None,
@@ -315,6 +340,7 @@ class WritingSession:
         return WritingTurn(
             story=self._story,
             agent=self._agent,
+            assembly=self._assembly,
             history=self._history,
             prompt=prompt,
             model_name=self._model_name,

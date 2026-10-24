@@ -36,6 +36,7 @@ include = ["storyline*"]
 [tool.setuptools.package-data]
 "storyline.agent" = ["prompts/*.md", "skills/*/SKILL.md"]
 "storyline.evals" = ["data/slop_forensics/*"]
+"storyline.presets" = ["*/preset.md", "*/skills/*/SKILL.md", "*/review.md"]
 
 [project.scripts]
 storyline = "storyline.cli:main"

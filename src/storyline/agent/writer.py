@@ -6,10 +6,10 @@ from pathlib import Path
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import WebSearch
 from pydantic_ai.settings import ModelSettings
-from pydantic_ai_harness.skills import Skills
 
 from storyline.agent.models import resolve_model
 from storyline.agent.writer_tools import WRITER_TOOLSET
+from storyline.presets import Preset
 from storyline.workspace import Story
 
 DEFAULT_MODEL_NAME = "openrouter:meta/muse-spark-1.3"
@@ -25,6 +25,11 @@ def prompt_version(instructions: str) -> str:
     return hashlib.sha256(instructions.encode("utf-8")).hexdigest()[:10]
 
 
+def writer_prompt_version(instructions: str, preset: Preset) -> str:
+    """Return a short stable identifier for the core instructions together with a preset's layer."""
+    return prompt_version("\n\n".join((instructions, preset.layer)))
+
+
 def create_writer_agent(*, model_name: str = DEFAULT_MODEL_NAME, instructions: str = WRITER_INSTRUCTIONS) -> Agent[Story, str]:
     """Create an agent that can edit one story through the story boundary."""
     return Agent(
@@ -33,6 +38,6 @@ def create_writer_agent(*, model_name: str = DEFAULT_MODEL_NAME, instructions: s
         deps_type=Story,
         instructions=instructions,
         toolsets=[WRITER_TOOLSET],
-        capabilities=[WebSearch(), Skills(WRITER_SKILLS_PATH)],
+        capabilities=[WebSearch()],
         model_settings=ModelSettings(max_tokens=WRITER_MAX_OUTPUT_TOKENS),
     )

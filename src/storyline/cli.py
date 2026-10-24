@@ -10,9 +10,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from storyline.agent import DEFAULT_MODEL_NAME, WRITER_INSTRUCTIONS, prompt_version, resolve_model
+from storyline.agent import DEFAULT_MODEL_NAME, WRITER_INSTRUCTIONS, resolve_model, writer_prompt_version
 from storyline.evals import DEFAULT_JUDGE_MODEL_NAME, EvalError, EvalService, RunRequest, ScenarioError
 from storyline.observability import configure_tracing
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID
 from storyline.tui.session import run_interactive_session
 from storyline.web.app import run_server
 from storyline.web.settings import DATA_DIR_ENV_VAR, WebConfigurationError
@@ -128,7 +129,7 @@ async def _run_eval_command(options: argparse.Namespace) -> str:
         scenario_names=tuple(options.scenarios),
         model_name=options.model,
         instructions=instructions,
-        out_dir=options.out or EVAL_RUNS_DIR / f"{timestamp}-{prompt_version(instructions)}",
+        out_dir=options.out or EVAL_RUNS_DIR / f"{timestamp}-{writer_prompt_version(instructions, BUNDLED_PRESETS.get(DEFAULT_PRESET_ID))}",
         judge_model_name=None if options.no_judge else options.judge_model,
         repeat=options.repeat,
     )

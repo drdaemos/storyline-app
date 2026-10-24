@@ -17,7 +17,7 @@ from storyline.tui.prompt import PromptBlock
 from storyline.tui.session import INTERRUPTED_NOTICE, StorylineTui
 from storyline.tui.status_line import NEW_MESSAGES_STATUS, StatusLine
 from storyline.workspace import StoryLibrary
-from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, FileStory
+from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, SETUP_FILENAME, FileStory
 from storyline.workspace.file_workspace import FileWorkspace
 
 STORY_NAME = "noir"
@@ -54,6 +54,19 @@ async def test_unknown_command_is_reported(tmp_path) -> None:
         await _submit(pilot, app, "/nope now")
 
         assert any("Unknown command: /nope" in body for body in _bodies(app, MessageKind.ERROR))
+
+
+@pytest.mark.asyncio
+async def test_a_story_that_cannot_be_opened_is_reported_instead_of_opened(tmp_path) -> None:
+    (tmp_path / STORY_NAME).mkdir()
+    (tmp_path / STORY_NAME / SETUP_FILENAME).write_text('{"preset": "no-such-preset"}', encoding="utf-8")
+    app = StorylineTui(_config(tmp_path))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        assert any(STORY_NAME in body and "no-such-preset" in body for body in _bodies(app, MessageKind.ERROR))
+        assert app._state.room is None
 
 
 @pytest.mark.asyncio

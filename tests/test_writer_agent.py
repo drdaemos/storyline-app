@@ -8,9 +8,10 @@ from pydantic_ai.messages import ModelMessage, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.native_tools import WebSearchTool
 
-from storyline.agent import WRITER_INSTRUCTIONS, create_writer_agent, prompt_version, story_snapshot, turn_prompt, visible_prompt_text
+from storyline.agent import WRITER_INSTRUCTIONS, assemble, create_writer_agent, prompt_version, story_snapshot, turn_prompt, visible_prompt_text
 from storyline.agent.story_context import GUIDE_CHARACTERS, SNAPSHOT_OPEN, TAIL_CHARACTERS
 from storyline.agent.writer import WRITER_PROMPT_PATH
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID
 from storyline.workspace import LoreFile
 from storyline.workspace.file_story import FileStory
 
@@ -40,7 +41,8 @@ async def test_writer_agent_exposes_the_anchored_editing_tools(tmp_path) -> None
         observed_tool_names.extend(tool.name for tool in info.function_tools)
         return ModelResponse(parts=[TextPart(content="Ready.")])
 
-    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(model_response))
+    assembly = assemble(BUNDLED_PRESETS.get(DEFAULT_PRESET_ID))
+    await create_writer_agent().run("Hi.", deps=FileStory(tmp_path), model=FunctionModel(model_response), capabilities=list(assembly.capabilities))
 
     assert observed_tool_names == [
         "load_capability",

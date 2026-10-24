@@ -35,7 +35,7 @@ from storyline.tui.message_log import AgentReply, MessageLog
 from storyline.tui.models import MessageKind, PromptCommand, TuiConfig, TuiState
 from storyline.tui.prompt import PromptBlock
 from storyline.tui.status_line import StatusLine
-from storyline.workspace import Story, StoryLibrary, StorySelectionError, Workspace, WorkspaceEditError
+from storyline.workspace import Story, StoryLibrary, StorySelectionError, StorySetupError, Workspace, WorkspaceEditError
 
 if sys.platform == "win32":
     from storyline.tui.windows_input import ModifierAwareWindowsDriver
@@ -233,8 +233,8 @@ class StorylineTui(App[None]):
         except StorySelectionError as error:
             await self._message_log.add_message(MessageKind.ERROR, f"{error} · /stories lists stories")
             return
-        await self._activate(opened)
-        await self._message_log.add_message(MessageKind.SYSTEM, f"Switched to {opened.name}.")
+        if await self._activate(opened):
+            await self._message_log.add_message(MessageKind.SYSTEM, f"Switched to {opened.name}.")
 
     async def _new_command(self, argument: str) -> None:
         if not argument:
@@ -247,8 +247,8 @@ class StorylineTui(App[None]):
         except StorySelectionError as error:
             await self._message_log.add_message(MessageKind.ERROR, str(error))
             return
-        await self._activate(created)
-        await self._message_log.add_message(MessageKind.SYSTEM, f"Created {created.name}.")
+        if await self._activate(created):
+            await self._message_log.add_message(MessageKind.SYSTEM, f"Created {created.name}.")
 
     async def _script_command(self, _: str) -> None:
         room = await self._require_room()
@@ -314,16 +314,18 @@ class StorylineTui(App[None]):
         except StorySelectionError as error:
             await self._message_log.add_message(MessageKind.ERROR, str(error))
             story = None
-        if story is None:
+        if story is None or not await self._activate(story):
             await self._message_log.add_message(MessageKind.SYSTEM, f"Choose a story to work on.\n\n{await self._story_list()}")
-        else:
-            await self._activate(story)
 
-    async def _activate(self, story: Story) -> None:
-        """Make ``story`` the active one and show its own conversation."""
+    async def _activate(self, story: Story) -> bool:
+        """Make ``story`` the active one and show its own conversation; say why and return False when it cannot be opened."""
+        try:
+            room = await StoryRoom.open(story=story, agent=self._config.agent, default_model_name=self._state.model_name, spawn=self._run_as_worker)
+        except StorySetupError as error:
+            await self._message_log.add_message(MessageKind.ERROR, f"Cannot open {story.name}: {error}")
+            return False
         if self._stop_listening is not None:
             self._stop_listening()
-        room = await StoryRoom.open(story=story, agent=self._config.agent, default_model_name=self._state.model_name, spawn=self._run_as_worker)
         self._stop_listening = room.add_listener(self._show_event)
         self._state.room = room
         self._prompt.placeholder = self._prompt_placeholder()
@@ -340,6 +342,7 @@ class StorylineTui(App[None]):
             await self._message_log.add_message(MessageKind.ERROR, snapshot.agenda_error)
         if snapshot.model_from_story:
             await self._message_log.add_message(MessageKind.SYSTEM, f"Using {snapshot.model_name}, the model last used with {snapshot.story}.")
+        return True
 
     def _run_as_worker(self, turns: Coroutine[None, None, None]) -> Worker[None]:
         """Run the room's turns as a worker, which ties them to the app and lets tests wait for them."""

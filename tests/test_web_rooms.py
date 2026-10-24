@@ -13,8 +13,9 @@ from storyline.room import (
     TurnFinished,
     UserMessageAdded,
 )
-from storyline.web.errors import StoryNotFoundError
+from storyline.web.errors import StoryNotFoundError, StoryUnavailableError
 from storyline.web.room_host import RoomHost, RoomSubscription, SubscriptionClosedError
+from storyline.workspace.file_story import SETUP_FILENAME
 from storyline.workspace.file_workspace import FileWorkspace
 from tests.web_support import ScriptedWriter, room_host
 
@@ -178,6 +179,17 @@ async def test_unknown_stories_are_not_found(tmp_path) -> None:
     with pytest.raises(StoryNotFoundError):
         async with host.use(LOCAL, "missing"):
             pass
+    assert host.open_rooms == 0
+
+
+@pytest.mark.asyncio
+async def test_a_story_whose_setup_cannot_be_used_is_unavailable(tmp_path) -> None:
+    await _workspace_with_story(tmp_path)
+    (tmp_path / "workspace" / "harbor" / SETUP_FILENAME).write_text('{"preset": "no-such-preset"}', encoding="utf-8")
+    host = room_host(tmp_path / "workspace")
+
+    with pytest.raises(StoryUnavailableError, match="no-such-preset"):
+        await host.subscribe(LOCAL, "harbor")
     assert host.open_rooms == 0
 
 

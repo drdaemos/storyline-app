@@ -6,8 +6,9 @@ from unittest.mock import Mock
 import pytest
 
 from storyline import cli
-from storyline.agent import WRITER_INSTRUCTIONS, prompt_version
+from storyline.agent import WRITER_INSTRUCTIONS, writer_prompt_version
 from storyline.evals import EvalError, RunRequest
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID
 from storyline.workspace.file_workspace import FileWorkspace
 
 
@@ -195,7 +196,7 @@ def test_eval_run_defaults_to_the_built_in_prompt_and_a_versioned_output_directo
     assert isinstance(request, RunRequest)
     assert request.instructions == WRITER_INSTRUCTIONS
     assert request.out_dir.parent == tmp_path / "eval-runs"
-    assert request.out_dir.name.endswith(prompt_version(WRITER_INSTRUCTIONS))
+    assert request.out_dir.name.endswith(writer_prompt_version(WRITER_INSTRUCTIONS, BUNDLED_PRESETS.get(DEFAULT_PRESET_ID)))
     assert request.judge_model_name is None
     assert service.calls[1] == ("judge", None)
 

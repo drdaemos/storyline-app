@@ -12,7 +12,7 @@ from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
 from storyline.workspace.atomic_file import atomic_write
-from storyline.workspace.contracts import AgendaError, AgendaItem, ConversationHistoryError, LoreEditError, LoreFile, TextEdit
+from storyline.workspace.contracts import AgendaError, AgendaItem, ConversationHistoryError, LoreEditError, LoreFile, StorySetup, StorySetupError, TextEdit
 from storyline.workspace.lore_format import lore_metadata
 from storyline.workspace.text_edit import TextChange, append_text, replace_unique, snippet
 
@@ -20,6 +20,7 @@ SCRIPT_FILENAME = "script.md"
 AGENDA_FILENAME = "agenda.json"
 CONVERSATION_HISTORY_FILENAME = ".storyline-history.json"
 STORY_SETTINGS_FILENAME = ".storyline-settings.json"
+SETUP_FILENAME = "story.json"
 _AGENDA_ADAPTER = TypeAdapter(tuple[AgendaItem, ...])
 
 
@@ -132,6 +133,19 @@ class FileStory:
 
         await self._locked(update)
 
+    @property
+    def setup_path(self) -> Path:
+        """Return the location of the story's setup record."""
+        return self.root / SETUP_FILENAME
+
+    async def read_setup(self) -> StorySetup:
+        """Read the setup record; a story without one has the default setup."""
+        return await asyncio.to_thread(self._read_setup)
+
+    async def write_setup(self, *, setup: StorySetup) -> None:
+        """Record the story's setup."""
+        await self._locked(partial(atomic_write, self.setup_path, setup.model_dump_json(indent=2).encode("utf-8")))
+
     async def read_message_history(self) -> list[ModelMessage]:
         """Read the complete persisted Pydantic AI conversation history."""
         return await asyncio.to_thread(self._read_message_history)
@@ -214,6 +228,16 @@ class FileStory:
             return StorySettings.model_validate_json(self.settings_path.read_bytes())
         except (FileNotFoundError, ValidationError):
             return StorySettings()
+
+    def _read_setup(self) -> StorySetup:
+        try:
+            serialized = self.setup_path.read_bytes()
+        except FileNotFoundError:
+            return StorySetup()
+        try:
+            return StorySetup.model_validate_json(serialized)
+        except ValidationError as error:
+            raise StorySetupError(f"{SETUP_FILENAME} is not a valid story setup (a JSON object with preset and mechanics): {error}") from error
 
     def _read_agenda(self) -> tuple[AgendaItem, ...]:
         try:

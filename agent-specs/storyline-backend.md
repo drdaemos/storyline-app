@@ -4,7 +4,8 @@ Backend is composed of Python packages, each serving a different responsibility.
 
 src/
     storyline/
-        agent/              - writer agent, its prompt and skills, per-turn story snapshot, model resolution, and WritingSession (one story's conversation: history repair, remembered model, running turns)
+        agent/              - writer agent, its core prompt and skills, the per-run assembly of a story's preset, per-turn story snapshot, model resolution, and WritingSession (one story's conversation: history repair, remembered model, running turns)
+        presets/            - bundled story presets (<id>/preset.md plus optional skills/): the relationship layer of the prompt for each kind of story
         workspace/          - stories in a workspace (one package per subdirectory), story selection, script and lore operations
         evals/              - scenario evaluations of the writer: runner, mechanical checks, behaviour and craft judges
         room/               - the interface-agnostic layer: the room protocol (operations, events, snapshot) and StoryRoom, which runs one story's conversation for any interface
@@ -40,8 +41,19 @@ frontend/                   - Vue web interface (shelf, writing room); the look 
 - The writer prompt is a small core (`agent/prompts/writer.md`: identity, files, the turn loop, trust, reply shape) plus
   skills (`agent/skills/<name>/SKILL.md`: assess-request, research, develop-element, outline, write-scene, revise) that
   the model loads through `load_capability` via the harness `Skills` capability. A skill's frontmatter `name` equals its
-  directory and its `description` says when to load it. `prompt_version()` hashes the core prompt so runs and traces can
-  name the variant. Skill files ship as package data.
+  directory and its `description` says when to load it. `prompt_version()` hashes an instruction text and
+  `writer_prompt_version()` hashes the core prompt together with a preset's layer, so runs and traces can name the
+  variant. Skill files ship as package data.
+- How the writer and the user share the work depends on the story's preset (`presets/<id>/preset.md`: frontmatter id,
+  title, description and mechanics, then the relationship layer as Markdown; default `co-writing`). The agent itself
+  carries only the core prompt. `agent/assembly.py` builds a `RunAssembly` per story, once, when the `WritingSession`
+  opens: the preset's layer, passed as run `instructions` after the core, and the skill catalog, passed as run
+  `capabilities`: the core `Skills` library minus any skill the preset overrides by name, plus the preset's own
+  `skills/` library. Every turn passes both to the agent run.
+- A story's kind is recorded in `story.json` beside `script.md` (`StorySetup`: preset id and mechanics, read and
+  written through `Story.read_setup` / `write_setup`). A story without one is a default co-writing story; an unreadable
+  file or an unknown preset raises `StorySetupError` when the story's room opens: the terminal UI reports it and stays
+  on the story list, and the web answers 422.
 - `plan.md` (direction), `style.md` (lasting prose preferences) and `collaboration.md` (working agreement, trust table,
   what is learned about the user) are lore files with fixed roles. Their bodies travel in every turn's story snapshot
   together with the lore index, the agenda and the end of the story. The agenda lives in `agenda.json` and is edited

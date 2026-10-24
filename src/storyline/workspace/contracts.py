@@ -37,6 +37,10 @@ class StorySelectionError(ValueError):
     """Raised when a story cannot be created or opened under the requested name."""
 
 
+class StorySetupError(StorySelectionError):
+    """Raised when a story's setup record (story.json) cannot be read."""
+
+
 @dataclass(frozen=True)
 class TextEdit:
     """A completed change to the script or a lore file."""
@@ -74,6 +78,15 @@ class AgendaItem(BaseModel):
     status: AgendaStatus = "open"
     outcome: str = ""
     """The decision in a few words, once the item is settled."""
+
+
+class StorySetup(BaseModel):
+    """What kind of story this is: the preset it was created with and the mechanics switched on."""
+
+    model_config = ConfigDict(frozen=True)
+
+    preset: str = "co-writing"
+    mechanics: tuple[str, ...] = ()
 
 
 class Story(Protocol):
@@ -124,6 +137,12 @@ class Story(Protocol):
 
     async def write_model_name(self, *, model_name: str) -> None:
         """Remember the model this story is being worked on with."""
+
+    async def read_setup(self) -> StorySetup:
+        """Return the story's setup record; a story without one is a default co-written story. Raise ``StorySetupError`` when it is unreadable."""
+
+    async def write_setup(self, *, setup: StorySetup) -> None:
+        """Record the story's setup."""
 
     async def read_message_history(self) -> list[ModelMessage]:
         """Return the complete persisted Pydantic AI conversation history."""

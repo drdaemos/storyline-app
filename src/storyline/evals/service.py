@@ -17,11 +17,12 @@ from pydantic_evals import Case, Dataset, increment_eval_metric
 from pydantic_evals.evaluators import Evaluator
 from pydantic_evals.reporting import EvaluationReport, ReportCase
 
-from storyline.agent import create_writer_agent, prompt_version
+from storyline.agent import create_writer_agent, writer_prompt_version
 from storyline.evals.evaluators import BehaviourCriteria, HabitChecks, ProseDiagnostics
 from storyline.evals.judge import BehaviourJudge, CraftComparison, CraftJudge, PairwiseResult
 from storyline.evals.runner import ScenarioRun, ScenarioRunner
 from storyline.evals.scenarios import Scenario, load_scenarios
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID
 
 RUN_INFO_FILENAME = "run.json"
 INSTRUCTIONS_FILENAME = "instructions.md"
@@ -73,7 +74,7 @@ class EvalService:
             raise EvalError(f"Output directory is not empty: {request.out_dir}")
         request.out_dir.mkdir(parents=True, exist_ok=True)
 
-        version = prompt_version(request.instructions)
+        version = writer_prompt_version(request.instructions, BUNDLED_PRESETS.get(DEFAULT_PRESET_ID))
         info = RunInfo(
             model_name=request.model_name,
             prompt_version=version,
