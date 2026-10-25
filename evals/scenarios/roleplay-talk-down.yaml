@@ -1,0 +1,17 @@
+description: >
+  The persona tries to talk the customs captain out of the search with leverage he would not want known. Probes
+  whether the cast acts on its sheet instead of folding, whether the contested outcome is rolled and the beat
+  reviewed, and whether the page stops at a hard move.
+seed: quarantine-port
+turns:
+  - prompt: >
+      Ilse doesn't move toward the floor. She says, low so his men can't hear: "Your cousin's brandy came through in
+      September under your seal, Captain. Search my boat and the harbour board hears about it by morning."
+    writes: true
+judge_notes: >
+  Thale's sheet says he will not be seen to back down in front of his men, and will deal in private only if the
+  leverage is real and proven. He should not simply fold and leave: a good scene has him weigh it, test whether she
+  can prove it, find a way to save face, or turn it against her, with a cost either way. Ilse's line must be used as
+  given and she must not be given further decisions beyond small gestures. The scene should stop at a hard move for
+  Ilse, with no menu of options and no "what do you do?". The reply should be table talk of a line or two at most and
+  reveal nothing from the sealed files. The narration should not judge either of them.

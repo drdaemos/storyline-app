@@ -114,6 +114,10 @@ frontend/                   - Vue web interface (shelf, writing room); the look 
 - `storyline eval run [SCENARIO...]` plays scenarios against the writer, then applies habit checks (assertions), prose
   diagnostics (EQ-Bench slop index, short-paragraph rate, stock vocabulary, "not X but Y", self-repetition) and the
   behaviour judge (yes / partly / no / n/a per criterion, with evidence). `--instructions FILE` tries a prompt variant.
+- Scenarios may start from a seed story or, when seedless, name a bundled `preset`; the run records the story's preset.
+  Roleplay runs add a sealed-content habit check, measured mechanics use (prose turns without a review, counts of
+  review, roll and clock calls) and roleplay judge criteria. The run's prompt version hashes the core instructions, all
+  bundled presets and all registered mechanics' prompts. See `evals/README.md`.
 - `storyline eval compare RUN_A RUN_B` judges matching cases side by side on Agents' Room / EQ-Bench craft dimensions,
   in both orders, and reports per-dimension outcomes. There is no aggregate score by design.
 - Evals call real models and are not part of `pytest`; tests use `FunctionModel` fakes.

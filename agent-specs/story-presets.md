@@ -1,7 +1,7 @@
 # Story presets
 
 How Storyline runs different kinds of story: co-writing, roleplay and, later, storylets. Agreed with the user on
-2026-10-24. The build order is in `story-presets-build-plan.md`.
+2026-10-24 and built in four phases: the prompt split, presets and mechanics, roleplay, and roleplay evals.
 
 ## Why
 

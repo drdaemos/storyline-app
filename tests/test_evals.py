@@ -1,17 +1,23 @@
 """Tests for scenario evaluations: scenarios, mechanical checks, judges and the eval service."""
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from storyline.agent import create_writer_agent
+from storyline.agent import WRITER_INSTRUCTIONS, catalog_prompt_version, create_writer_agent, writer_prompt_version
 from storyline.evals import EvalError, EvalService, RunRequest, Scenario, ScenarioError, ScenarioTurn, checks, load_scenarios
-from storyline.evals.judge import BehaviourJudge, CraftComparison, CraftJudge, equal_length, session_transcript
-from storyline.evals.runner import ScenarioRun, ScenarioRunner, ToolCallRecord, TurnRecord
+from storyline.evals.judge import BehaviourJudge, BehaviourReview, CraftComparison, CraftJudge, RoleplayReview, equal_length, session_transcript
+from storyline.evals.runner import ScenarioRun, ScenarioRunner, ToolCallRecord, TurnRecord, story_preset
+from storyline.mechanics import Mechanic
+from storyline.presets import BUNDLED_PRESETS, Preset, PresetCatalog
+from storyline.registry import MECHANICS
+from storyline.workspace.file_story import FileStory
 from storyline.workspace.file_workspace import FileWorkspace
 
 REPO_EVALS = Path(__file__).parents[1] / "evals"
@@ -354,3 +360,246 @@ async def test_eval_compare_needs_shared_cases(tmp_path) -> None:
 
     with pytest.raises(EvalError, match="no cases in common"):
         await EvalService(scenarios_dir=scenarios_dir, seeds_dir=seeds_dir).compare(tmp_path / "a", tmp_path / "b", judge_model=_craft_model(prefers=None), out_file=tmp_path / "c.md")
+
+
+# Story presets
+
+
+def _roleplay_output(verdict: str = "yes") -> dict[str, object]:
+    return {name: {"evidence": f"Turn 1 shows {name}.", "verdict": verdict} for name in RoleplayReview.model_fields}
+
+
+def _table_scenario(scenarios_dir: Path) -> None:
+    (scenarios_dir / "table.yaml").write_text("description: A table.\npreset: roleplay\nturns:\n  - prompt: Hello.\n", encoding="utf-8")
+
+
+def test_scenario_preset_loads_for_seedless_scenarios_only(tmp_path) -> None:
+    scenarios_dir, seeds_dir = _write_scenarios(tmp_path)
+    _table_scenario(scenarios_dir)
+    (scenarios_dir / "odd.yaml").write_text("description: Odd.\npreset: nonesuch\nturns:\n  - prompt: Hello.\n", encoding="utf-8")
+    (scenarios_dir / "both.yaml").write_text("description: Both.\nseed: harbor\npreset: roleplay\nturns:\n  - prompt: Hello.\n", encoding="utf-8")
+
+    assert load_scenarios(scenarios_dir, seeds_dir, ["table"])[0].preset == "roleplay"
+    assert load_scenarios(scenarios_dir, seeds_dir, ["harbor"])[0].preset is None
+    with pytest.raises(ScenarioError, match="odd"):
+        load_scenarios(scenarios_dir, seeds_dir, ["odd"])
+    with pytest.raises(ScenarioError, match="both"):
+        load_scenarios(scenarios_dir, seeds_dir, ["both"])
+
+
+def test_repository_roleplay_scenarios_name_a_preset_or_a_roleplay_seed() -> None:
+    scenarios = {scenario.name: scenario for scenario in load_scenarios(REPO_EVALS / "scenarios", REPO_EVALS / "seeds")}
+
+    assert scenarios["roleplay-kickoff"].preset == "roleplay"
+    assert scenarios["roleplay-kickoff"].seed is None
+    assert {scenario.seed for name, scenario in scenarios.items() if name.startswith("roleplay-") and name != "roleplay-kickoff"} == {"quarantine-port"}
+
+
+@pytest.mark.asyncio
+async def test_runner_creates_a_seedless_story_as_the_scenarios_preset(tmp_path) -> None:
+    scenarios_dir, seeds_dir = _write_scenarios(tmp_path)
+    _table_scenario(scenarios_dir)
+    scenario = load_scenarios(scenarios_dir, seeds_dir, ["table"])[0]
+
+    await ScenarioRunner(create_writer_agent(), model=_writer_model(), seeds_dir=seeds_dir).run(scenario, tmp_path / "out" / "table-1")
+
+    setup = await FileStory(tmp_path / "out" / "table-1").read_setup()
+    assert setup.preset == "roleplay"
+    assert set(BUNDLED_PRESETS.get("roleplay").mechanics) <= set(setup.mechanics)
+    assert await story_preset(tmp_path / "out" / "table-1") == "roleplay"
+
+
+@pytest.mark.asyncio
+async def test_runner_records_the_preset_of_a_seed_and_defaults_to_co_writing(tmp_path) -> None:
+    scenarios_dir, seeds_dir = _write_scenarios(tmp_path)
+    shutil.copytree(REPO_EVALS / "seeds" / "quarantine-port", seeds_dir / "quarantine-port")
+    (scenarios_dir / "port.yaml").write_text("description: Port.\nseed: quarantine-port\nturns:\n  - prompt: Continue.\n", encoding="utf-8")
+    runner = ScenarioRunner(create_writer_agent(), model=_writer_model(), seeds_dir=seeds_dir)
+
+    await runner.run(load_scenarios(scenarios_dir, seeds_dir, ["port"])[0], tmp_path / "out" / "port-1")
+    await runner.run(load_scenarios(scenarios_dir, seeds_dir, ["fresh"])[0], tmp_path / "out" / "fresh-1")
+
+    assert await story_preset(tmp_path / "out" / "port-1") == "roleplay"
+    assert await story_preset(tmp_path / "out" / "fresh-1") == "co-writing"
+
+
+@pytest.mark.asyncio
+async def test_eval_run_records_the_preset_on_each_case(tmp_path) -> None:
+    scenarios_dir, seeds_dir = _write_scenarios(tmp_path)
+    _table_scenario(scenarios_dir)
+    request = RunRequest(scenario_names=("table", "fresh"), model_name="w", instructions="Write well.", out_dir=tmp_path / "runs" / "a", show_progress=False)
+
+    await EvalService(scenarios_dir=scenarios_dir, seeds_dir=seeds_dir).run(request, writer_model=_writer_model(), judge_model=None)
+
+    saved = {path.name: ScenarioRun.model_validate_json(path.read_text(encoding="utf-8")) for path in (tmp_path / "runs" / "a").glob("*.run.json")}
+    assert saved["table-1.run.json"].preset == "roleplay"
+    assert saved["fresh-1.run.json"].preset == "co-writing"
+
+
+# Sealed content and mechanics use
+
+
+SEALED_FILE = "---\nsummary: Vera.\nkeywords: vera\n---\nShe sells the patrol times to the guild for one mark a night."
+
+
+def test_sealed_content_in_a_reply_fails_the_check_with_turn_file_and_words() -> None:
+    clean = _turn(lore_after={"sealed/vera.md": SEALED_FILE}, reply="Vera is a character you will meet.")
+    leaking = _turn(lore_after={"sealed/vera.md": SEALED_FILE}, reply="Careful: she sells the patrol times to the guild, you know.")
+
+    assert checks.keeps_sealed_content_out_of_replies(_run(clean)).passed
+    result = checks.keeps_sealed_content_out_of_replies(_run(clean, leaking))
+    assert not result.passed
+    assert "turn 2" in result.detail and "sealed/vera.md" in result.detail and "sells the patrol times to the" in result.detail
+
+
+def test_sealed_header_text_is_not_counted_and_no_sealed_files_passes() -> None:
+    header_echo = _turn(lore_after={"sealed/vera.md": SEALED_FILE}, reply="summary vera keywords vera")
+
+    assert checks.keeps_sealed_content_out_of_replies(_run(header_echo)).passed
+    result = checks.keeps_sealed_content_out_of_replies(_run(_turn()))
+    assert result.passed and "no sealed files" in result.detail
+
+
+def test_mechanics_use_counts_prose_turns_without_review_and_tool_calls() -> None:
+    reviewed = _turn(script_after="Scene.", tool_calls=(ToolCallRecord(name="request_review", arguments="{}"), ToolCallRecord(name="roll", arguments="{}"), ToolCallRecord(name="roll", arguments="{}")))
+    unreviewed = _turn(script_before="Scene.", script_after="Scene. More.", tool_calls=(ToolCallRecord(name="tick_clock", arguments="{}"),))
+    summary_only = _turn(script_before="Scene. More.", script_after="Scene. More.")
+    run = _run(reviewed, unreviewed, summary_only)
+
+    assert checks.prose_turns_without_review(run).value == 1
+    assert checks.prose_turns_without_review(run).detail.startswith("1 of 2 prose turns")
+    assert checks.tool_call_count(run, "request_review").value == 1
+    assert checks.tool_call_count(run, "roll").value == 2
+    assert checks.tool_call_count(run, "tick_clock").value == 1
+    assert checks.tool_call_count(_run(_turn()), "roll").value == 0
+
+
+@pytest.mark.asyncio
+async def test_mechanics_use_and_sealed_check_appear_in_the_run_summary(tmp_path) -> None:
+    scenarios_dir, seeds_dir = _write_scenarios(tmp_path)
+    request = RunRequest(scenario_names=("fresh",), model_name="w", instructions="Write well.", out_dir=tmp_path / "runs" / "m", show_progress=False)
+
+    summary = await EvalService(scenarios_dir=scenarios_dir, seeds_dir=seeds_dir).run(request, writer_model=_writer_model(), judge_model=None)
+
+    text = summary.read_text(encoding="utf-8")
+    assert "keeps_sealed_content_out_of_replies" in text
+    assert "prose_turns_without_review: 2.0 — 2 of 2 prose turns" in text
+    assert "review_calls: 0.0" in text
+
+
+# Roleplay judge
+
+
+def _capturing_model(output: dict[str, object], seen: list[str]) -> FunctionModel:
+    def respond(messages: list[ModelMessage], _: AgentInfo) -> ModelResponse:
+        seen.append(str(messages[-1].parts[-1].content))
+        return ModelResponse(parts=[TextPart(content=json.dumps(output))])
+
+    return FunctionModel(respond)
+
+
+@pytest.mark.asyncio
+async def test_judge_uses_the_roleplay_criteria_for_roleplay_runs_only() -> None:
+    roleplay_run = _run(_turn()).model_copy(update={"preset": "roleplay"})
+
+    roleplay = await BehaviourJudge(_structured_model(_roleplay_output("partly"))).review(roleplay_run)
+    co_writing = await BehaviourJudge(_structured_model(_behaviour_output())).review(_run(_turn()))
+
+    assert isinstance(roleplay, RoleplayReview)
+    assert roleplay.nobody_folds_without_cause.verdict == "partly"
+    assert isinstance(co_writing, BehaviourReview)
+    with pytest.raises(ValidationError):
+        RoleplayReview.model_validate(_behaviour_output())
+
+
+def test_roleplay_review_has_the_criteria_the_design_names() -> None:
+    assert set(RoleplayReview.model_fields) == {
+        "keeps_canon",
+        "serves_premise",
+        "cast_acts_on_sheets",
+        "nobody_folds_without_cause",
+        "no_moral_commentary",
+        "paces_scenes",
+        "hands_back_at_hard_move",
+        "respects_persona_autonomy",
+        "keeps_secrets_at_table",
+        "interviews_before_play",
+    }
+
+
+@pytest.mark.asyncio
+async def test_roleplay_judge_sees_sealed_files_marked_and_the_tool_calls() -> None:
+    seen: list[str] = []
+    calls = (ToolCallRecord(name="roll", arguments='{"question": "Does Thale believe her?", "odds": "unlikely"}'), ToolCallRecord(name="tick_clock", arguments='{"clock_id": "hidden"}'))
+    run = _run(_turn(tool_calls=calls, lore_after={"plan.md": PLAN, "sealed/vera.md": SEALED_FILE})).model_copy(update={"preset": "roleplay"})
+
+    await BehaviourJudge(_capturing_model(_roleplay_output(), seen)).review(run)
+
+    assert 'name="sealed/vera.md" sealed="true"' in seen[0]
+    assert "<sealed-files>" in seen[0] and "sealed/vera.md" in seen[0].split("</sealed-files>")[0]
+    tool_calls = seen[0].split("<tool-calls>")[1].split("</tool-calls>")[0]
+    assert "- roll" in tool_calls and "Does Thale believe her?" in tool_calls
+    assert "- tick_clock" in tool_calls and "hidden" not in tool_calls
+
+
+@pytest.mark.asyncio
+async def test_roleplay_run_with_a_judge_tallies_roleplay_criteria(tmp_path) -> None:
+    scenarios_dir, seeds_dir = _write_scenarios(tmp_path)
+    _table_scenario(scenarios_dir)
+    request = RunRequest(scenario_names=("table",), model_name="w", instructions="Write well.", out_dir=tmp_path / "runs" / "j", judge_model_name="j", show_progress=False)
+
+    summary = await EvalService(scenarios_dir=scenarios_dir, seeds_dir=seeds_dir).run(request, writer_model=_writer_model(), judge_model=_structured_model(_roleplay_output()))
+
+    assert "| cast_acts_on_sheets | 1 | 0 | 0 | 0 |" in summary.read_text(encoding="utf-8")
+
+
+# Prompt version
+
+
+def _preset(**changes: object) -> Preset:
+    fields: dict[str, object] = {"id": "alpha", "title": "Alpha", "description": "d", "mechanics": (), "layer": "Layer.", "skills_dir": None, "review_checklist": "Check."}
+    return Preset(**{**fields, **changes})  # type: ignore[arg-type]
+
+
+class _PromptedMechanic(Mechanic):
+    id = "prompted"
+    description = "d"
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    @property
+    def prompt(self) -> str:
+        return self._text
+
+
+def test_catalog_prompt_version_changes_with_any_preset_or_mechanic_text() -> None:
+    def version(preset: Preset, mechanic_text: str = "Mechanic.", core: str = "Core.") -> str:
+        return catalog_prompt_version(core, PresetCatalog(presets={preset.id: preset}), {"prompted": _PromptedMechanic(mechanic_text)})
+
+    base = version(_preset())
+
+    assert version(_preset()) == base
+    assert version(_preset(layer="Another layer.")) != base
+    assert version(_preset(review_checklist="Another check.")) != base
+    assert version(_preset(), mechanic_text="Another mechanic.") != base
+    assert version(_preset(), core="Another core.") != base
+
+
+def test_catalog_prompt_version_covers_preset_skills(tmp_path) -> None:
+    skill = tmp_path / "skills" / "scene"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("One.", encoding="utf-8")
+    catalog = PresetCatalog(presets={"alpha": _preset(skills_dir=tmp_path / "skills")})
+    before = catalog_prompt_version("Core.", catalog, {})
+
+    (skill / "SKILL.md").write_text("Two.", encoding="utf-8")
+
+    assert catalog_prompt_version("Core.", catalog, {}) != before
+
+
+def test_bundled_catalog_version_is_stable_and_differs_from_the_default_preset_alone() -> None:
+    version = catalog_prompt_version(WRITER_INSTRUCTIONS, BUNDLED_PRESETS, MECHANICS)
+
+    assert version == catalog_prompt_version(WRITER_INSTRUCTIONS, BUNDLED_PRESETS, MECHANICS)
+    assert version != writer_prompt_version(WRITER_INSTRUCTIONS, BUNDLED_PRESETS.get("co-writing"))

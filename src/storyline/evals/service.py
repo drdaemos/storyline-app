@@ -17,12 +17,13 @@ from pydantic_evals import Case, Dataset, increment_eval_metric
 from pydantic_evals.evaluators import Evaluator
 from pydantic_evals.reporting import EvaluationReport, ReportCase
 
-from storyline.agent import create_writer_agent, writer_prompt_version
-from storyline.evals.evaluators import BehaviourCriteria, HabitChecks, ProseDiagnostics
+from storyline.agent import catalog_prompt_version, create_writer_agent
+from storyline.evals.evaluators import BehaviourCriteria, HabitChecks, MechanicsUse, ProseDiagnostics
 from storyline.evals.judge import BehaviourJudge, CraftComparison, CraftJudge, PairwiseResult
-from storyline.evals.runner import ScenarioRun, ScenarioRunner
+from storyline.evals.runner import ScenarioRun, ScenarioRunner, story_preset
 from storyline.evals.scenarios import Scenario, load_scenarios
-from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID
+from storyline.presets import BUNDLED_PRESETS
+from storyline.registry import MECHANICS
 
 RUN_INFO_FILENAME = "run.json"
 INSTRUCTIONS_FILENAME = "instructions.md"
@@ -74,7 +75,7 @@ class EvalService:
             raise EvalError(f"Output directory is not empty: {request.out_dir}")
         request.out_dir.mkdir(parents=True, exist_ok=True)
 
-        version = writer_prompt_version(request.instructions, BUNDLED_PRESETS.get(DEFAULT_PRESET_ID))
+        version = catalog_prompt_version(request.instructions, BUNDLED_PRESETS, MECHANICS)
         info = RunInfo(
             model_name=request.model_name,
             prompt_version=version,
@@ -92,13 +93,14 @@ class EvalService:
         async def play(scenario: Scenario) -> ScenarioRun:
             played[scenario.name] += 1
             case_name = f"{scenario.name}-{played[scenario.name]}"
-            turns = await runner.run(scenario, request.out_dir / case_name)
-            run = ScenarioRun(case_name=case_name, scenario=scenario, model_name=request.model_name, prompt_version=version, turns=turns)
+            story_dir = request.out_dir / case_name
+            turns = await runner.run(scenario, story_dir)
+            run = ScenarioRun(case_name=case_name, scenario=scenario, model_name=request.model_name, prompt_version=version, preset=await story_preset(story_dir), turns=turns)
             (request.out_dir / f"{case_name}{CASE_SUFFIX}").write_text(run.model_dump_json(indent=2), encoding="utf-8")
             _record_usage(run)
             return run
 
-        evaluators: list[Evaluator[Scenario, ScenarioRun, None]] = [HabitChecks(), ProseDiagnostics()]
+        evaluators: list[Evaluator[Scenario, ScenarioRun, None]] = [HabitChecks(), MechanicsUse(), ProseDiagnostics()]
         if judge_model is not None:
             evaluators.append(BehaviourCriteria(judge=BehaviourJudge(judge_model)))
         dataset = Dataset[Scenario, ScenarioRun, None](name="storyline-writer", cases=[Case(name=scenario.name, inputs=scenario) for scenario in scenarios], evaluators=evaluators)

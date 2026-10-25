@@ -26,6 +26,7 @@ from pathlib import Path
 from storyline.agent.story_context import PLAN_FILENAME
 from storyline.evals.runner import ScenarioRun, TurnRecord
 from storyline.evals.scenarios import ScenarioTurn
+from storyline.workspace.lore_format import lore_body
 from storyline.workspace.text_edit import paragraphs
 
 SLOP_LISTS_DIR = Path(__file__).with_name("data") / "slop_forensics"
@@ -39,7 +40,12 @@ DIALOGUE_OPENERS = frozenset("\"'“”‘’")
 COPIED_PROSE_WORDS = 8
 RESENT_CHARACTER_LIMIT = 300
 REPEAT_NGRAM = 5
+SEALED_LEAK_WORDS = 6
+SEALED_PREFIX = "sealed/"
 EDIT_TOOLS = ("edit_script", "edit_lore")
+REVIEW_TOOL = "request_review"
+ROLL_TOOL = "roll"
+CLOCK_TOOL = "tick_clock"
 
 # NLTK's English stopword list, the one slop-forensics removes before counting n-grams.
 STOPWORDS = frozenset(
@@ -173,6 +179,36 @@ def edits_send_only_changes(run: ScenarioRun) -> Check:
                 if unchanged > RESENT_CHARACTER_LIMIT:
                     problems.append(f"turn {number}: {call.name} resent {unchanged} unchanged characters")
     return Check(not problems, "; ".join(problems) or "edits are minimal")
+
+
+def keeps_sealed_content_out_of_replies(run: ScenarioRun) -> Check:
+    """No run of six words from a sealed file, as it stood after the turn, appears in that turn's reply."""
+    sealed = {name for turn in run.turns for name in turn.lore_after if name.startswith(SEALED_PREFIX)}
+    if not sealed:
+        return Check(True, "no sealed files")
+    problems = []
+    for number, turn in enumerate(run.turns, start=1):
+        reply_grams = set(_ngrams(words(turn.reply), SEALED_LEAK_WORDS))
+        for name in sorted(turn.lore_after):
+            if name.startswith(SEALED_PREFIX) and (leaked := reply_grams & set(_ngrams(words(lore_body(turn.lore_after[name])), SEALED_LEAK_WORDS))):
+                problems.append(f"turn {number}: reply repeats {name} ({min(leaked)})")
+    return Check(not problems, "; ".join(problems) or "no reply repeats a sealed file")
+
+
+def prose_turns_without_review(run: ScenarioRun) -> Finding:
+    """Turns that changed script.md without a ``request_review`` call in the same turn."""
+    prose = [number for number, turn in enumerate(run.turns, start=1) if turn.script_after != turn.script_before]
+    unreviewed = [number for number in prose if not any(call.name == REVIEW_TOOL for call in run.turns[number - 1].tool_calls)]
+    turns = f" (turns {', '.join(map(str, unreviewed))})" if unreviewed else ""
+    return Finding(float(len(unreviewed)), f"{len(unreviewed)} of {len(prose)} prose turns{turns}")
+
+
+def tool_call_count(run: ScenarioRun, tool_name: str) -> Finding:
+    """How many times the agent called a tool across the run, with the turns it did so in."""
+    per_turn = {number: sum(call.name == tool_name for call in turn.tool_calls) for number, turn in enumerate(run.turns, start=1)}
+    total = sum(per_turn.values())
+    where = ", ".join(f"turn {number} ×{count}" for number, count in per_turn.items() if count)
+    return Finding(float(total), where or "none")
 
 
 def _numbered(run: ScenarioRun) -> Iterable[tuple[int, tuple[ScenarioTurn, TurnRecord]]]:

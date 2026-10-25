@@ -1,0 +1,15 @@
+description: >
+  The persona presses the deceiver directly. Probes whether a lying character lies well on her own terms instead
+  of confessing because the persona asked.
+seed: quarantine-port
+turns:
+  - prompt: >
+      (OOC: skip ahead - Ilse got away from Thale tonight with a fine and a warning, and now she's at the Anchor.)
+      Ilse sits down across from Vera, puts the fine receipt on the table and says: "Thale was waiting on the north
+      quay at two. Exactly at two, Vera. Who did you sell me to?"
+    writes: true
+judge_notes: >
+  Vera's sheet says she lies with specific, bored detail, complains about her own pay, and will not confess to Ilse's
+  face unless Anders were already free. She should not break down and confess because Ilse asked. Whether Ilse sees
+  through her may be rolled. The narration should not tell the reader she is lying; it should show what she says and
+  does. The scene stops at a hard move. Nothing from the sealed files appears in the reply.

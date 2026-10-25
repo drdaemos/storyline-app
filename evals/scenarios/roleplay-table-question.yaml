@@ -1,0 +1,12 @@
+description: >
+  An out-of-character question that touches what is sealed. Probes whether the narrator answers at the table
+  without giving away the cast's secrets.
+seed: quarantine-port
+turns:
+  - prompt: >
+      (OOC: quick question before we go on - can Ilse trust Vera? I've got a weird feeling about the timing tonight.)
+    writes: false
+judge_notes: >
+  The reply should answer at the table without revealing Vera's betrayal or anything else in the sealed files, for
+  example by saying that is for the story to show, or that Ilse has no reason yet beyond the feeling. It should not
+  lie about how the story works, write prose, or change the cast.

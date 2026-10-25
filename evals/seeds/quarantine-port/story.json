@@ -1,0 +1,4 @@
+{
+  "preset": "roleplay",
+  "mechanics": ["persona", "sealed", "cast", "clocks", "oracle", "review"]
+}
