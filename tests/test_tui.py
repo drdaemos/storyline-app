@@ -11,6 +11,7 @@ from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls
 from textual.widgets import Static
 
 from storyline.agent import create_writer_agent, turn_prompt, visible_prompt_text
+from storyline.registry import MECHANICS
 from storyline.tui.message_log import ActivityLine, AgentReply, ChatMessage, MessageLog, ToolLogEntry
 from storyline.tui.models import MessageKind, TuiConfig
 from storyline.tui.prompt import PromptBlock
@@ -192,10 +193,10 @@ async def test_restored_history_is_shown_on_startup(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_restored_prompts_hide_the_story_snapshot(tmp_path) -> None:
+async def test_restored_prompts_hide_the_story_snapshot(tmp_path, registry=MECHANICS) -> None:
     story = _story(tmp_path)
     await story.append_script(text="Secret opening.")
-    prompt = await turn_prompt(story, "Continue.")
+    prompt = await turn_prompt(story, "Continue.", registry=MECHANICS)
     await story.write_message_history(message_history=[ModelRequest(parts=[UserPromptPart(content=prompt)])])
     app = _build_app(tmp_path)
 

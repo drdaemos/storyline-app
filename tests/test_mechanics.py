@@ -9,9 +9,10 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart, Use
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from storyline.agent import WRITER_INSTRUCTIONS, TurnOutcome, WritingSession, assemble, create_writer_agent, story_snapshot, tool_call_is_sealed, turn_prompt
-from storyline.agent.writer_tools import WRITER_TOOLSET
-from storyline.mechanics import MECHANICS, Mechanic, MechanicError, SealedMechanic, resolve_mechanics
+from storyline.agent.writer_tools import mechanic_toolset
+from storyline.mechanics import Mechanic, MechanicError, SealedMechanic, resolve_mechanics
 from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, PresetError, load_presets, setup_for
+from storyline.registry import MECHANICS
 from storyline.workspace import LoreFile, Story, StoryLibrary, StorySetup, StorySetupError
 from storyline.workspace.file_story import SETUP_FILENAME, FileStory
 from storyline.workspace.file_workspace import FileWorkspace
@@ -207,7 +208,7 @@ def test_listing_the_lore_is_sealed_only_in_a_story_with_the_sealed_mechanic() -
 def test_the_snapshot_marks_sealed_lore_as_hidden_from_the_user() -> None:
     lore = (LoreFile("city.md", "The city.", "city"), LoreFile("sealed/vera.md", "What Vera wants.", "vera", sealed=True))
 
-    snapshot = story_snapshot("Opening.", lore=lore)
+    snapshot = story_snapshot("Opening.", lore=lore, registry=MECHANICS)
 
     [city] = [line for line in snapshot.splitlines() if "city.md" in line]
     [vera] = [line for line in snapshot.splitlines() if "sealed/vera.md" in line]
@@ -234,7 +235,7 @@ async def test_each_mechanics_snapshot_lines_come_in_mechanic_order_before_the_a
     first, second = _mechanic(tmp_path, "first"), _mechanic(tmp_path, "second")
     story = FileStory(tmp_path / "story")
 
-    prompt = await turn_prompt(story, "Go.", (first, second), _registry(first, second))
+    prompt = await turn_prompt(story, "Go.", (first, second), registry=_registry(first, second))
 
     snapshot = str(prompt[0])
     assert snapshot.index("Section lines of first.") < snapshot.index("Section lines of second.") < snapshot.index("Agenda:")
@@ -251,7 +252,7 @@ async def test_a_story_naming_an_unknown_mechanic_fails_to_open(tmp_path: Path) 
     await story.write_setup(setup=StorySetup(mechanics=("ghost",)))
 
     with pytest.raises(StorySetupError, match="ghost"):
-        await WritingSession.open(story=story, agent=create_writer_agent())
+        await WritingSession.open(story=story, agent=create_writer_agent(), registry=MECHANICS)
 
 
 @pytest.mark.asyncio
@@ -272,12 +273,11 @@ async def test_a_session_runs_with_the_mechanics_its_story_records(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_a_mechanic_enabled_during_a_turn_applies_from_the_next_turn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_a_mechanic_enabled_during_a_turn_applies_from_the_next_turn(tmp_path: Path) -> None:
     mechanic = _mechanic(tmp_path, "notes", with_tool=True)
-    monkeypatch.setitem(MECHANICS, "notes", mechanic)
     story = FileStory(tmp_path / "story")
     seen = Recorder(ToolCallPart(tool_name="enable_mechanic", args={"mechanic_id": "notes"}))
-    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=seen.model)
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=seen.model, registry={**MECHANICS, "notes": mechanic})
 
     first = session.turn("Enable it.")
     await first.run()
@@ -300,7 +300,7 @@ async def test_a_mechanic_enabled_during_a_turn_applies_from_the_next_turn(tmp_p
 async def test_a_turn_whose_setup_became_unusable_fails_without_running(tmp_path: Path) -> None:
     story = FileStory(tmp_path)
     seen = Recorder()
-    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=seen.model)
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=seen.model, registry=MECHANICS)
     await story.write_setup(setup=StorySetup(mechanics=("ghost",)))
 
     turn = session.turn("Hi.")
@@ -315,7 +315,7 @@ async def test_a_turn_whose_setup_became_unusable_fails_without_running(tmp_path
 async def test_a_turn_whose_setup_file_is_unreadable_fails_and_a_repaired_one_works_again(tmp_path: Path) -> None:
     story = FileStory(tmp_path)
     seen = Recorder()
-    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=seen.model)
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=seen.model, registry=MECHANICS)
     (tmp_path / SETUP_FILENAME).write_text("{not json", encoding="utf-8")
 
     broken = session.turn("Hi.")
@@ -331,19 +331,18 @@ async def test_a_turn_whose_setup_file_is_unreadable_fails_and_a_repaired_one_wo
 # The enable_mechanic tool
 
 
-async def _enable(story: FileStory, mechanic_id: str) -> str:
+async def _enable(story: FileStory, mechanic_id: str, registry: Mapping[str, Mechanic] = MECHANICS) -> str:
     seen = Recorder(ToolCallPart(tool_name="enable_mechanic", args={"mechanic_id": mechanic_id}))
-    await create_writer_agent().run("Go.", deps=story, model=seen.model)
+    await create_writer_agent().run("Go.", deps=story, model=seen.model, toolsets=[mechanic_toolset(registry)])
     return seen.prompts[-1]
 
 
 @pytest.mark.asyncio
-async def test_enabling_a_mechanic_records_it_with_its_requirements(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(MECHANICS, "needy", _mechanic(tmp_path, "needy", requires=("sealed",)))
+async def test_enabling_a_mechanic_records_it_with_its_requirements(tmp_path: Path) -> None:
     story = FileStory(tmp_path / "story")
     await story.write_setup(setup=StorySetup())
 
-    await _enable(story, "needy")
+    await _enable(story, "needy", {**MECHANICS, "needy": _mechanic(tmp_path, "needy", requires=("sealed",))})
 
     assert (await story.read_setup()).mechanics == ("sealed", "needy")
 
@@ -360,7 +359,7 @@ async def test_the_enable_result_says_it_takes_effect_from_the_next_turn(tmp_pat
             return ModelResponse(parts=[TextPart(content="Done.")])
         return ModelResponse(parts=[ToolCallPart(tool_name="enable_mechanic", args={"mechanic_id": "sealed"})])
 
-    await create_writer_agent().run("Go.", deps=story, model=FunctionModel(respond))
+    await create_writer_agent().run("Go.", deps=story, model=FunctionModel(respond), toolsets=[mechanic_toolset(MECHANICS)])
 
     assert (await story.read_setup()).mechanics == ("sealed",)
     assert "next turn" in results[0]
@@ -378,7 +377,7 @@ async def test_enabling_an_unknown_mechanic_is_refused_and_changes_nothing(tmp_p
             return ModelResponse(parts=[TextPart(content="Done.")])
         return ModelResponse(parts=[ToolCallPart(tool_name="enable_mechanic", args={"mechanic_id": "ghost"})])
 
-    await create_writer_agent().run("Go.", deps=story, model=FunctionModel(respond))
+    await create_writer_agent().run("Go.", deps=story, model=FunctionModel(respond), toolsets=[mechanic_toolset(MECHANICS)])
 
     assert not (tmp_path / "story" / SETUP_FILENAME).exists() or (await story.read_setup()).mechanics == ()
     assert outcomes[0].outcome == "failed"
@@ -398,7 +397,7 @@ async def test_enabling_a_mechanic_already_in_use_changes_nothing(tmp_path: Path
 
 def test_the_core_prompt_tells_the_writer_to_ask_before_it_enables_a_mechanic() -> None:
     assert "enable_mechanic" in WRITER_INSTRUCTIONS
-    assert "enable_mechanic" in set(WRITER_TOOLSET.tools)
+    assert "enable_mechanic" in set(mechanic_toolset(MECHANICS).tools)
 
 
 # Creating a story as a preset
@@ -415,7 +414,7 @@ def test_a_preset_becomes_a_setup_with_its_mechanics_resolved_in_full(tmp_path: 
 
 
 def test_the_default_preset_becomes_the_default_setup() -> None:
-    assert setup_for(CO_WRITING) == StorySetup()
+    assert setup_for(CO_WRITING, MECHANICS) == StorySetup()
 
 
 def test_a_preset_naming_an_unknown_mechanic_is_refused_by_name(tmp_path: Path) -> None:
@@ -424,7 +423,7 @@ def test_a_preset_naming_an_unknown_mechanic_is_refused_by_name(tmp_path: Path) 
     (root / "preset.md").write_text("---\nname: broken\ntitle: Broken\ndescription: Broken.\nmechanics: [ghost]\n---\nLayer.\n", encoding="utf-8")
 
     with pytest.raises(PresetError, match="broken"):
-        setup_for(load_presets(tmp_path / "presets").get("broken"))
+        setup_for(load_presets(tmp_path / "presets").get("broken"), MECHANICS)
 
 
 @pytest.mark.asyncio

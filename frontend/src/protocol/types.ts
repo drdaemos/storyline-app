@@ -29,6 +29,13 @@ export interface AgendaItem {
   outcome: string
 }
 
+export interface ClockView {
+  id: string
+  name: string
+  segments: number
+  filled: number
+}
+
 export interface MessageEntry {
   kind: 'message'
   role: 'user' | 'writer'
@@ -66,6 +73,8 @@ export interface RoomSnapshot {
   hidden_entries: number
   agenda: AgendaItem[]
   agenda_error: string | null
+  clocks: ClockView[]
+  hidden_clocks: number
   activity: Activity
   tool_name: string | null
   queue: string[]
@@ -86,6 +95,7 @@ export type RoomEvent =
   | { type: 'activity_changed'; activity: Activity; tool_name: string | null }
   | { type: 'queue_changed'; prompts: string[] }
   | { type: 'agenda_changed'; items: AgendaItem[] }
+  | { type: 'clocks_changed'; clocks: ClockView[]; hidden: number }
   | { type: 'story_files_changed'; script: boolean; lore: boolean }
   | { type: 'turn_finished'; outcome: TurnOutcome; error: string | null }
   | { type: 'conversation_replaced'; entries: Entry[]; hidden_entries: number }

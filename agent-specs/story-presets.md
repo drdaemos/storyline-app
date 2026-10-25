@@ -132,7 +132,8 @@ Skills:
 
 - `assess-request` (replaces the core one): the interview. Who the persona is, what kind of pressure the user wants,
   seeds for the cast, content bounds, and the starting agreement including persona autonomy.
-- `cast-sheet`: develop one cast member. For a deceiver, write both the lie and the truth.
+- `cast-sheet` (from the cast mechanic, so any story with a cast has it): develop one cast member. For a deceiver,
+  write both the lie and the truth.
 - `write-scene` (replaces the core one): run a scene. Advance offscreen moves and clocks, set odds and roll for
   contested outcomes, write the plan, request review where it matters, write, update sheets and clocks, hand back.
 
@@ -222,9 +223,10 @@ A second look at the narrator's plan before a close beat is written.
 
 ## Content bounds
 
-Part of the core, for every preset: lines (never on the page), veils (happens offscreen, the scene cuts away) and an
-intensity, recorded in `collaboration.md`. The interview asks about them when the request makes them relevant;
-otherwise the default is moderate. Inside the bounds the agent does not soften: no rescues the story did not set up,
+Lines (never on the page), veils (happens offscreen, the scene cuts away) and an intensity, recorded in
+`collaboration.md`. The roleplay interview asks about them and offers a default; the roleplay layer holds the rules
+below. They move into the core, for every preset, once roleplay has been played with them, since that changes
+co-writing behaviour too. Inside the bounds the agent does not soften: no rescues the story did not set up,
 no consolation, no moral commentary. Stories with transgression, struggle and darkness are a normal request.
 
 The model provider's policy still applies, and models differ. When the model will not write something inside the
@@ -242,6 +244,6 @@ use a model that handles it.
 
 ## Open
 
-- The reviewer's default model.
-- Whether the content-bounds change to the core interview ships with roleplay or separately, since it changes
-  co-writing behaviour too.
+- The reviewer's model: `STORYLINE_REVIEW_MODEL`, or the narrator's own model when it is not set. Which model to
+  recommend there (another family, and one that reads dark material) is open until roleplay has been played.
+- Moving content bounds into the core (see above).

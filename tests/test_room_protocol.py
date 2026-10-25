@@ -9,6 +9,7 @@ from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, Too
 from pydantic_ai.messages import RetryPromptPart, UserPromptPart
 
 from storyline.agent import turn_prompt
+from storyline.registry import MECHANICS
 from storyline.room import (
     EVENT_TYPES,
     ConversationReplaced,
@@ -104,10 +105,10 @@ def test_blank_writer_text_is_left_out() -> None:
 
 
 @pytest.mark.asyncio
-async def test_prompts_show_what_the_user_wrote_without_the_story_snapshot(tmp_path) -> None:
+async def test_prompts_show_what_the_user_wrote_without_the_story_snapshot(tmp_path, registry=MECHANICS) -> None:
     story = FileStory(tmp_path)
     await story.append_script(text="Secret opening.")
-    prompt = await turn_prompt(story, "Continue.")
+    prompt = await turn_prompt(story, "Continue.", registry=MECHANICS)
 
     entries = transcript_entries([_user_request(prompt)])
 

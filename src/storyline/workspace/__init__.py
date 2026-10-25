@@ -1,13 +1,18 @@
 """Abstract workspace interface and application factory."""
 
 from storyline.workspace.agenda import render_agenda, replace_agenda, update_agenda_item
+from storyline.workspace.clocks import remove_clock, render_clocks, set_clock, tick_clock
 from storyline.workspace.contracts import (
     AgendaError,
     AgendaItem,
     AgendaStatus,
+    Clock,
+    ClockError,
     ConversationHistoryError,
     LoreEditError,
     LoreFile,
+    Roll,
+    RollLogError,
     Story,
     StorySelectionError,
     StorySetup,
@@ -26,9 +31,13 @@ __all__ = [
     "AgendaError",
     "AgendaItem",
     "AgendaStatus",
+    "Clock",
+    "ClockError",
     "ConversationHistoryError",
     "LoreEditError",
     "LoreFile",
+    "Roll",
+    "RollLogError",
     "Story",
     "StoryLibrary",
     "StorySelectionError",
@@ -40,7 +49,11 @@ __all__ = [
     "WorkspaceConfigurationError",
     "WorkspaceEditError",
     "open_workspace",
+    "remove_clock",
     "render_agenda",
+    "render_clocks",
     "replace_agenda",
+    "set_clock",
+    "tick_clock",
     "update_agenda_item",
 ]

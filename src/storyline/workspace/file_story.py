@@ -12,18 +12,35 @@ from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
 from storyline.workspace.atomic_file import atomic_write
-from storyline.workspace.contracts import AgendaError, AgendaItem, ConversationHistoryError, LoreEditError, LoreFile, StorySetup, StorySetupError, TextEdit
+from storyline.workspace.contracts import (
+    AgendaError,
+    AgendaItem,
+    Clock,
+    ClockError,
+    ConversationHistoryError,
+    LoreEditError,
+    LoreFile,
+    Roll,
+    RollLogError,
+    StorySetup,
+    StorySetupError,
+    TextEdit,
+)
 from storyline.workspace.lore_format import lore_metadata
 from storyline.workspace.text_edit import TextChange, append_text, replace_unique, snippet
 
 SCRIPT_FILENAME = "script.md"
 AGENDA_FILENAME = "agenda.json"
+CLOCKS_FILENAME = "clocks.json"
+ROLLS_FILENAME = "rolls.json"
 CONVERSATION_HISTORY_FILENAME = ".storyline-history.json"
 STORY_SETTINGS_FILENAME = ".storyline-settings.json"
 SETUP_FILENAME = "story.json"
 SEALED_DIRNAME = "sealed"
 _LORE_NAME_RULE = "Lore filenames must be Markdown filenames beside script.md, or in the sealed folder as sealed/<name>.md."
 _AGENDA_ADAPTER = TypeAdapter(tuple[AgendaItem, ...])
+_CLOCKS_ADAPTER = TypeAdapter(tuple[Clock, ...])
+_ROLLS_ADAPTER = TypeAdapter(tuple[Roll, ...])
 
 
 class StorySettings(BaseModel):
@@ -61,6 +78,16 @@ class FileStory:
     def agenda_path(self) -> Path:
         """Return the agenda location within this story."""
         return self.root / AGENDA_FILENAME
+
+    @property
+    def clocks_path(self) -> Path:
+        """Return the clocks location within this story."""
+        return self.root / CLOCKS_FILENAME
+
+    @property
+    def rolls_path(self) -> Path:
+        """Return the oracle roll log location: the log is sealed along with the rolls' questions."""
+        return self.root / SEALED_DIRNAME / ROLLS_FILENAME
 
     async def read_script(self) -> str:
         """Return an empty script until the first edit creates it."""
@@ -114,6 +141,34 @@ class FileStory:
             items = tuple(change(self._read_agenda()))
             self._write_agenda(items)
             return items
+
+        return await self._locked(read_change_write)
+
+    async def read_clocks(self) -> tuple[Clock, ...]:
+        """Read the clocks; a story without any has none."""
+        return await self._locked(self._read_clocks)
+
+    async def change_clocks(self, *, change: Callable[[tuple[Clock, ...]], Sequence[Clock]]) -> tuple[Clock, ...]:
+        """Read, change and write the clocks under the write lock, so parallel tool calls apply one after another."""
+
+        def read_change_write() -> tuple[Clock, ...]:
+            clocks = tuple(change(self._read_clocks()))
+            atomic_write(self.clocks_path, _CLOCKS_ADAPTER.dump_json(clocks, indent=2))
+            return clocks
+
+        return await self._locked(read_change_write)
+
+    async def read_rolls(self) -> tuple[Roll, ...]:
+        """Read the logged oracle rolls, newest first; a story that never rolled has none."""
+        return await self._locked(self._read_rolls)
+
+    async def change_rolls(self, *, change: Callable[[tuple[Roll, ...]], Sequence[Roll]]) -> tuple[Roll, ...]:
+        """Read, change and write the roll log under the write lock."""
+
+        def read_change_write() -> tuple[Roll, ...]:
+            rolls = tuple(change(self._read_rolls()))
+            atomic_write(self.rolls_path, _ROLLS_ADAPTER.dump_json(rolls, indent=2))
+            return rolls
 
         return await self._locked(read_change_write)
 
@@ -251,6 +306,26 @@ class FileStory:
             return _AGENDA_ADAPTER.validate_json(serialized)
         except ValidationError as error:
             raise AgendaError(f"{AGENDA_FILENAME} is not a valid agenda (a JSON list of items with id and title): {error}") from error
+
+    def _read_clocks(self) -> tuple[Clock, ...]:
+        try:
+            serialized = self.clocks_path.read_bytes()
+        except FileNotFoundError:
+            return ()
+        try:
+            return _CLOCKS_ADAPTER.validate_json(serialized)
+        except ValidationError as error:
+            raise ClockError(f"{CLOCKS_FILENAME} is not a valid list of clocks (a JSON list with id, name, segments and visible): {error}") from error
+
+    def _read_rolls(self) -> tuple[Roll, ...]:
+        try:
+            serialized = self.rolls_path.read_bytes()
+        except FileNotFoundError:
+            return ()
+        try:
+            return _ROLLS_ADAPTER.validate_json(serialized)
+        except ValidationError as error:
+            raise RollLogError(f"{SEALED_DIRNAME}/{ROLLS_FILENAME} is not a valid roll log: {error}") from error
 
     def _read_message_history(self) -> list[ModelMessage]:
         try:

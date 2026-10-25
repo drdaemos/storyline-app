@@ -2,6 +2,7 @@
 
 from storyline.agent import ModelNameError
 from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, PresetCatalog, PresetError, setup_for
+from storyline.registry import MECHANICS
 from storyline.web.errors import InvalidRequestError, LoreFileNotFoundError
 from storyline.web.room_host import RoomHost, RoomSubscription
 from storyline.web.schemas import LoreList, LoreSummary, PresetInfo, PresetList, StoryList
@@ -28,7 +29,7 @@ class StoryService:
 
     async def create_story(self, user_id: str, name: str, preset: str | None = None) -> str:
         try:
-            setup = setup_for(self._presets.get(preset or DEFAULT_PRESET_ID))
+            setup = setup_for(self._presets.get(preset or DEFAULT_PRESET_ID), MECHANICS)
         except PresetError as error:
             raise InvalidRequestError(str(error)) from error
         library = StoryLibrary(self._workspaces.workspace_for(user_id))

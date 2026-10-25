@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { activityLabel, isWorking } from '@/room/roomState'
 import type { Room } from '@/room/useRoom'
 import AgendaCard from './AgendaCard.vue'
+import ClocksCard from './ClocksCard.vue'
 import Composer from './Composer.vue'
 import ConversationLog from './ConversationLog.vue'
 import RoomHeader from './RoomHeader.vue'
@@ -29,6 +30,7 @@ const activity = computed(() => activityLabel(state.value))
       Connection lost. Reconnecting…
     </p>
     <AgendaCard :items="state.agenda" :error="state.agendaError" />
+    <ClocksCard :clocks="state.clocks" :hidden="state.hiddenClocks" />
     <ConversationLog :entries="state.entries" :hidden-entries="state.hiddenEntries" :activity="activity" />
     <Composer
       :draft="state.draft"

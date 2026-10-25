@@ -11,9 +11,11 @@ from textual.worker import Worker
 
 from storyline.agent import DEFAULT_MODEL_NAME, ModelNameError, create_writer_agent, validate_model_name
 from storyline.presets import DEFAULT_PRESET_ID, PresetError, setup_for
+from storyline.registry import MECHANICS
 from storyline.room import (
     ActivityChanged,
     AgendaChanged,
+    ClocksChanged,
     ConversationReplaced,
     DraftRestored,
     ModelChanged,
@@ -102,6 +104,7 @@ class StorylineTui(App[None]):
         ActivityChanged: "_show_activity",
         QueueChanged: "_show_queue",
         AgendaChanged: "_show_agenda",
+        ClocksChanged: "_show_clocks",
         StoryFilesChanged: "_show_story_files_changed",
         TurnFinished: "_show_turn_finished",
         ConversationReplaced: "_show_conversation_replaced",
@@ -257,7 +260,7 @@ class StorylineTui(App[None]):
             await self._message_log.add_message(MessageKind.ERROR, NEW_USAGE)
             return
         try:
-            setup = setup_for(self._config.presets.get(preset_id))
+            setup = setup_for(self._config.presets.get(preset_id), MECHANICS)
         except PresetError as error:
             await self._message_log.add_message(MessageKind.ERROR, f"{error} · /presets lists the kinds")
             return
@@ -391,6 +394,7 @@ class StorylineTui(App[None]):
         else:
             await self._message_log.show_transcript(snapshot.entries, hidden_count=snapshot.hidden_entries)
         await self._agenda_panel.show_items(snapshot.agenda)
+        await self._agenda_panel.show_clocks(snapshot.clocks, snapshot.hidden_clocks)
         if snapshot.agenda_error is not None:
             await self._message_log.add_message(MessageKind.ERROR, snapshot.agenda_error)
         if snapshot.model_from_story:
@@ -458,6 +462,9 @@ class StorylineTui(App[None]):
 
     async def _show_agenda(self, event: AgendaChanged) -> None:
         await self._agenda_panel.show_items(event.items)
+
+    async def _show_clocks(self, event: ClocksChanged) -> None:
+        await self._agenda_panel.show_clocks(event.clocks, event.hidden)
 
     async def _show_story_files_changed(self, _: StoryFilesChanged) -> None:
         """Do nothing: the terminal shows the script and lore only when asked with /script and /lore."""

@@ -20,6 +20,8 @@ function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
     hidden_entries: 0,
     agenda: [],
     agenda_error: null,
+    clocks: [],
+    hidden_clocks: 0,
     activity: 'idle',
     tool_name: null,
     queue: [],
@@ -241,6 +243,20 @@ describe('event reducers', () => {
     const state = reduce(loaded({ agendaError: 'broken' }), { type: 'agenda_changed', items })
     expect(state.agenda).toEqual(items)
     expect(state.agendaError).toBeNull()
+  })
+
+  it('clocks_changed replaces the clocks and the hidden count', () => {
+    const clocks = [{ id: 'c', name: 'The tide', segments: 6, filled: 2 }]
+    const state = reduce(loaded({ hiddenClocks: 3 }), { type: 'clocks_changed', clocks, hidden: 1 })
+    expect(state.clocks).toEqual(clocks)
+    expect(state.hiddenClocks).toBe(1)
+  })
+
+  it('applySnapshot takes the clocks and the hidden count', () => {
+    const clocks = [{ id: 'c', name: 'The tide', segments: 6, filled: 6 }]
+    const state = applySnapshot(loaded(), snapshot({ clocks, hidden_clocks: 2 }))
+    expect(state.clocks).toEqual(clocks)
+    expect(state.hiddenClocks).toBe(2)
   })
 
   it('story_files_changed goes up for the files that changed only', () => {

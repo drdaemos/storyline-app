@@ -34,6 +34,8 @@ const SNAPSHOT: RoomSnapshot = {
   hidden_entries: 2,
   agenda: [{ id: 'a', title: 'The ferry scene', status: 'waiting', outcome: '' }],
   agenda_error: null,
+  clocks: [],
+  hidden_clocks: 0,
   activity: 'idle',
   tool_name: null,
   queue: [],

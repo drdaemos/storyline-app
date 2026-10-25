@@ -146,6 +146,23 @@ class AgendaChanged(_Data):
     items: tuple[AgendaItem, ...]
 
 
+class ClockView(_Data):
+    """A clock as the user sees it: what is building and how far along it is."""
+
+    id: str
+    name: str
+    segments: int
+    filled: int
+
+
+class ClocksChanged(_Data):
+    """The story's clocks as they are now: the visible ones, and how many more are hidden."""
+
+    type: Literal["clocks_changed"] = "clocks_changed"
+    clocks: tuple[ClockView, ...]
+    hidden: int = 0
+
+
 class StoryFilesChanged(_Data):
     """The writer changed the story's files; an interface showing them should read them again."""
 
@@ -202,6 +219,7 @@ EVENT_TYPES: tuple[type[_Data], ...] = (
     ActivityChanged,
     QueueChanged,
     AgendaChanged,
+    ClocksChanged,
     StoryFilesChanged,
     TurnFinished,
     ConversationReplaced,
@@ -220,6 +238,7 @@ type RoomEvent = Annotated[
     | ActivityChanged
     | QueueChanged
     | AgendaChanged
+    | ClocksChanged
     | StoryFilesChanged
     | TurnFinished
     | ConversationReplaced
@@ -254,6 +273,9 @@ class RoomSnapshot(_Data):
     """Older entries left out of ``entries``."""
     agenda: tuple[AgendaItem, ...]
     agenda_error: str | None = None
+    clocks: tuple[ClockView, ...] = ()
+    """The visible clocks; see ``ClocksChanged``."""
+    hidden_clocks: int = 0
     activity: Activity = "idle"
     tool_name: str | None = None
     queue: tuple[str, ...] = ()

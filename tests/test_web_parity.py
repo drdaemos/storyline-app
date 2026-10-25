@@ -9,6 +9,8 @@ from storyline.room import (
     EVENT_TYPES,
     ActivityChanged,
     AgendaChanged,
+    ClocksChanged,
+    ClockView,
     ConversationReplaced,
     DraftRestored,
     MessageEntry,
@@ -43,6 +45,7 @@ SAMPLE_EVENTS = (
     ActivityChanged(activity="using_tool", tool_name="append_script"),
     QueueChanged(prompts=("Also this.", "And this.")),
     AgendaChanged(items=(AgendaItem(id="a1", title="Name the harbor", status="working"),)),
+    ClocksChanged(clocks=(ClockView(id="c1", name="The patrol", segments=4, filled=1),), hidden=2),
     StoryFilesChanged(script=True, lore=False),
     TurnFinished(outcome="failed", error="provider down"),
     ConversationReplaced(

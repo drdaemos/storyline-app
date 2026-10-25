@@ -103,6 +103,63 @@
         ],
         "type": "string"
       },
+      "ClockView": {
+        "description": "A clock as the user sees it: what is building and how far along it is.",
+        "properties": {
+          "filled": {
+            "title": "Filled",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "segments": {
+            "title": "Segments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "segments",
+          "filled"
+        ],
+        "title": "ClockView",
+        "type": "object"
+      },
+      "ClocksChanged": {
+        "description": "The story's clocks as they are now: the visible ones, and how many more are hidden.",
+        "properties": {
+          "clocks": {
+            "items": {
+              "$ref": "#/$defs/ClockView"
+            },
+            "title": "Clocks",
+            "type": "array"
+          },
+          "hidden": {
+            "default": 0,
+            "title": "Hidden",
+            "type": "integer"
+          },
+          "type": {
+            "const": "clocks_changed",
+            "default": "clocks_changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clocks"
+        ],
+        "title": "ClocksChanged",
+        "type": "object"
+      },
       "ConversationReplaced": {
         "description": "The conversation changed as a whole (undo, clear); show these entries instead of what was shown.",
         "properties": {
@@ -553,6 +610,7 @@
       "mapping": {
         "activity_changed": "#/$defs/ActivityChanged",
         "agenda_changed": "#/$defs/AgendaChanged",
+        "clocks_changed": "#/$defs/ClocksChanged",
         "conversation_replaced": "#/$defs/ConversationReplaced",
         "draft_restored": "#/$defs/DraftRestored",
         "model_changed": "#/$defs/ModelChanged",
@@ -598,6 +656,9 @@
         "$ref": "#/$defs/AgendaChanged"
       },
       {
+        "$ref": "#/$defs/ClocksChanged"
+      },
+      {
         "$ref": "#/$defs/StoryFilesChanged"
       },
       {
@@ -627,6 +688,7 @@
     "activity_changed",
     "queue_changed",
     "agenda_changed",
+    "clocks_changed",
     "story_files_changed",
     "turn_finished",
     "conversation_replaced",
@@ -715,6 +777,35 @@
           "archive_name"
         ],
         "title": "ArchivedConversation",
+        "type": "object"
+      },
+      "ClockView": {
+        "description": "A clock as the user sees it: what is building and how far along it is.",
+        "properties": {
+          "filled": {
+            "title": "Filled",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "segments": {
+            "title": "Segments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "segments",
+          "filled"
+        ],
+        "title": "ClockView",
         "type": "object"
       },
       "Entry": {
@@ -864,12 +955,25 @@
         ],
         "default": null
       },
+      "clocks": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/ClockView"
+        },
+        "title": "Clocks",
+        "type": "array"
+      },
       "entries": {
         "items": {
           "$ref": "#/$defs/Entry"
         },
         "title": "Entries",
         "type": "array"
+      },
+      "hidden_clocks": {
+        "default": 0,
+        "title": "Hidden Clocks",
+        "type": "integer"
       },
       "hidden_entries": {
         "title": "Hidden Entries",

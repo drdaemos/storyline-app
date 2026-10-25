@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 
 from pydantic_ai.messages import UserContent
 
-from storyline.mechanics import MECHANICS, Mechanic
+from storyline.mechanics import Mechanic
 from storyline.workspace import AgendaItem, LoreFile, Story, render_agenda
 from storyline.workspace.lore_format import lore_body
 from storyline.workspace.text_edit import Paragraph, paragraphs
@@ -29,7 +29,7 @@ GUIDE_CHARACTERS = 4000
 AGENDA_CHARACTERS = 3000
 
 
-async def turn_prompt(story: Story, prompt: str, mechanics: Sequence[Mechanic] = (), registry: Mapping[str, Mechanic] = MECHANICS) -> list[UserContent]:
+async def turn_prompt(story: Story, prompt: str, mechanics: Sequence[Mechanic] = (), *, registry: Mapping[str, Mechanic]) -> list[UserContent]:
     """Return the user content for one turn: a story snapshot followed by the user's prompt.
 
     ``mechanics`` are the story's, in order; each adds its own section to the snapshot, and ``registry`` supplies the ones that could be enabled.
@@ -57,7 +57,7 @@ def story_snapshot(
     guides: Mapping[str, str] | None = None,
     agenda: Sequence[AgendaItem] = (),
     mechanics: Sequence[Mechanic] = (),
-    registry: Mapping[str, Mechanic] = MECHANICS,
+    registry: Mapping[str, Mechanic],
     mechanic_sections: Sequence[Sequence[str]] = (),
 ) -> str:
     """Describe the story's size, headings, ending, lore, mechanics, guiding files, mechanic sections and agenda within a fixed budget."""

@@ -10,6 +10,7 @@ from pydantic_ai.models import Model
 
 from storyline.agent import WritingSession
 from storyline.evals.scenarios import Scenario
+from storyline.registry import MECHANICS
 from storyline.workspace import Story
 from storyline.workspace.file_story import FileStory
 from storyline.workspace.text_edit import paragraphs
@@ -89,7 +90,7 @@ class ScenarioRunner:
             shutil.copytree(self._seeds_dir / scenario.seed, story_dir)
         story = FileStory(story_dir)
 
-        session = await WritingSession.open(story=story, agent=self._agent, model=self._model)
+        session = await WritingSession.open(story=story, agent=self._agent, model=self._model, registry=MECHANICS)
         turns: list[TurnRecord] = []
         for turn in scenario.turns:
             script_before, lore_before = await _story_files(story)

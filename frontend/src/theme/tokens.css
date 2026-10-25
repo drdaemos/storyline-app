@@ -91,6 +91,9 @@
   --ink-fresh: #1d3f86;
   --ink-fresh-rule: rgba(29, 63, 134, 0.55);
   --highlight: #f2dc6b;
+  --clock-filled: var(--accent);
+  --clock-empty: var(--paper-shade);
+  --clock-edge: var(--paper-rule-warm);
 
   /* Accents */
   --accent: #8e2219;

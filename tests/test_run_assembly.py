@@ -12,6 +12,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from storyline.agent import WRITER_INSTRUCTIONS, WritingSession, assemble, create_writer_agent
 from storyline.agent.writer import WRITER_SKILLS_PATH
 from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, Preset, load_presets
+from storyline.registry import MECHANICS
 from storyline.workspace import StorySetup, StorySetupError
 from storyline.workspace.file_story import SETUP_FILENAME, FileStory
 
@@ -58,7 +59,7 @@ async def _run_assembled(preset: Preset, tmp_path: Path) -> str:
 async def test_a_co_writing_session_sends_the_core_then_the_layer_and_every_core_skill(tmp_path: Path) -> None:
     story = FileStory(tmp_path)
     seen: list[str] = []
-    session = await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name="openrouter:x/y", model=_recorder(seen))
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name="openrouter:x/y", model=_recorder(seen), registry=MECHANICS)
 
     await session.turn("Hi.").run()
 
@@ -101,7 +102,7 @@ async def test_a_session_uses_the_preset_its_story_names(tmp_path: Path) -> None
     await story.write_setup(setup=StorySetup(preset="tabletop"))
     seen: list[str] = []
 
-    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=_recorder(seen), presets=load_presets(tmp_path / "presets"))
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), model=_recorder(seen), presets=load_presets(tmp_path / "presets"), registry=MECHANICS)
     await session.turn("Hi.").run()
 
     assert session.preset_id == preset.id
@@ -115,7 +116,7 @@ async def test_a_story_naming_an_unknown_preset_fails_to_open(tmp_path: Path) ->
     await story.write_setup(setup=StorySetup(preset="no-such-preset"))
 
     with pytest.raises(StorySetupError, match="no-such-preset"):
-        await WritingSession.open(story=story, agent=create_writer_agent())
+        await WritingSession.open(story=story, agent=create_writer_agent(), registry=MECHANICS)
 
 
 @pytest.mark.asyncio
@@ -123,7 +124,7 @@ async def test_a_story_with_an_unreadable_setup_fails_to_open(tmp_path: Path) ->
     (tmp_path / SETUP_FILENAME).write_text("{not json", encoding="utf-8")
 
     with pytest.raises(StorySetupError, match=SETUP_FILENAME):
-        await WritingSession.open(story=FileStory(tmp_path), agent=create_writer_agent())
+        await WritingSession.open(story=FileStory(tmp_path), agent=create_writer_agent(), registry=MECHANICS)
 
 
 @pytest.mark.asyncio

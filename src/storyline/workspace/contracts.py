@@ -2,10 +2,11 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from datetime import datetime
+from typing import Literal, Protocol, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_ai.messages import ModelMessage
 
 
@@ -27,6 +28,14 @@ class LoreEditError(WorkspaceEditError):
 
 class AgendaError(WorkspaceEditError):
     """Raised when the agenda cannot be read, or a requested agenda change is invalid."""
+
+
+class ClockError(WorkspaceEditError):
+    """Raised when the clocks cannot be read, or a requested clock change is invalid."""
+
+
+class RollLogError(WorkspaceEditError):
+    """Raised when the log of oracle rolls cannot be read."""
 
 
 class ConversationHistoryError(ValueError):
@@ -83,6 +92,47 @@ class AgendaItem(BaseModel):
     """The decision in a few words, once the item is settled."""
 
 
+class Clock(BaseModel):
+    """Something that builds over time in the story, filled one segment at a time."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=_new_agenda_id, min_length=1)
+    name: str = Field(min_length=1)
+    segments: int = Field(ge=2, le=12)
+    filled: int = Field(default=0, ge=0)
+    """Never more than ``segments``; a clock is full when they are equal."""
+    visible: bool
+    """Whether the user sees it; a hidden clock belongs to what is sealed."""
+    when_full: str = ""
+    """What happens when the clock fills, as the writer means it to land."""
+
+    @model_validator(mode="after")
+    def _filled_within_segments(self) -> Self:
+        if self.filled > self.segments:
+            raise ValueError(f"A clock of {self.segments} segments cannot have {self.filled} filled.")
+        return self
+
+    @property
+    def full(self) -> bool:
+        return self.filled == self.segments
+
+
+class Roll(BaseModel):
+    """One oracle roll: the question, the odds it was rolled at and what came up."""
+
+    model_config = ConfigDict(frozen=True)
+
+    question: str = Field(min_length=1)
+    odds: str
+    """The name of the odds the roll was made at, e.g. ``likely``."""
+    die: int = Field(ge=1, le=100)
+    answer: Literal["yes", "no"]
+    strong: bool = False
+    at: datetime
+    """When the roll was made."""
+
+
 class StorySetup(BaseModel):
     """What kind of story this is: the preset it was created with and the mechanics switched on."""
 
@@ -131,6 +181,18 @@ class Story(Protocol):
 
     async def write_agenda(self, *, items: Sequence[AgendaItem]) -> None:
         """Replace the whole agenda."""
+
+    async def read_clocks(self) -> tuple[Clock, ...]:
+        """Return the story's clocks in order; empty when there are none. Raise ``ClockError`` when they are unreadable."""
+
+    async def change_clocks(self, *, change: Callable[[tuple[Clock, ...]], Sequence[Clock]]) -> tuple[Clock, ...]:
+        """Read, change and write the clocks as one step, so concurrent changes never overwrite each other."""
+
+    async def read_rolls(self) -> tuple[Roll, ...]:
+        """Return the logged oracle rolls, newest first; empty when there are none. Raise ``RollLogError`` when the log is unreadable."""
+
+    async def change_rolls(self, *, change: Callable[[tuple[Roll, ...]], Sequence[Roll]]) -> tuple[Roll, ...]:
+        """Read, change and write the roll log as one step, so concurrent rolls never overwrite each other."""
 
     async def change_agenda(self, *, change: Callable[[tuple[AgendaItem, ...]], Sequence[AgendaItem]]) -> tuple[AgendaItem, ...]:
         """Read, change and write the agenda as one step, so concurrent changes never overwrite each other."""

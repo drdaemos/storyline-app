@@ -29,7 +29,8 @@ class Mechanic:
     """Ids of mechanics this one needs; they are enabled with it."""
     prompt_path: ClassVar[Path | None] = None
     """Markdown added to the writer's instructions in every run of a story that uses the mechanic."""
-    toolset: ClassVar[FunctionToolset[Story] | None] = None
+    toolset: FunctionToolset[Story] | None = None
+    """The tools added to the writer. A class attribute for a mechanic whose tools need nothing from an instance, otherwise built per instance."""
     skills_dir: ClassVar[Path | None] = None
     """A skill library (``<name>/SKILL.md`` directories) added to the story's skill catalog."""
 

@@ -12,6 +12,7 @@ from storyline.agent import WRITER_INSTRUCTIONS, assemble, create_writer_agent, 
 from storyline.agent.story_context import GUIDE_CHARACTERS, SNAPSHOT_OPEN, TAIL_CHARACTERS
 from storyline.agent.writer import WRITER_PROMPT_PATH
 from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID
+from storyline.registry import MECHANICS
 from storyline.workspace import LoreFile
 from storyline.workspace.file_story import FileStory
 
@@ -55,7 +56,6 @@ async def test_writer_agent_exposes_the_anchored_editing_tools(tmp_path) -> None
         "append_lore",
         "edit_lore",
         "delete_lore",
-        "enable_mechanic",
         "set_agenda",
         "update_agenda_item",
     ]
@@ -153,7 +153,7 @@ async def test_story_travels_in_the_turn_prompt_not_the_instructions(tmp_path) -
         observed.append((info.instructions, messages))
         return ModelResponse(parts=[TextPart(content="Noted.")])
 
-    prompt = await turn_prompt(workspace, "Continue.")
+    prompt = await turn_prompt(workspace, "Continue.", registry=MECHANICS)
     await create_writer_agent().run(prompt, deps=workspace, model=FunctionModel(model_response))
 
     instructions, messages = observed[0]
@@ -166,7 +166,7 @@ async def test_story_travels_in_the_turn_prompt_not_the_instructions(tmp_path) -
 def test_story_snapshot_is_bounded_and_lists_headings() -> None:
     story = "# Act One\n\n" + "\n\n".join(f"Paragraph {index} " + "x" * 200 for index in range(1, 60))
 
-    snapshot = story_snapshot(story)
+    snapshot = story_snapshot(story, registry={})
 
     assert snapshot.startswith(SNAPSHOT_OPEN)
     assert "60 paragraphs" in snapshot
@@ -177,14 +177,14 @@ def test_story_snapshot_is_bounded_and_lists_headings() -> None:
 
 
 def test_story_snapshot_cuts_one_oversized_final_paragraph() -> None:
-    snapshot = story_snapshot("Start." + "y" * (TAIL_CHARACTERS * 2))
+    snapshot = story_snapshot("Start." + "y" * (TAIL_CHARACTERS * 2), registry={})
 
     assert "Start." not in snapshot
     assert len(snapshot) < TAIL_CHARACTERS + 450
 
 
 def test_story_snapshot_of_an_empty_story() -> None:
-    assert "The story is empty." in story_snapshot("")
+    assert "The story is empty." in story_snapshot("", registry=MECHANICS)
 
 
 def test_story_snapshot_lists_lore_and_shows_plan_and_style_guide() -> None:
@@ -193,7 +193,7 @@ def test_story_snapshot_lists_lore_and_shows_plan_and_style_guide() -> None:
         LoreFile(filename="plan.md", summary="The plan.", keywords="plan"),
     )
 
-    snapshot = story_snapshot("Opening.", lore=lore, guides={"plan.md": "Next: the storm."})
+    snapshot = story_snapshot("Opening.", lore=lore, guides={"plan.md": "Next: the storm."}, registry=MECHANICS)
 
     assert "- ines.md: The point-of-view character." in snapshot
     assert "Next: the storm." in snapshot
@@ -201,7 +201,7 @@ def test_story_snapshot_lists_lore_and_shows_plan_and_style_guide() -> None:
 
 
 def test_story_snapshot_cuts_an_oversized_guide() -> None:
-    snapshot = story_snapshot("Opening.", guides={"plan.md": "p" * (GUIDE_CHARACTERS * 2)})
+    snapshot = story_snapshot("Opening.", guides={"plan.md": "p" * (GUIDE_CHARACTERS * 2)}, registry=MECHANICS)
 
     assert "read_lore shows the rest" in snapshot
     assert len(snapshot) < GUIDE_CHARACTERS + TAIL_CHARACTERS + 500
@@ -213,7 +213,7 @@ async def test_turn_prompt_carries_guides_without_their_metadata_header(tmp_path
     await story.write_lore(filename="plan.md", content="---\nsummary: The plan.\nkeywords: plan\n---\nScene one: arrival.")
     await story.write_lore(filename="style.md", content="---\nsummary: Style guide.\nkeywords: style\n---\nKeep it plain.")
 
-    snapshot = (await turn_prompt(story, "Continue."))[0]
+    snapshot = (await turn_prompt(story, "Continue.", registry=MECHANICS))[0]
 
     assert "Scene one: arrival." in snapshot
     assert "Keep it plain." in snapshot

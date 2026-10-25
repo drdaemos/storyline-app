@@ -13,12 +13,21 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from storyline.agent import WRITER_INSTRUCTIONS, assemble, create_writer_agent
 from storyline.agent.writer import WRITER_MAX_OUTPUT_TOKENS, WRITER_PROMPT_PATH, WRITER_SKILLS_PATH
 from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, PRESETS_PATH
+from storyline.registry import MECHANICS
 from storyline.workspace.file_story import FileStory
 
 SKILL_NAMES = ("assess-request", "research", "develop-element", "outline", "write-scene", "revise")
 
 
-GUIDANCE_FILES = [WRITER_PROMPT_PATH, *sorted(WRITER_SKILLS_PATH.glob("*/SKILL.md")), *sorted(PRESETS_PATH.glob("*/preset.md")), *sorted(PRESETS_PATH.glob("*/skills/*/SKILL.md"))]
+MECHANICS_PATH = Path(MECHANICS["sealed"].prompt_path or "").parent
+GUIDANCE_FILES = [
+    WRITER_PROMPT_PATH,
+    *sorted(WRITER_SKILLS_PATH.glob("*/SKILL.md")),
+    *sorted(PRESETS_PATH.glob("*/preset.md")),
+    *sorted(PRESETS_PATH.glob("*/skills/*/SKILL.md")),
+    *sorted(MECHANICS_PATH.glob("*.md")),
+    *sorted(MECHANICS_PATH.glob("*/skills/*/SKILL.md")),
+]
 
 
 def _skill_files() -> list[Path]:

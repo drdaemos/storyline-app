@@ -23,7 +23,8 @@ from storyline.agent.history import actionable_history, without_last_turn
 from storyline.agent.models import resolve_model, validate_model_name
 from storyline.agent.story_context import turn_prompt
 from storyline.agent.writer import DEFAULT_MODEL_NAME
-from storyline.mechanics import MECHANICS, Mechanic, MechanicError, resolve_mechanics
+from storyline.agent.writer_tools import mechanic_toolset
+from storyline.mechanics import Mechanic, MechanicError, resolve_mechanics
 from storyline.presets import BUNDLED_PRESETS, PresetCatalog, PresetError
 from storyline.workspace import ConversationHistoryError, Story, StorySetup, StorySetupError
 
@@ -100,7 +101,7 @@ class WritingTurn:
         story: Story,
         agent: Agent[Story, str],
         setup: SetupProvider,
-        registry: Mapping[str, Mechanic] = MECHANICS,
+        registry: Mapping[str, Mechanic],
         history: SavedHistory,
         prompt: str,
         model_name: str,
@@ -185,7 +186,7 @@ class WritingTurn:
                 await self._story.write_model_name(model_name=self._model_name)
             model = self._model_override if self._model_override is not None else resolve_model(self._model_name)
             setup = await self._setup()
-            prompt = await turn_prompt(self._story, self._prompt, setup.mechanics, self._registry)
+            prompt = await turn_prompt(self._story, self._prompt, setup.mechanics, registry=self._registry)
             previous = self._history.messages
             # The prompt is kept from the start, so a turn that dies before it saves anything still leaves what the user asked.
             await self._history.save([*previous, ModelRequest(parts=[UserPromptPart(content=prompt)])])
@@ -196,7 +197,7 @@ class WritingTurn:
                 model=model,
                 instructions=setup.assembly.instructions,
                 capabilities=list(setup.assembly.capabilities),
-                toolsets=list(setup.assembly.toolsets),
+                toolsets=[mechanic_toolset(self._registry), *setup.assembly.toolsets],
             ) as run:
                 self._run = run
                 for prompt in self._enqueued:
@@ -286,8 +287,8 @@ class WritingSession:
         agent: Agent[Story, str],
         default_model_name: str = DEFAULT_MODEL_NAME,
         model: Model | str | None = None,
+        registry: Mapping[str, Mechanic],
         presets: PresetCatalog = BUNDLED_PRESETS,
-        registry: Mapping[str, Mechanic] = MECHANICS,
     ) -> Self:
         """Open a story's conversation, repairing or archiving saved history that a run could not continue from.
 

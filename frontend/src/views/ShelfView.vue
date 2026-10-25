@@ -357,6 +357,12 @@ onMounted(() => {
   background: var(--field);
 }
 
+/* The page is dark, but the radios sit on paper: draw them as on light paper so an empty one does not look filled. */
+.kind__radio {
+  color-scheme: light;
+  accent-color: var(--accent);
+}
+
 .kind__title {
   font-weight: 600;
 }

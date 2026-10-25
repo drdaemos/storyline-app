@@ -10,6 +10,7 @@ DEFAULT_PRESET_ID = "co-writing"
 PRESETS_PATH = Path(__file__).parent
 PRESET_FILENAME = "preset.md"
 PRESET_SKILLS_DIRNAME = "skills"
+REVIEW_FILENAME = "review.md"
 
 
 class PresetError(ValueError):
@@ -28,6 +29,8 @@ class Preset:
     """The Markdown body of ``preset.md``: how the writer and the user share the work on this kind of story."""
     skills_dir: Path | None
     """The preset's own skills, which add to or override the core skills; None when it has none."""
+    review_checklist: str | None = None
+    """The checklist the reviewer applies to a plan on this kind of story (``review.md``); None when the preset has none."""
 
 
 @dataclass(frozen=True)
@@ -94,7 +97,18 @@ def _load_preset(path: Path) -> Preset:
         mechanics=tuple(mechanics),
         layer=layer,
         skills_dir=skills_dir if skills_dir.is_dir() else None,
+        review_checklist=_review_checklist(directory),
     )
+
+
+def _review_checklist(directory: Path) -> str | None:
+    path = directory / REVIEW_FILENAME
+    if not path.is_file():
+        return None
+    checklist = path.read_text(encoding="utf-8").strip()
+    if not checklist:
+        raise PresetError(f"{path}: the review checklist is empty.")
+    return checklist
 
 
 def _split_frontmatter(path: Path) -> tuple[dict[str, object], str]:

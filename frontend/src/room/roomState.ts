@@ -6,6 +6,7 @@ import type {
   Activity,
   AgendaItem,
   ArchivedConversation,
+  ClockView,
   Entry,
   EventOf,
   NoticeLevel,
@@ -33,6 +34,9 @@ export interface RoomState {
   hiddenEntries: number
   agenda: AgendaItem[]
   agendaError: string | null
+  /** The clocks the user may see, and how many more exist that they may not. */
+  clocks: ClockView[]
+  hiddenClocks: number
   activity: Activity
   toolName: string | null
   queue: string[]
@@ -54,6 +58,8 @@ export function initialRoomState(story = ''): RoomState {
     hiddenEntries: 0,
     agenda: [],
     agendaError: null,
+    clocks: [],
+    hiddenClocks: 0,
     activity: 'idle',
     toolName: null,
     queue: [],
@@ -88,6 +94,8 @@ export function applySnapshot(state: RoomState, snapshot: RoomSnapshot): RoomSta
     hiddenEntries: snapshot.hidden_entries,
     agenda: [...snapshot.agenda],
     agendaError: snapshot.agenda_error ?? null,
+    clocks: snapshot.clocks.map((clock) => ({ ...clock })),
+    hiddenClocks: snapshot.hidden_clocks,
     activity: snapshot.activity ?? 'idle',
     toolName: snapshot.tool_name ?? null,
     queue: [...(snapshot.queue ?? [])],
@@ -205,6 +213,12 @@ export const EVENT_REDUCERS: Reducers = {
   queue_changed: (state, event) => ({ ...state, queue: [...event.prompts] }),
 
   agenda_changed: (state, event) => ({ ...state, agenda: [...event.items], agendaError: null }),
+
+  clocks_changed: (state, event) => ({
+    ...state,
+    clocks: event.clocks.map((clock) => ({ ...clock })),
+    hiddenClocks: event.hidden,
+  }),
 
   story_files_changed: (state, event) => ({
     ...state,
