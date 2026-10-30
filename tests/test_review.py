@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 
 import pytest
-from pydantic_ai import ModelResponse, ToolCallPart
+from pydantic_ai import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
@@ -34,19 +34,23 @@ class Reviewer:
         self.read = read
         self.instructions: list[str] = []
         self.tools: list[list[str]] = []
+        self.output_tools: list[list[str]] = []
+        self.text_output: list[bool] = []
         self.prompts: list[list[str]] = []
         self.model = FunctionModel(self._respond)
 
     def _respond(self, messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         self.instructions.append(str(info.instructions))
         self.tools.append([tool.name for tool in info.function_tools])
+        self.output_tools.append([tool.name for tool in info.output_tools])
+        self.text_output.append(info.allow_text_output)
         self.prompts.append(user_prompts(messages))
         if self.error is not None:
             raise self.error
         if self.read is not None and not tool_returns(messages):
             name, arguments = self.read
             return ModelResponse(parts=[ToolCallPart(tool_name=name, args=arguments)])
-        return ModelResponse(parts=[ToolCallPart(tool_name=info.output_tools[0].name, args=self.verdict)])
+        return ModelResponse(parts=[TextPart(content=json.dumps(self.verdict))])
 
 
 def _writer(reviewer: Reviewer) -> FunctionModel:
@@ -95,8 +99,7 @@ async def test_the_reviewer_instructions_hold_its_prompt_then_the_presets_checkl
 
     assert checklist is not None
     instructions = reviewer.instructions[0]
-    assert instructions.index("## Checklist") < instructions.index(checklist)
-    assert instructions.rstrip().endswith(checklist.rstrip())
+    assert instructions.index("You review a narrator's plan") < instructions.index("## Checklist") < instructions.index(checklist.rstrip())
 
 
 @pytest.mark.asyncio
@@ -122,6 +125,19 @@ async def test_the_reviewer_can_read_the_story_but_has_no_writing_tools(tmp_path
 
 
 # Verdicts
+
+
+@pytest.mark.asyncio
+async def test_the_reviewer_answers_in_text_so_no_tool_call_is_forced_on_its_model(tmp_path) -> None:
+    reviewer = Reviewer()
+
+    await _review(tmp_path, reviewer)
+
+    review_requests = [index for index, tools in enumerate(reviewer.tools) if "request_review" not in tools]
+    assert review_requests
+    for index in review_requests:
+        assert reviewer.output_tools[index] == []
+        assert reviewer.text_output[index] is True
 
 
 @pytest.mark.asyncio
