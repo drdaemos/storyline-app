@@ -2,7 +2,10 @@
 
 from dataclasses import dataclass
 
-from storyline.workspace.contracts import Story, Workspace
+from storyline.workspace.contracts import Story, StorySetup, Workspace
+
+DEFAULT_SETUP = StorySetup()
+"""A co-written story with no extra mechanics."""
 
 
 @dataclass(frozen=True)
@@ -36,8 +39,9 @@ class StoryLibrary:
         await self.workspace.write_active_story(name=story.name)
         return story
 
-    async def create(self, *, name: str) -> Story:
-        """Create a story and make it the active one."""
+    async def create(self, *, name: str, setup: StorySetup = DEFAULT_SETUP) -> Story:
+        """Create a story with the given setup (co-writing unless said otherwise) and make it the active one."""
         story = await self.workspace.create_story(name=name)
+        await story.write_setup(setup=setup)
         await self.workspace.write_active_story(name=story.name)
         return story

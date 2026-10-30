@@ -5,6 +5,19 @@ from pydantic import BaseModel, ConfigDict
 
 class CreateStoryRequest(BaseModel):
     name: str
+    preset: str | None = None
+    """The id of the preset to create the story as; the default preset when omitted."""
+
+
+class PresetInfo(BaseModel):
+    id: str
+    title: str
+    description: str
+
+
+class PresetList(BaseModel):
+    presets: list[PresetInfo]
+    """Every preset a story can be created as, the default first."""
 
 
 class StoryCreated(BaseModel):
@@ -43,6 +56,7 @@ class LoreSummary(BaseModel):
     filename: str
     summary: str | None
     keywords: str | None
+    sealed: bool = False
 
 
 class LoreList(BaseModel):

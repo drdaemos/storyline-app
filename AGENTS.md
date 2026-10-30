@@ -44,7 +44,7 @@ Run commands from the repository root.
 
 Environment (set in `.env`, see `.env.default`):
 
-- Model provider keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, and so on; `STORYLINE_MODEL` picks the writer model.
+- Model provider keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, and so on; `STORYLINE_MODEL` picks the writer model; `STORYLINE_REVIEW_MODEL` picks the model of the roleplay reviewer (default: the writer's model).
 - `STORYLINE_WORKSPACE` - the workspace directory when auth is off (also `--workspace`).
 - `AUTH_ENABLED`, `CLERK_SECRET_KEY` (or `CLERK_JWT_KEY`), `CLERK_AUTHORIZED_PARTIES`, `STORYLINE_DATA_DIR` (also `--data-dir`) - hosted multi-user mode.
 - `VITE_CLERK_PUBLISHABLE_KEY` - frontend sign-in; read at build/dev time. Without it the frontend sends no token.

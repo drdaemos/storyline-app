@@ -11,13 +11,14 @@ from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls
 from textual.widgets import Static
 
 from storyline.agent import create_writer_agent, turn_prompt, visible_prompt_text
+from storyline.registry import MECHANICS
 from storyline.tui.message_log import ActivityLine, AgentReply, ChatMessage, MessageLog, ToolLogEntry
 from storyline.tui.models import MessageKind, TuiConfig
 from storyline.tui.prompt import PromptBlock
 from storyline.tui.session import INTERRUPTED_NOTICE, StorylineTui
 from storyline.tui.status_line import NEW_MESSAGES_STATUS, StatusLine
 from storyline.workspace import StoryLibrary
-from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, FileStory
+from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, SETUP_FILENAME, FileStory
 from storyline.workspace.file_workspace import FileWorkspace
 
 STORY_NAME = "noir"
@@ -54,6 +55,19 @@ async def test_unknown_command_is_reported(tmp_path) -> None:
         await _submit(pilot, app, "/nope now")
 
         assert any("Unknown command: /nope" in body for body in _bodies(app, MessageKind.ERROR))
+
+
+@pytest.mark.asyncio
+async def test_a_story_that_cannot_be_opened_is_reported_instead_of_opened(tmp_path) -> None:
+    (tmp_path / STORY_NAME).mkdir()
+    (tmp_path / STORY_NAME / SETUP_FILENAME).write_text('{"preset": "no-such-preset"}', encoding="utf-8")
+    app = StorylineTui(_config(tmp_path))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        assert any(STORY_NAME in body and "no-such-preset" in body for body in _bodies(app, MessageKind.ERROR))
+        assert app._state.room is None
 
 
 @pytest.mark.asyncio
@@ -128,7 +142,7 @@ async def test_slash_opens_the_command_list_and_tab_completes(tmp_path) -> None:
         prompt = app.query_one(PromptBlock)
         prompt.value = "/"
         await pilot.pause()
-        assert prompt.command_count == 10
+        assert prompt.command_count == 12
 
         prompt.value = "/mo"
         await pilot.pause()
@@ -179,10 +193,10 @@ async def test_restored_history_is_shown_on_startup(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_restored_prompts_hide_the_story_snapshot(tmp_path) -> None:
+async def test_restored_prompts_hide_the_story_snapshot(tmp_path, registry=MECHANICS) -> None:
     story = _story(tmp_path)
     await story.append_script(text="Secret opening.")
-    prompt = await turn_prompt(story, "Continue.")
+    prompt = await turn_prompt(story, "Continue.", registry=MECHANICS)
     await story.write_message_history(message_history=[ModelRequest(parts=[UserPromptPart(content=prompt)])])
     app = _build_app(tmp_path)
 

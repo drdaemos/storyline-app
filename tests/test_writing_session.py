@@ -9,6 +9,7 @@ from pydantic_ai.messages import ModelMessage, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 
 from storyline.agent import ModelNameError, PromptDelivered, TurnOutcome, WritingSession, WritingTurn, create_writer_agent, visible_prompt_text
+from storyline.registry import MECHANICS
 from storyline.workspace.file_story import CONVERSATION_HISTORY_FILENAME, FileStory
 
 DEFAULT_MODEL = "openrouter:default/model"
@@ -39,7 +40,7 @@ async def _say_done(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
 
 
 async def _open(story: FileStory) -> WritingSession:
-    return await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name=DEFAULT_MODEL)
+    return await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name=DEFAULT_MODEL, registry=MECHANICS)
 
 
 async def _consume(turn: WritingTurn) -> None:
@@ -64,7 +65,7 @@ def _blocks_after_a_tool_call(started: asyncio.Event):
 async def test_a_turn_saves_the_conversation_and_remembers_the_model(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     with agent.override(model=FunctionModel(stream_function=_say_done)):
         turn = session.turn("Continue.")
         await _consume(turn)
@@ -80,7 +81,7 @@ async def test_a_turn_saves_the_conversation_and_remembers_the_model(tmp_path) -
 @pytest.mark.asyncio
 async def test_a_failed_turn_reports_its_error(tmp_path) -> None:
     agent = create_writer_agent()
-    session = await WritingSession.open(story=_story(tmp_path), agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=_story(tmp_path), agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
 
     async def explode(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
         raise RuntimeError("provider down")
@@ -98,7 +99,7 @@ async def test_a_failed_turn_reports_its_error(tmp_path) -> None:
 async def test_a_failed_turn_keeps_the_users_message_in_an_actionable_history(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
 
     async def explode(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
         raise RuntimeError("provider down")
@@ -119,7 +120,7 @@ async def test_a_failed_turn_keeps_the_users_message_in_an_actionable_history(tm
 async def test_the_users_prompt_is_saved_before_the_model_answers(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     saved_while_answering: list[ModelMessage] = []
 
     async def answer(_: list[ModelMessage], __: AgentInfo) -> AsyncIterator[str]:
@@ -139,7 +140,7 @@ async def test_the_users_prompt_is_saved_before_the_model_answers(tmp_path) -> N
 @pytest.mark.asyncio
 async def test_a_turn_that_cannot_start_a_run_still_keeps_the_users_prompt(tmp_path) -> None:
     story = _story(tmp_path)
-    session = await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name="not-a-model")
+    session = await WritingSession.open(story=story, agent=create_writer_agent(), default_model_name="not-a-model", registry=MECHANICS)
 
     turn = session.turn("Continue the scene.")
     await _consume(turn)
@@ -218,7 +219,7 @@ async def test_set_model_refuses_names_no_turn_could_run_on(tmp_path, name: str)
 async def test_clear_starts_a_new_conversation(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     with agent.override(model=FunctionModel(stream_function=_say_done)):
         await _consume(session.turn("Continue."))
     assert session.message_history
@@ -233,7 +234,7 @@ async def test_clear_starts_a_new_conversation(tmp_path) -> None:
 async def test_cancelling_a_turn_leaves_an_actionable_history_and_reports_it_interrupted(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     started = asyncio.Event()
 
     with agent.override(model=_blocks_after_a_tool_call(started)):
@@ -254,7 +255,7 @@ async def test_cancelling_a_turn_leaves_an_actionable_history_and_reports_it_int
 async def test_cancelling_the_task_running_a_turn_still_saves_an_actionable_history(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     started = asyncio.Event()
 
     with agent.override(model=_blocks_after_a_tool_call(started)):
@@ -274,7 +275,7 @@ async def test_cancelling_the_task_running_a_turn_still_saves_an_actionable_hist
 @pytest.mark.asyncio
 async def test_prompts_enqueued_before_the_run_starts_are_delivered(tmp_path) -> None:
     agent = create_writer_agent()
-    session = await WritingSession.open(story=_story(tmp_path), agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=_story(tmp_path), agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     seen: list[list[str]] = []
 
     async def stream_response(messages: list[ModelMessage], _: AgentInfo) -> AsyncIterator[str | DeltaToolCalls]:
@@ -298,7 +299,7 @@ async def test_prompts_enqueued_before_the_run_starts_are_delivered(tmp_path) ->
 @pytest.mark.asyncio
 async def test_prompts_the_agent_never_read_are_reported_in_order(tmp_path) -> None:
     agent = create_writer_agent()
-    session = await WritingSession.open(story=_story(tmp_path), agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=_story(tmp_path), agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     started = asyncio.Event()
 
     with agent.override(model=_blocks_after_a_tool_call(started)):
@@ -318,7 +319,7 @@ async def test_prompts_the_agent_never_read_are_reported_in_order(tmp_path) -> N
 async def test_undoing_the_last_turn_saves_the_shorter_conversation_and_returns_the_prompt(tmp_path) -> None:
     story = _story(tmp_path)
     agent = create_writer_agent()
-    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL)
+    session = await WritingSession.open(story=story, agent=agent, default_model_name=DEFAULT_MODEL, registry=MECHANICS)
     with agent.override(model=FunctionModel(stream_function=_say_done)):
         for prompt in ("First.", "Second."):
             await _consume(session.turn(prompt))

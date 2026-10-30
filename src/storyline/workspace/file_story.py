@@ -12,15 +12,35 @@ from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
 from storyline.workspace.atomic_file import atomic_write
-from storyline.workspace.contracts import AgendaError, AgendaItem, ConversationHistoryError, LoreEditError, LoreFile, TextEdit
+from storyline.workspace.contracts import (
+    AgendaError,
+    AgendaItem,
+    Clock,
+    ClockError,
+    ConversationHistoryError,
+    LoreEditError,
+    LoreFile,
+    Roll,
+    RollLogError,
+    StorySetup,
+    StorySetupError,
+    TextEdit,
+)
 from storyline.workspace.lore_format import lore_metadata
 from storyline.workspace.text_edit import TextChange, append_text, replace_unique, snippet
 
 SCRIPT_FILENAME = "script.md"
 AGENDA_FILENAME = "agenda.json"
+CLOCKS_FILENAME = "clocks.json"
+ROLLS_FILENAME = "rolls.json"
 CONVERSATION_HISTORY_FILENAME = ".storyline-history.json"
 STORY_SETTINGS_FILENAME = ".storyline-settings.json"
+SETUP_FILENAME = "story.json"
+SEALED_DIRNAME = "sealed"
+_LORE_NAME_RULE = "Lore filenames must be Markdown filenames beside script.md, or in the sealed folder as sealed/<name>.md."
 _AGENDA_ADAPTER = TypeAdapter(tuple[AgendaItem, ...])
+_CLOCKS_ADAPTER = TypeAdapter(tuple[Clock, ...])
+_ROLLS_ADAPTER = TypeAdapter(tuple[Roll, ...])
 
 
 class StorySettings(BaseModel):
@@ -59,6 +79,16 @@ class FileStory:
         """Return the agenda location within this story."""
         return self.root / AGENDA_FILENAME
 
+    @property
+    def clocks_path(self) -> Path:
+        """Return the clocks location within this story."""
+        return self.root / CLOCKS_FILENAME
+
+    @property
+    def rolls_path(self) -> Path:
+        """Return the oracle roll log location: the log is sealed along with the rolls' questions."""
+        return self.root / SEALED_DIRNAME / ROLLS_FILENAME
+
     async def read_script(self) -> str:
         """Return an empty script until the first edit creates it."""
         return await asyncio.to_thread(self._read_script)
@@ -72,7 +102,7 @@ class FileStory:
         return await self._locked(partial(self._change_script, partial(replace_unique, find=find, replace=replace)))
 
     async def list_lore(self) -> tuple[LoreFile, ...]:
-        """List Markdown lore files with their summary and keywords."""
+        """List Markdown lore files with their summary and keywords: the story's own, then the sealed ones."""
         return await asyncio.to_thread(self._list_lore)
 
     async def read_lore(self, *, filename: str) -> str:
@@ -114,6 +144,34 @@ class FileStory:
 
         return await self._locked(read_change_write)
 
+    async def read_clocks(self) -> tuple[Clock, ...]:
+        """Read the clocks; a story without any has none."""
+        return await self._locked(self._read_clocks)
+
+    async def change_clocks(self, *, change: Callable[[tuple[Clock, ...]], Sequence[Clock]]) -> tuple[Clock, ...]:
+        """Read, change and write the clocks under the write lock, so parallel tool calls apply one after another."""
+
+        def read_change_write() -> tuple[Clock, ...]:
+            clocks = tuple(change(self._read_clocks()))
+            atomic_write(self.clocks_path, _CLOCKS_ADAPTER.dump_json(clocks, indent=2))
+            return clocks
+
+        return await self._locked(read_change_write)
+
+    async def read_rolls(self) -> tuple[Roll, ...]:
+        """Read the logged oracle rolls, newest first; a story that never rolled has none."""
+        return await self._locked(self._read_rolls)
+
+    async def change_rolls(self, *, change: Callable[[tuple[Roll, ...]], Sequence[Roll]]) -> tuple[Roll, ...]:
+        """Read, change and write the roll log under the write lock."""
+
+        def read_change_write() -> tuple[Roll, ...]:
+            rolls = tuple(change(self._read_rolls()))
+            atomic_write(self.rolls_path, _ROLLS_ADAPTER.dump_json(rolls, indent=2))
+            return rolls
+
+        return await self._locked(read_change_write)
+
     @property
     def settings_path(self) -> Path:
         """Return the location of per-story session settings, such as the last model used."""
@@ -131,6 +189,19 @@ class FileStory:
             atomic_write(self.settings_path, settings.model_dump_json(indent=2).encode("utf-8"))
 
         await self._locked(update)
+
+    @property
+    def setup_path(self) -> Path:
+        """Return the location of the story's setup record."""
+        return self.root / SETUP_FILENAME
+
+    async def read_setup(self) -> StorySetup:
+        """Read the setup record; a story without one has the default setup."""
+        return await asyncio.to_thread(self._read_setup)
+
+    async def write_setup(self, *, setup: StorySetup) -> None:
+        """Record the story's setup."""
+        await self._locked(partial(atomic_write, self.setup_path, setup.model_dump_json(indent=2).encode("utf-8")))
 
     async def read_message_history(self) -> list[ModelMessage]:
         """Read the complete persisted Pydantic AI conversation history."""
@@ -166,29 +237,29 @@ class FileStory:
         if not self.root.is_dir():
             return ()
 
-        lore_files: list[LoreFile] = []
-        for path in sorted(self.root.glob("*.md")):
-            if path.name == SCRIPT_FILENAME:
-                continue
-            metadata = lore_metadata(path.read_text(encoding="utf-8"))
-            lore_files.append(
-                LoreFile(
-                    filename=path.name,
-                    summary=metadata.get("summary") if metadata else None,
-                    keywords=metadata.get("keywords") if metadata else None,
-                )
-            )
+        lore_files = [self._lore_file(path, sealed=False) for path in sorted(self.root.glob("*.md")) if path.name != SCRIPT_FILENAME]
+        lore_files.extend(self._lore_file(path, sealed=True) for path in sorted((self.root / SEALED_DIRNAME).glob("*.md")) if path.is_file())
         return tuple(lore_files)
+
+    def _lore_file(self, path: Path, *, sealed: bool) -> LoreFile:
+        metadata = lore_metadata(path.read_text(encoding="utf-8"))
+        return LoreFile(
+            filename=path.relative_to(self.root).as_posix(),
+            summary=metadata.get("summary") if metadata else None,
+            keywords=metadata.get("keywords") if metadata else None,
+            sealed=sealed,
+        )
 
     def _read_existing_lore(self, path: Path) -> str:
         if not path.is_file():
-            raise LoreEditError(f"Lore file does not exist: {path.name}. Use write_lore to create it.")
+            raise LoreEditError(f"Lore file does not exist: {path.relative_to(self.root).as_posix()}. Use write_lore to create it.")
         return path.read_text(encoding="utf-8")
 
     def _change_lore(self, filename: str, change: TextChanger, *, create: bool) -> TextEdit:
         path = self._lore_path(filename)
+        name = self._lore_name(filename)
         if path.exists() and not path.is_file():
-            raise LoreEditError(f"Lore path is not a file: {path.name}")
+            raise LoreEditError(f"Lore path is not a file: {name}")
         if create:
             existing = path.read_text(encoding="utf-8") if path.is_file() else ""
         else:
@@ -198,8 +269,9 @@ class FileStory:
         metadata = lore_metadata(result.text)
         if metadata is None or not metadata.get("summary") or not metadata.get("keywords"):
             raise LoreEditError("Lore files must start with a hyphen-delimited header containing non-empty summary and keywords properties.")
+        path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(path, result.text.encode("utf-8"))
-        return _text_edit(path.name, existing, result)
+        return _text_edit(name, existing, result)
 
     def _delete_lore(self, filename: str) -> None:
         path = self._lore_path(filename)
@@ -215,6 +287,16 @@ class FileStory:
         except (FileNotFoundError, ValidationError):
             return StorySettings()
 
+    def _read_setup(self) -> StorySetup:
+        try:
+            serialized = self.setup_path.read_bytes()
+        except FileNotFoundError:
+            return StorySetup()
+        try:
+            return StorySetup.model_validate_json(serialized)
+        except ValidationError as error:
+            raise StorySetupError(f"{SETUP_FILENAME} is not a valid story setup (a JSON object with preset and mechanics): {error}") from error
+
     def _read_agenda(self) -> tuple[AgendaItem, ...]:
         try:
             serialized = self.agenda_path.read_bytes()
@@ -224,6 +306,26 @@ class FileStory:
             return _AGENDA_ADAPTER.validate_json(serialized)
         except ValidationError as error:
             raise AgendaError(f"{AGENDA_FILENAME} is not a valid agenda (a JSON list of items with id and title): {error}") from error
+
+    def _read_clocks(self) -> tuple[Clock, ...]:
+        try:
+            serialized = self.clocks_path.read_bytes()
+        except FileNotFoundError:
+            return ()
+        try:
+            return _CLOCKS_ADAPTER.validate_json(serialized)
+        except ValidationError as error:
+            raise ClockError(f"{CLOCKS_FILENAME} is not a valid list of clocks (a JSON list with id, name, segments and visible): {error}") from error
+
+    def _read_rolls(self) -> tuple[Roll, ...]:
+        try:
+            serialized = self.rolls_path.read_bytes()
+        except FileNotFoundError:
+            return ()
+        try:
+            return _ROLLS_ADAPTER.validate_json(serialized)
+        except ValidationError as error:
+            raise RollLogError(f"{SEALED_DIRNAME}/{ROLLS_FILENAME} is not a valid roll log: {error}") from error
 
     def _read_message_history(self) -> list[ModelMessage]:
         try:
@@ -243,19 +345,26 @@ class FileStory:
         return archive_path.name
 
     def _lore_path(self, filename: str) -> Path:
-        relative_path = Path(filename.strip())
-        if relative_path.suffix == "":
-            relative_path = relative_path.with_suffix(".md")
-        if (
-            not filename.strip()
-            or relative_path.is_absolute()
-            or relative_path.drive
-            or len(relative_path.parts) != 1
-            or relative_path.suffix.lower() != ".md"
-            or relative_path.name.lower() == SCRIPT_FILENAME
-        ):
-            raise LoreEditError("Lore filenames must be Markdown filenames beside script.md.")
-        return self.root.joinpath(relative_path)
+        return self.root.joinpath(*_lore_parts(filename))
+
+    def _lore_name(self, filename: str) -> str:
+        """The filename as reported: relative to the story with ``/`` separators."""
+        return "/".join(_lore_parts(filename))
+
+
+def _lore_parts(filename: str) -> tuple[str, ...]:
+    """Split a lore filename into its path parts: ``(name,)`` or ``("sealed", name)``; raise ``LoreEditError`` for anything else."""
+    parts = filename.strip().replace("\\", "/").split("/")
+    directory, name = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
+    if len(parts) > 2 or (len(parts) == 2 and directory != SEALED_DIRNAME):
+        raise LoreEditError(_LORE_NAME_RULE)
+    if not name.strip() or name in {".", ".."}:
+        raise LoreEditError(_LORE_NAME_RULE)
+    if Path(name).suffix == "":
+        name = f"{name}.md"
+    if Path(name).suffix.lower() != ".md" or ":" in name or name.lower() == SCRIPT_FILENAME:
+        raise LoreEditError(_LORE_NAME_RULE)
+    return (directory, name) if directory else (name,)
 
 
 def _overwrite(_: str, *, content: str) -> TextChange:

@@ -1,6 +1,6 @@
 """Conversion of persisted model messages into conversation entries."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from pydantic_ai.messages import (
     ModelMessage,
@@ -24,8 +24,12 @@ def tool_result_summary(part: ToolReturnPart | RetryPromptPart) -> tuple[str, st
     return part.model_response(), "retry"
 
 
-def transcript_entries(history: Sequence[ModelMessage]) -> list[Entry]:
-    """Return the user prompts, writer replies and tool calls of a conversation in order."""
+type SealedPredicate = Callable[[str, Mapping[str, object]], bool]
+"""Whether a tool call, given its name and arguments, touches what is hidden from the user."""
+
+
+def transcript_entries(history: Sequence[ModelMessage], is_sealed: SealedPredicate | None = None) -> list[Entry]:
+    """Return the user prompts, writer replies and tool calls of a conversation in order; ``is_sealed`` marks the sealed tool calls."""
     results = {
         part.tool_call_id: tool_result_summary(part)
         for message in history
@@ -54,6 +58,7 @@ def transcript_entries(history: Sequence[ModelMessage]) -> list[Entry]:
                             arguments=part.args_as_json_str(),
                             result=result,
                             outcome=outcome,
+                            sealed=is_sealed is not None and is_sealed(part.tool_name, part.args_as_dict()),
                         )
                     )
     return entries

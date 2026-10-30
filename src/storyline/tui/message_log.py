@@ -15,6 +15,8 @@ from storyline.room import Entry, MessageEntry
 from storyline.tui.markdown import terminal_markdown
 from storyline.tui.models import MessageKind
 
+SEALED_DETAILS_NOTICE = "The details are hidden because this call touches sealed lore · /sealed peeks at the sealed files."
+
 
 class ChatMessage(Static):
     """One plain conversation entry: a user prompt, notice or error."""
@@ -59,18 +61,25 @@ class ToolLogEntry(Collapsible):
     ToolLogEntry .tool-details { color: $text-muted; }
     """
 
-    def __init__(self, *, tool_name: str, arguments: str, result: str | None = None, outcome: str = "working") -> None:
+    def __init__(self, *, tool_name: str, arguments: str, result: str | None = None, outcome: str = "working", sealed: bool = False) -> None:
         self._tool_name = tool_name
         self._arguments = arguments
+        self._sealed = sealed
         self._details = Static(self._details_text(result), classes="tool-details")
-        super().__init__(self._details, title=f"{tool_name} · {outcome}", classes="message tool")
+        super().__init__(self._details, title=self._heading(outcome), classes="message tool")
 
-    def complete(self, *, result: str, outcome: str) -> None:
-        """Attach a result while keeping it in the existing tool entry."""
-        self.title = f"{self._tool_name} · {outcome}"
+    def complete(self, *, result: str, outcome: str, sealed: bool = False) -> None:
+        """Attach a result while keeping it in the existing tool entry; a sealed call stays hidden."""
+        self._sealed = self._sealed or sealed
+        self.title = self._heading(outcome)
         self._details.update(self._details_text(result))
 
+    def _heading(self, outcome: str) -> str:
+        return f"{self._tool_name} · {outcome}" + (" · sealed" if self._sealed else "")
+
     def _details_text(self, result: str | None) -> Text:
+        if self._sealed:
+            return Text(SEALED_DETAILS_NOTICE)
         return Text(f"Request\n{self._arguments}\n\nResult\n{result or 'Waiting for result.'}")
 
 
@@ -144,18 +153,18 @@ class MessageLog(VerticalScroll):
         await reply.stream_text(text)
         self._content_changed()
 
-    async def add_tool_call(self, *, tool_call_id: str, tool_name: str, arguments: str) -> ToolLogEntry:
-        """Add a compact tool entry whose details are available on click."""
-        entry = ToolLogEntry(tool_name=tool_name, arguments=arguments)
+    async def add_tool_call(self, *, tool_call_id: str, tool_name: str, arguments: str, sealed: bool = False) -> ToolLogEntry:
+        """Add a compact tool entry whose details are available on click, unless the call is sealed."""
+        entry = ToolLogEntry(tool_name=tool_name, arguments=arguments, sealed=sealed)
         self._tool_entries[tool_call_id] = entry
         await self._mount_entries([entry])
         return entry
 
-    def complete_tool_call(self, *, tool_call_id: str, result: str, outcome: str) -> None:
+    def complete_tool_call(self, *, tool_call_id: str, result: str, outcome: str, sealed: bool = False) -> None:
         """Attach a result to its existing tool entry."""
         entry = self._tool_entries.pop(tool_call_id, None)
         if entry is not None:
-            entry.complete(result=result, outcome=outcome)
+            entry.complete(result=result, outcome=outcome, sealed=sealed)
             self._content_changed()
 
     async def show_transcript(self, entries: Sequence[Entry], *, hidden_count: int = 0) -> None:
@@ -173,6 +182,7 @@ class MessageLog(VerticalScroll):
                         arguments=entry.arguments,
                         result=entry.result,
                         outcome=entry.outcome,
+                        sealed=entry.sealed,
                     )
                 )
         await self._mount_entries(widgets)

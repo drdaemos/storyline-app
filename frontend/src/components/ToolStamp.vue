@@ -6,13 +6,19 @@ import { outcomeTone, prettyJson } from '@/room/format'
 const props = defineProps<{ entry: ToolCallEntry }>()
 
 const open = ref(false)
+/** A sealed call keeps its arguments and result hidden until the user chooses to see them. */
+const revealed = ref(false)
+const sealed = computed(() => props.entry.sealed === true)
 const detailsId = useId()
 const tone = computed(() => outcomeTone(props.entry.outcome))
 const request = computed(() => prettyJson(props.entry.arguments))
 </script>
 
 <template>
-  <div class="stamp on-paper" :class="`stamp--${tone}`" data-kind="tool_call">
+  <div class="stamp on-paper"
+    :class="[`stamp--${tone}`, { 'stamp--sealed': sealed }]"
+    data-kind="tool_call"
+    :data-sealed="sealed">
     <button
       type="button"
       class="stamp__button"
@@ -22,13 +28,22 @@ const request = computed(() => prettyJson(props.entry.arguments))
     >
       <span class="stamp__name">{{ entry.tool_name }}</span>
       <span class="stamp__outcome">{{ entry.outcome }}</span>
+      <span v-if="sealed" class="stamp__seal">sealed</span>
       <span class="stamp__chevron" aria-hidden="true">{{ open ? '–' : '+' }}</span>
     </button>
     <div v-show="open" :id="detailsId" class="stamp__details">
-      <h4 class="stamp__label">Request</h4>
-      <pre class="stamp__text">{{ request }}</pre>
-      <h4 class="stamp__label">Result</h4>
-      <pre class="stamp__text">{{ entry.result ?? 'Waiting for a result.' }}</pre>
+      <div v-if="sealed && !revealed" class="stamp__warning">
+        <p class="stamp__warning-text">
+          This call touched sealed lore. Its request and result may spoil the story.
+        </p>
+        <button type="button" class="stamp__reveal" @click="revealed = true">Reveal anyway</button>
+      </div>
+      <template v-else>
+        <h4 class="stamp__label">Request</h4>
+        <pre class="stamp__text">{{ request }}</pre>
+        <h4 class="stamp__label">Result</h4>
+        <pre class="stamp__text">{{ entry.result ?? 'Waiting for a result.' }}</pre>
+      </template>
     </div>
   </div>
 </template>
@@ -51,6 +66,36 @@ const request = computed(() => prettyJson(props.entry.arguments))
 
 .stamp--trouble {
   border-left-color: var(--stamp-edge-retry);
+}
+
+.stamp--sealed {
+  border-left-color: var(--bookmark-sealed);
+}
+
+.stamp__seal {
+  padding: 0 0.4rem;
+  border: 1px solid var(--bookmark-sealed);
+  border-radius: var(--radius-stamp);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bookmark-sealed);
+}
+
+.stamp__warning-text {
+  margin: 0.6rem 0;
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
+.stamp__reveal {
+  min-height: 40px;
+  padding: 0 0.9rem;
+  background: var(--button-ground);
+  color: var(--button-ink);
+  border: 1.5px solid var(--button-edge);
+  border-radius: var(--radius-button);
+  font: inherit;
 }
 
 .stamp__button {

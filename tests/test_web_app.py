@@ -278,8 +278,8 @@ async def test_listing_and_reading_lore(tmp_path) -> None:
     assert listed.status_code == 200
     assert listed.json() == {
         "files": [
-            {"filename": "ines.md", "summary": "Harbor town.", "keywords": "harbor, fog"},
-            {"filename": "notes.md", "summary": None, "keywords": None},
+            {"filename": "ines.md", "summary": "Harbor town.", "keywords": "harbor, fog", "sealed": False},
+            {"filename": "notes.md", "summary": None, "keywords": None, "sealed": False},
         ]
     }
     assert read.status_code == 200

@@ -1,0 +1,8 @@
+- Does each character act as their cast sheet says: what they want, what they know, what they would and would not do, and their current move?
+- Does anyone give ground (agree, believe, forgive, back down, miss something, fail) without a cause in the story or a roll that says so?
+- Is a clock or a cast member's current move ignored where it should bear on this beat?
+- Does something happen to the persona that nothing in the story set up? Bad luck needs a cause, a roll or a clock behind it.
+- Does the plan give the persona words, actions, feelings or conclusions beyond the persona autonomy level in collaboration.md?
+- Does the narration or a bystander pass judgement on what someone does, or soften a cruel or deceitful character into a harmless one?
+- Does the plan contradict the lore, persona.md, the sealed files or what has already happened in the script?
+- Is the plan inside the content bounds in collaboration.md?

@@ -7,9 +7,12 @@ directory that is copied as the starting story. Scenarios carry expectations tha
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from storyline.presets import BUNDLED_PRESETS
 
 SCENARIO_SUFFIX = ".yaml"
 
@@ -40,8 +43,18 @@ class Scenario(BaseModel):
     turns: tuple[ScenarioTurn, ...] = Field(min_length=1)
     seed: str | None = None
     """Name of a directory in the seeds directory copied as the starting story; None starts from an empty story."""
+    preset: str | None = None
+    """Id of the bundled preset a seedless scenario's story is created as; None starts a co-writing story. A seed carries its own."""
     judge_notes: str = ""
     """What the scenario probes, shown to the judge."""
+
+    @model_validator(mode="after")
+    def _preset_belongs_to_a_seedless_scenario(self) -> Self:
+        if self.preset is not None and self.seed is not None:
+            raise ValueError(f"Scenario {self.name} names both a seed and a preset; a seed carries its own story.json.")
+        if self.preset is not None and self.preset not in BUNDLED_PRESETS:
+            raise ValueError(f"Scenario {self.name} names an unknown preset {self.preset!r}. Known presets: {', '.join(p.id for p in BUNDLED_PRESETS)}.")
+        return self
 
 
 def load_scenarios(scenarios_dir: Path, seeds_dir: Path, names: Sequence[str] = ()) -> list[Scenario]:

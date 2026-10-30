@@ -22,6 +22,7 @@ describe('loreTitle', () => {
   it('drops the extension', () => {
     expect(loreTitle('ines.md')).toBe('ines')
     expect(loreTitle('notes')).toBe('notes')
+    expect(loreTitle('sealed/vera.md')).toBe('vera')
   })
 })
 

@@ -9,6 +9,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from storyline.agent import create_writer_agent, story_snapshot, turn_prompt
 from storyline.agent.story_context import AGENDA_CHARACTERS
+from storyline.registry import MECHANICS
 from storyline.workspace import AgendaError, AgendaItem, render_agenda, replace_agenda, update_agenda_item
 from storyline.workspace.file_story import AGENDA_FILENAME, FileStory
 
@@ -162,7 +163,7 @@ def test_story_snapshot_shows_the_agenda_and_collaboration_agreement() -> None:
         AgendaItem(id="id2", title="Who she is", status="waiting"),
     )
 
-    snapshot = story_snapshot("Opening.", guides={"collaboration.md": "Options for main characters."}, agenda=agenda)
+    snapshot = story_snapshot("Opening.", guides={"collaboration.md": "Options for main characters."}, agenda=agenda, registry=MECHANICS)
 
     assert "Options for main characters." in snapshot
     assert "id1" in snapshot
@@ -172,7 +173,7 @@ def test_story_snapshot_shows_the_agenda_and_collaboration_agreement() -> None:
 
 
 def test_story_snapshot_marks_missing_collaboration_and_empty_agenda() -> None:
-    snapshot = story_snapshot("Opening.")
+    snapshot = story_snapshot("Opening.", registry=MECHANICS)
 
     assert "collaboration.md does not exist yet." in snapshot
     assert "The agenda is empty." in snapshot
@@ -181,7 +182,7 @@ def test_story_snapshot_marks_missing_collaboration_and_empty_agenda() -> None:
 def test_story_snapshot_cuts_an_oversized_agenda() -> None:
     agenda = tuple(AgendaItem(title="x" * 200) for _ in range(40))
 
-    snapshot = story_snapshot("Opening.", agenda=agenda)
+    snapshot = story_snapshot("Opening.", agenda=agenda, registry={})
 
     assert len(snapshot) < AGENDA_CHARACTERS + 1000
 
@@ -192,7 +193,7 @@ async def test_turn_prompt_carries_the_agenda_and_collaboration_file(tmp_path) -
     await story.write_agenda(items=[AgendaItem(title="Tone of the book")])
     await story.write_lore(filename="collaboration.md", content="---\nsummary: Agreement.\nkeywords: trust\n---\nPropose, then wait.")
 
-    snapshot = str((await turn_prompt(story, "Continue."))[0])
+    snapshot = str((await turn_prompt(story, "Continue.", registry=MECHANICS))[0])
 
     assert "Tone of the book" in snapshot
     assert "Propose, then wait." in snapshot

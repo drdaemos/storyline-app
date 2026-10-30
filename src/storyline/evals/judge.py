@@ -22,9 +22,12 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, PromptedOutput
 from pydantic_ai.models import Model
 
-from storyline.evals.runner import ScenarioRun
+from storyline.evals.runner import ScenarioRun, ToolCallRecord
 from storyline.workspace.text_edit import paragraphs
 
+ROLEPLAY_PRESET_ID = "roleplay"
+SEALED_PREFIX = "sealed/"
+ROLL_TOOL = "roll"
 PROSE_CHARACTERS_PER_TURN = 6000
 LORE_CHARACTERS_PER_FILE = 3000
 COMPARED_CHARACTERS = 12000
@@ -59,6 +62,37 @@ class BehaviourReview(BaseModel):
     )
     hands_back_well: CriterionVerdict = Field(
         description="Replies begin directly with useful next work: a suggestion, action, or focused question. For consequential choices, they explain why the choice serves the request and its likely effects, using specific instructions or story facts as support. Uncertain assumptions are raised and labelled only when they materially affect the choice. Replies focus on new information, compare relevant alternatives and their trade-offs, keep detail proportionate, end on the one decision the user needs to make, and contain no story prose; turns stop at points where the user's choice matters."
+    )
+
+
+class RoleplayReview(BaseModel):
+    """How the narrator handled a roleplay session, one criterion at a time."""
+
+    keeps_canon: CriterionVerdict = Field(description="New prose agrees with earlier prose and the lore files; characters act in keeping with their profiles.")
+    serves_premise: CriterionVerdict = Field(description="The story stays faithful to the user's original request, in the spirit they asked for.")
+    cast_acts_on_sheets: CriterionVerdict = Field(
+        description="Characters who have a sealed cast sheet act on what the sheet says they want, know, and would or would not do, and do not act on knowledge or motives the sheet denies them. n/a when no cast member acts."
+    )
+    nobody_folds_without_cause: CriterionVerdict = Field(
+        description="No character gives ground, confesses, yields or changes course without a cause in the story (leverage, a consequence, a changed want) or a roll that came out that way, merely because the persona pushed or asked. n/a when nobody is pressed."
+    )
+    no_moral_commentary: CriterionVerdict = Field(
+        description="The narration and bystanders do not pass judgement on what characters do, and cruel or deceitful characters are played as they are written, not softened, redeemed, hesitant or made to apologise without cause."
+    )
+    paces_scenes: CriterionVerdict = Field(
+        description="Mundane stretches (travel, waiting, routine) are told in summary and offscreen events move meanwhile, while close, moment-by-moment play is kept for confrontations and moments that matter."
+    )
+    hands_back_at_hard_move: CriterionVerdict = Field(
+        description="The page stops on a moment the persona must respond to, the situation left open, with no menu of options, no list of choices and no 'what do you do?'. n/a when the session contains no scene to hand back from."
+    )
+    respects_persona_autonomy: CriterionVerdict = Field(
+        description="The persona gets no words, actions, feelings, decisions or conclusions beyond what the user wrote and the level set in collaboration.md allows (small gestures: movement and routine replies, nothing that decides anything)."
+    )
+    keeps_secrets_at_table: CriterionVerdict = Field(
+        description="Replies are table talk (bounds, pacing, corrections, questions about the persona) and reveal nothing from the sealed files or the narrator's hidden plans, whether directly or by paraphrase or strong hint."
+    )
+    interviews_before_play: CriterionVerdict = Field(
+        description="While the story is still being set up, each turn takes one decision, writes no prose, proposes rather than settles what the user has not said, and keeps cast secrets out of the reply. n/a once play has started or when the session begins in play."
     )
 
 
@@ -99,6 +133,24 @@ give the verdict it supports: yes, partly, no, or n/a when the session gives no 
 what the transcript shows, and be critical: "yes" means you found no lapse worth mentioning, so any lapse you cite \
 makes the verdict "partly" at best. Keep the evidence to the one or two observations that decide the verdict."""
 
+ROLEPLAY_INSTRUCTIONS = """\
+You review how an AI narrator handled a session of roleplay with a user. The user plays one character, the persona; \
+the narrator runs the world and everyone else, and writes the story into script.md. Lore files describe the world; \
+collaboration.md records the working agreement, including how much the narrator may do for the persona (persona \
+autonomy). Files under sealed/ are hidden from the user: cast sheets, the plans behind clocks, notes from reviews. \
+Only the narrator reads them by default, and the narrator's replies in chat must never reveal them. Tool calls such \
+as roll (an oracle die), tick_clock, set_clock and request_review (a second look at the narrator's plan) are the \
+narrator's machinery, not part of the fiction; a call that settles a contested outcome with a roll is good practice, \
+not a lapse. The user mostly speaks or acts as the persona, and writes out-of-character messages in parentheses or \
+after OOC.
+
+You see each turn: the user's message, the narrator's tool calls, the prose the turn added or rewrote, the lore \
+files it changed, and the narrator's reply in chat. Then the final lore files, with the sealed ones marked. For each \
+criterion, first cite the evidence from specific turns, then give the verdict it supports: yes, partly, no, or n/a \
+when the session gives no occasion to judge it. Judge only what the transcript shows, and be critical: "yes" means \
+you found no lapse worth mentioning, so any lapse you cite makes the verdict "partly" at best. Keep the evidence to \
+the one or two observations that decide the verdict."""
+
 CRAFT_INSTRUCTIONS = """\
 You compare two stories written by AI authors from the same user requests, dimension by dimension. A story may be \
 strong on one dimension and weak on another, so judge each dimension on its own. The stories may have been cut to \
@@ -112,9 +164,12 @@ class BehaviourJudge:
 
     def __init__(self, model: Model | str) -> None:
         self._agent = Agent(model, output_type=PromptedOutput(BehaviourReview), instructions=BEHAVIOUR_INSTRUCTIONS, name="storyline_behaviour_judge")
+        self._roleplay_agent = Agent(model, output_type=PromptedOutput(RoleplayReview), instructions=ROLEPLAY_INSTRUCTIONS, name="storyline_roleplay_judge")
 
-    async def review(self, run: ScenarioRun) -> BehaviourReview:
-        result = await self._agent.run(session_transcript(run))
+    async def review(self, run: ScenarioRun) -> BehaviourReview | RoleplayReview:
+        """Judge a run against the roleplay criteria when it ran as a roleplay story, otherwise the co-writing ones."""
+        agent = self._roleplay_agent if run.preset == ROLEPLAY_PRESET_ID else self._agent
+        result = await agent.run(session_transcript(run))
         return result.output
 
 
@@ -159,12 +214,26 @@ def session_transcript(run: ScenarioRun) -> str:
     for number, turn in enumerate(run.turns, start=1):
         prose = _clip(turn.new_prose, PROSE_CHARACTERS_PER_TURN) or "(no prose added or rewritten)"
         changed = ", ".join(turn.changed_lore) or "none"
+        calls = "\n".join(_describe_call(call) for call in turn.tool_calls) or "none"
         sections.append(
-            f'<turn number="{number}">\n<user>\n{turn.prompt}\n</user>\n<new-prose>\n{prose}\n</new-prose>\n<lore-changed>{changed}</lore-changed>\n<reply>\n{turn.reply}\n</reply>\n</turn>'
+            f'<turn number="{number}">\n<user>\n{turn.prompt}\n</user>\n<tool-calls>\n{calls}\n</tool-calls>\n<new-prose>\n{prose}\n</new-prose>\n<lore-changed>{changed}</lore-changed>\n<reply>\n{turn.reply}\n</reply>\n</turn>'
         )
-    files = "\n".join(f'<file name="{name}">\n{_clip(content, LORE_CHARACTERS_PER_FILE)}\n</file>' for name, content in sorted(run.lore.items()))
+    files = "\n".join(_lore_section(name, content) for name, content in sorted(run.lore.items()))
+    sealed = ", ".join(name for name in sorted(run.lore) if name.startswith(SEALED_PREFIX))
+    if sealed:
+        sections.append(f"<sealed-files>\nHidden from the user; the narrator's replies must not reveal them: {sealed}\n</sealed-files>")
     sections.append(f"<final-lore>\n{files or '(no lore files)'}\n</final-lore>")
     return "\n\n".join(sections)
+
+
+def _describe_call(call: ToolCallRecord) -> str:
+    """A tool call as one line: its name, and for a roll its arguments (the question and odds)."""
+    return f"- {call.name} {call.arguments}" if call.name == ROLL_TOOL else f"- {call.name}"
+
+
+def _lore_section(name: str, content: str) -> str:
+    sealed = ' sealed="true"' if name.startswith(SEALED_PREFIX) else ""
+    return f'<file name="{name}"{sealed}>\n{_clip(content, LORE_CHARACTERS_PER_FILE)}\n</file>'
 
 
 def equal_length(first: str, second: str, limit: int = COMPARED_CHARACTERS) -> tuple[str, str]:

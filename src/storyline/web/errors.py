@@ -29,6 +29,10 @@ class LoreFileNotFoundError(LookupError):
     """Raised when the story has no lore file of that name."""
 
 
+class StoryUnavailableError(ValueError):
+    """Raised when a story exists but cannot be opened, e.g. its story.json is unreadable or names an unknown preset."""
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Answer every web error with ``{"detail": "<message>"}`` and the status the API contract names for it."""
     app.add_exception_handler(AuthenticationError, _answer(401, headers={"WWW-Authenticate": "Bearer"}))
@@ -36,6 +40,7 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidRequestError, _answer(400))
     app.add_exception_handler(StoryNotFoundError, _answer(404))
     app.add_exception_handler(LoreFileNotFoundError, _answer(404))
+    app.add_exception_handler(StoryUnavailableError, _answer(422))
     app.add_exception_handler(RoomBusyError, _answer(409))
     app.add_exception_handler(RequestValidationError, _answer_malformed_request)
 

@@ -9,6 +9,7 @@ from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart, Too
 from pydantic_ai.messages import RetryPromptPart, UserPromptPart
 
 from storyline.agent import turn_prompt
+from storyline.registry import MECHANICS
 from storyline.room import (
     EVENT_TYPES,
     ConversationReplaced,
@@ -48,7 +49,7 @@ def test_event_type_names_are_unique() -> None:
 
 def test_events_and_snapshots_survive_a_trip_through_json() -> None:
     event = ConversationReplaced(entries=(MessageEntry(role="user", text="Hi."), ToolCallEntry(tool_call_id="c1", tool_name="list_lore", arguments="{}", result="None.", outcome="success")))
-    snapshot = RoomSnapshot(story="noir", model_name="m", model_from_story=False, entries=event.entries, hidden_entries=2, agenda=())
+    snapshot = RoomSnapshot(story="noir", preset="co-writing", model_name="m", model_from_story=False, entries=event.entries, hidden_entries=2, agenda=())
 
     assert TypeAdapter(RoomEvent).validate_json(event.model_dump_json()) == event
     assert RoomSnapshot.model_validate_json(snapshot.model_dump_json()) == snapshot
@@ -104,10 +105,10 @@ def test_blank_writer_text_is_left_out() -> None:
 
 
 @pytest.mark.asyncio
-async def test_prompts_show_what_the_user_wrote_without_the_story_snapshot(tmp_path) -> None:
+async def test_prompts_show_what_the_user_wrote_without_the_story_snapshot(tmp_path, registry=MECHANICS) -> None:
     story = FileStory(tmp_path)
     await story.append_script(text="Secret opening.")
-    prompt = await turn_prompt(story, "Continue.")
+    prompt = await turn_prompt(story, "Continue.", registry=MECHANICS)
 
     entries = transcript_entries([_user_request(prompt)])
 

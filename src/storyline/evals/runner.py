@@ -10,6 +10,8 @@ from pydantic_ai.models import Model
 
 from storyline.agent import WritingSession
 from storyline.evals.scenarios import Scenario
+from storyline.presets import BUNDLED_PRESETS, DEFAULT_PRESET_ID, setup_for
+from storyline.registry import MECHANICS
 from storyline.workspace import Story
 from storyline.workspace.file_story import FileStory
 from storyline.workspace.text_edit import paragraphs
@@ -63,6 +65,8 @@ class ScenarioRun(BaseModel):
     model_name: str
     prompt_version: str
     turns: tuple[TurnRecord, ...]
+    preset: str = DEFAULT_PRESET_ID
+    """The preset the story ran as, read from its setup after the seed was copied."""
 
     @property
     def script(self) -> str:
@@ -88,8 +92,10 @@ class ScenarioRunner:
         else:
             shutil.copytree(self._seeds_dir / scenario.seed, story_dir)
         story = FileStory(story_dir)
+        if scenario.seed is None and scenario.preset is not None:
+            await story.write_setup(setup=setup_for(BUNDLED_PRESETS.get(scenario.preset), MECHANICS))
 
-        session = await WritingSession.open(story=story, agent=self._agent, model=self._model)
+        session = await WritingSession.open(story=story, agent=self._agent, model=self._model, registry=MECHANICS)
         turns: list[TurnRecord] = []
         for turn in scenario.turns:
             script_before, lore_before = await _story_files(story)
@@ -114,6 +120,11 @@ class ScenarioRunner:
                 )
             )
         return tuple(turns)
+
+
+async def story_preset(story_dir: Path) -> str:
+    """The id of the preset the story in this directory runs as; co-writing when it records none."""
+    return (await FileStory(story_dir).read_setup()).preset
 
 
 async def _story_files(story: Story) -> tuple[str, dict[str, str]]:

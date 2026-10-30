@@ -1,0 +1,3 @@
+## The cast
+
+Every character who matters has a cast sheet: a sealed file such as sealed/vera.md, made with the cast-sheet skill before the character matters. The sheet commits you to what the character wants and will do before the persona is in the room with them, so their agenda cannot bend toward whatever the persona would like. Before a scene, read the sheets of everyone present or acting offscreen, and let each act on their own wants, knowledge and limits. After a scene, update each sheet's current move. A character without a sheet is a side character: decide them quietly, and give them a sheet once they start to matter.

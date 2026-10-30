@@ -10,9 +10,9 @@ from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
 from storyline.room import RoomEvent, RoomSnapshot, StoryRoom
-from storyline.web.errors import StoryNotFoundError
+from storyline.web.errors import StoryNotFoundError, StoryUnavailableError
 from storyline.web.user_workspaces import UserWorkspaces
-from storyline.workspace import Story, StoryLibrary, StorySelectionError
+from storyline.workspace import Story, StoryLibrary, StorySelectionError, StorySetupError
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,10 @@ class RoomHost:
         if opened is None or remember_as_active:
             story = await self._open_story(user_id, story_name, remember_as_active=remember_as_active)
             if opened is None:
-                room = await StoryRoom.open(story=story, agent=self._agent, default_model_name=self._default_model_name, model=self._model)
+                try:
+                    room = await StoryRoom.open(story=story, agent=self._agent, default_model_name=self._default_model_name, model=self._model)
+                except StorySetupError as error:
+                    raise StoryUnavailableError(str(error)) from error
                 opened = self._rooms[key] = _OpenRoom(key=key, room=room)
         opened.holders += 1
         return opened

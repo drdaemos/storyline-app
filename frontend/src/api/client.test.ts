@@ -5,6 +5,7 @@ import {
   createStory,
   interrupt,
   listLore,
+  listPresets,
   listStories,
   readLore,
   readScript,
@@ -56,6 +57,29 @@ describe('API client', () => {
     const calls = mockFetch(() => json({ name: 'tale' }, 201))
     expect(await createStory('tale')).toEqual({ name: 'tale' })
     expect(calls[0]).toMatchObject({ url: '/api/stories', method: 'POST', body: { name: 'tale' } })
+  })
+
+  it('creates a story of a chosen kind, or of the default kind', async () => {
+    const calls = mockFetch(() => json({ name: 'tale' }, 201))
+    await createStory('tale', 'mystery')
+    await createStory('tale')
+    expect(calls.map((call) => call.body)).toEqual([
+      { name: 'tale', preset: 'mystery' },
+      { name: 'tale', preset: null },
+    ])
+  })
+
+  it('lists the kinds of story', async () => {
+    const presets = [{ id: 'default', title: 'Story', description: 'Any story.' }]
+    const calls = mockFetch(() => json({ presets }))
+    expect(await listPresets()).toEqual({ presets })
+    expect(calls[0]).toMatchObject({ url: '/api/presets', method: 'GET' })
+  })
+
+  it('reads a sealed lore file by path, keeping the slash', async () => {
+    const calls = mockFetch(() => json({ filename: 'sealed/vera ok.md', text: '' }))
+    await readLore('a tale', 'sealed/vera ok.md')
+    expect(calls[0]?.url).toBe('/api/stories/a%20tale/lore/sealed/vera%20ok.md')
   })
 
   it('sends a prompt, interrupts, sets the model and clears, on the right routes', async () => {

@@ -1,5 +1,5 @@
 /** The files the book shows: the script, the lore index and single lore files. Read-only, read again on request. */
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { ApiError, describeError, listLore, readLore, readScript } from '@/api/client'
 import type { Activity, LoreFileSummary } from '@/protocol/types'
@@ -39,6 +39,16 @@ export function useStoryFiles(input: StoryFilesInput) {
     files: [],
     error: null,
   })
+  /** The index of the story's own lore; sealed files are kept apart so they cannot spoil the lore page. */
+  const ownLoreIndex = computed(() => ({
+    ...loreIndex.value,
+    files: loreIndex.value.files.filter((file) => !file.sealed),
+  }))
+  /** The index of the sealed lore: what the writer keeps from the story. */
+  const sealedLoreIndex = computed(() => ({
+    ...loreIndex.value,
+    files: loreIndex.value.files.filter((file) => file.sealed),
+  }))
   /** Every lore file asked for so far, by filename. */
   const loreFiles = reactive<Record<string, Loaded>>({})
   const wanted = new Set<string>()
@@ -133,7 +143,7 @@ export function useStoryFiles(input: StoryFilesInput) {
     }
   })
 
-  return { script, scriptBaseline, loreIndex, loreFiles, want }
+  return { script, scriptBaseline, loreIndex, ownLoreIndex, sealedLoreIndex, loreFiles, want }
 }
 
 export type StoryFiles = ReturnType<typeof useStoryFiles>

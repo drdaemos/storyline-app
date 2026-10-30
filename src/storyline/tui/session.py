@@ -1,5 +1,6 @@
 """Interactive terminal interface for the writing agent."""
 
+import re
 import sys
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from dataclasses import dataclass
@@ -9,9 +10,12 @@ from textual.app import App, ComposeResult
 from textual.worker import Worker
 
 from storyline.agent import DEFAULT_MODEL_NAME, ModelNameError, create_writer_agent, validate_model_name
+from storyline.presets import DEFAULT_PRESET_ID, PresetError, setup_for
+from storyline.registry import MECHANICS
 from storyline.room import (
     ActivityChanged,
     AgendaChanged,
+    ClocksChanged,
     ConversationReplaced,
     DraftRestored,
     ModelChanged,
@@ -35,7 +39,8 @@ from storyline.tui.message_log import AgentReply, MessageLog
 from storyline.tui.models import MessageKind, PromptCommand, TuiConfig, TuiState
 from storyline.tui.prompt import PromptBlock
 from storyline.tui.status_line import StatusLine
-from storyline.workspace import Story, StoryLibrary, StorySelectionError, Workspace, WorkspaceEditError
+from storyline.workspace import Story, StoryLibrary, StorySelectionError, StorySetupError, Workspace, WorkspaceEditError
+from storyline.workspace.file_story import SEALED_DIRNAME
 
 if sys.platform == "win32":
     from storyline.tui.windows_input import ModifierAwareWindowsDriver
@@ -47,7 +52,10 @@ THINKING_STATUS = "Thinking…"
 WRITING_STATUS = "Writing…"
 INTERRUPTED_NOTICE = "Interrupted."
 BUSY_NOTICE = "The agent is working · wait or press esc first."
-STORY_HINT = "/story <name> opens a story · /new <name> creates one"
+STORY_HINT = "/story <name> opens a story · /new <name> [--as <kind>] creates one · /presets lists the kinds"
+SEALED_WARNING = "Spoilers ahead: sealed files hold what the writer keeps from you on purpose."
+NEW_USAGE = "Name the story: /new <name> [--as <preset id>]"
+NEW_ARGUMENT = re.compile(r"^(?P<name>.*?)(?:\s+|^)--as(?:\s+(?P<preset>\S+))?\s*$")
 
 
 @dataclass(frozen=True)
@@ -80,6 +88,7 @@ class StorylineTui(App[None]):
         Operation.UNDO_LAST_TURN: "/undo",
         Operation.CLEAR_CONVERSATION: "/clear",
         Operation.READ_SCRIPT: "/script",
+        Operation.LIST_PRESETS: "/presets",
         Operation.LIST_LORE: "/lore",
         Operation.READ_LORE: "/lore",
     }
@@ -95,6 +104,7 @@ class StorylineTui(App[None]):
         ActivityChanged: "_show_activity",
         QueueChanged: "_show_queue",
         AgendaChanged: "_show_agenda",
+        ClocksChanged: "_show_clocks",
         StoryFilesChanged: "_show_story_files_changed",
         TurnFinished: "_show_turn_finished",
         ConversationReplaced: "_show_conversation_replaced",
@@ -119,9 +129,11 @@ class StorylineTui(App[None]):
                 SlashCommand(name="/model", description="Show or set the active model", run=self._model_command),
                 SlashCommand(name="/stories", description="List the stories in the workspace", run=self._stories_command),
                 SlashCommand(name="/story", description="Show or switch the active story", run=self._story_command),
-                SlashCommand(name="/new", description="Create a story and switch to it", run=self._new_command),
+                SlashCommand(name="/presets", description="List the kinds of story /new --as can create", run=self._presets_command),
+                SlashCommand(name="/new", description="Create a story and switch to it; /new <name> --as <preset id> picks the kind", run=self._new_command),
                 SlashCommand(name="/script", description="Show the story text", run=self._script_command),
                 SlashCommand(name="/lore", description="List lore files, or show one with /lore <file>", run=self._lore_command),
+                SlashCommand(name="/sealed", description="Peek at sealed lore (spoilers): /sealed [file]", run=self._sealed_command),
                 SlashCommand(name="/undo", description="Remove the last exchange and put your message back to edit", run=self._undo_command),
                 SlashCommand(name="/clear", description="Start a new conversation", run=self._clear_command),
                 SlashCommand(name="/quit", description="Exit Storyline", run=self._quit_command),
@@ -233,22 +245,34 @@ class StorylineTui(App[None]):
         except StorySelectionError as error:
             await self._message_log.add_message(MessageKind.ERROR, f"{error} · /stories lists stories")
             return
-        await self._activate(opened)
-        await self._message_log.add_message(MessageKind.SYSTEM, f"Switched to {opened.name}.")
+        if await self._activate(opened):
+            await self._message_log.add_message(MessageKind.SYSTEM, f"Switched to {opened.name}.")
+
+    async def _presets_command(self, _: str) -> None:
+        lines = [f"{preset.id}{' (default)' if preset.id == DEFAULT_PRESET_ID else ''}  {preset.title} · {preset.description}" for preset in self._config.presets.summaries()]
+        await self._message_log.add_message(MessageKind.SYSTEM, "\n".join([*lines, "", "/new <name> --as <preset id> creates a story of that kind"]))
 
     async def _new_command(self, argument: str) -> None:
-        if not argument:
-            await self._message_log.add_message(MessageKind.ERROR, "Name the story: /new <name>")
+        match = NEW_ARGUMENT.match(argument)
+        name = match["name"].strip() if match else argument
+        preset_id = (match["preset"] if match else None) or DEFAULT_PRESET_ID
+        if not name or (match is not None and match["preset"] is None):
+            await self._message_log.add_message(MessageKind.ERROR, NEW_USAGE)
+            return
+        try:
+            setup = setup_for(self._config.presets.get(preset_id), MECHANICS)
+        except PresetError as error:
+            await self._message_log.add_message(MessageKind.ERROR, f"{error} · /presets lists the kinds")
             return
         if await self._refuse_while_busy():
             return
         try:
-            created = await self._config.library.create(name=argument)
+            created = await self._config.library.create(name=name, setup=setup)
         except StorySelectionError as error:
             await self._message_log.add_message(MessageKind.ERROR, str(error))
             return
-        await self._activate(created)
-        await self._message_log.add_message(MessageKind.SYSTEM, f"Created {created.name}.")
+        if await self._activate(created):
+            await self._message_log.add_message(MessageKind.SYSTEM, f"Created {created.name}.")
 
     async def _script_command(self, _: str) -> None:
         room = await self._require_room()
@@ -263,6 +287,9 @@ class StorylineTui(App[None]):
         if room is None:
             return
         if argument:
+            if _is_sealed_filename(argument):
+                await self._message_log.add_message(MessageKind.SYSTEM, f"{argument} is sealed · /sealed {argument.removeprefix(f'{SEALED_DIRNAME}/')} peeks at it.")
+                return
             try:
                 text = await room.read_lore(argument)
             except WorkspaceEditError as error:
@@ -270,8 +297,35 @@ class StorylineTui(App[None]):
                 return
             await self._message_log.add_message(MessageKind.SYSTEM, f"{argument} · {len(text)} characters\n\n{text}")
             return
-        lines = [f"{lore.filename}  {lore.summary or '(missing summary)'}" for lore in await room.list_lore()]
-        await self._message_log.add_message(MessageKind.SYSTEM, "\n".join(lines) or "No lore files.")
+        files = await room.list_lore()
+        lines = [f"{lore.filename}  {lore.summary or '(missing summary)'}" for lore in files if not lore.sealed]
+        sealed_count = sum(lore.sealed for lore in files)
+        if sealed_count:
+            lines += ["", f"{sealed_count} sealed lore {'file is' if sealed_count == 1 else 'files are'} hidden · /sealed peeks at them (spoilers)."]
+        await self._message_log.add_message(MessageKind.SYSTEM, "\n".join(lines).strip("\n") or "No lore files.")
+
+    async def _sealed_command(self, argument: str) -> None:
+        room = await self._require_room()
+        if room is None:
+            return
+        sealed = [lore for lore in await room.list_lore() if lore.sealed]
+        if not sealed:
+            await self._message_log.add_message(MessageKind.SYSTEM, "No sealed lore in this story.")
+            return
+        if not argument:
+            lines = [f"{lore.filename}  {lore.summary or '(missing summary)'}" for lore in sealed]
+            await self._message_log.add_message(MessageKind.SYSTEM, "\n".join([SEALED_WARNING, "", *lines]))
+            return
+        filename = _sealed_filename(argument)
+        if filename not in {lore.filename for lore in sealed}:
+            await self._message_log.add_message(MessageKind.ERROR, f"No sealed file named {argument!r} · /sealed lists them")
+            return
+        try:
+            text = await room.read_lore(filename)
+        except WorkspaceEditError as error:
+            await self._message_log.add_message(MessageKind.ERROR, str(error))
+            return
+        await self._message_log.add_message(MessageKind.SYSTEM, f"{SEALED_WARNING}\n\n{filename} · {len(text)} characters\n\n{text}")
 
     async def _clear_command(self, _: str) -> None:
         room = await self._require_room()
@@ -314,16 +368,20 @@ class StorylineTui(App[None]):
         except StorySelectionError as error:
             await self._message_log.add_message(MessageKind.ERROR, str(error))
             story = None
-        if story is None:
+        if story is None or not await self._activate(story):
             await self._message_log.add_message(MessageKind.SYSTEM, f"Choose a story to work on.\n\n{await self._story_list()}")
-        else:
-            await self._activate(story)
 
-    async def _activate(self, story: Story) -> None:
-        """Make ``story`` the active one and show its own conversation."""
+    async def _activate(self, story: Story) -> bool:
+        """Make ``story`` the active one and show its own conversation; say why and return False when it cannot be opened."""
+        try:
+            room = await StoryRoom.open(
+                story=story, agent=self._config.agent, default_model_name=self._state.model_name, spawn=self._run_as_worker, presets=self._config.presets
+            )
+        except StorySetupError as error:
+            await self._message_log.add_message(MessageKind.ERROR, f"Cannot open {story.name}: {error}")
+            return False
         if self._stop_listening is not None:
             self._stop_listening()
-        room = await StoryRoom.open(story=story, agent=self._config.agent, default_model_name=self._state.model_name, spawn=self._run_as_worker)
         self._stop_listening = room.add_listener(self._show_event)
         self._state.room = room
         self._prompt.placeholder = self._prompt_placeholder()
@@ -336,10 +394,12 @@ class StorylineTui(App[None]):
         else:
             await self._message_log.show_transcript(snapshot.entries, hidden_count=snapshot.hidden_entries)
         await self._agenda_panel.show_items(snapshot.agenda)
+        await self._agenda_panel.show_clocks(snapshot.clocks, snapshot.hidden_clocks)
         if snapshot.agenda_error is not None:
             await self._message_log.add_message(MessageKind.ERROR, snapshot.agenda_error)
         if snapshot.model_from_story:
             await self._message_log.add_message(MessageKind.SYSTEM, f"Using {snapshot.model_name}, the model last used with {snapshot.story}.")
+        return True
 
     def _run_as_worker(self, turns: Coroutine[None, None, None]) -> Worker[None]:
         """Run the room's turns as a worker, which ties them to the app and lets tests wait for them."""
@@ -381,10 +441,10 @@ class StorylineTui(App[None]):
             await reply.finish()
 
     async def _show_tool_call_started(self, event: ToolCallStarted) -> None:
-        await self._message_log.add_tool_call(tool_call_id=event.tool_call_id, tool_name=event.tool_name, arguments=event.arguments)
+        await self._message_log.add_tool_call(tool_call_id=event.tool_call_id, tool_name=event.tool_name, arguments=event.arguments, sealed=event.sealed)
 
     async def _show_tool_call_finished(self, event: ToolCallFinished) -> None:
-        self._message_log.complete_tool_call(tool_call_id=event.tool_call_id, result=event.result, outcome=event.outcome)
+        self._message_log.complete_tool_call(tool_call_id=event.tool_call_id, result=event.result, outcome=event.outcome, sealed=event.sealed)
 
     async def _show_activity(self, event: ActivityChanged) -> None:
         match event.activity:
@@ -402,6 +462,9 @@ class StorylineTui(App[None]):
 
     async def _show_agenda(self, event: AgendaChanged) -> None:
         await self._agenda_panel.show_items(event.items)
+
+    async def _show_clocks(self, event: ClocksChanged) -> None:
+        await self._agenda_panel.show_clocks(event.clocks, event.hidden)
 
     async def _show_story_files_changed(self, _: StoryFilesChanged) -> None:
         """Do nothing: the terminal shows the script and lore only when asked with /script and /lore."""
@@ -460,7 +523,20 @@ class StorylineTui(App[None]):
 
     def _prompt_placeholder(self) -> str:
         story_name = self._state.story.name if self._state.story is not None else "no story"
-        return f"> [{story_name} · {self._state.model_name}]"
+        room = self._state.room
+        preset_id = room.snapshot().preset if room is not None else DEFAULT_PRESET_ID
+        kind = "" if preset_id == DEFAULT_PRESET_ID else f" · {preset_id}"
+        return f"> [{story_name}{kind} · {self._state.model_name}]"
+
+
+def _is_sealed_filename(argument: str) -> bool:
+    return argument.replace("\\", "/").startswith(f"{SEALED_DIRNAME}/")
+
+
+def _sealed_filename(argument: str) -> str:
+    """Normalise ``vera``, ``vera.md`` and ``sealed/vera.md`` to ``sealed/vera.md``."""
+    name = argument.replace("\\", "/").removeprefix(f"{SEALED_DIRNAME}/")
+    return f"{SEALED_DIRNAME}/{name if name.endswith('.md') else f'{name}.md'}"
 
 
 def _key_hints(prompt: str) -> str:

@@ -9,6 +9,8 @@ import type { Loaded, LoadStatus } from '@/room/useStoryFiles'
 const props = defineProps<{
   index: { status: LoadStatus; files: readonly LoreFileSummary[]; error: string | null }
   files: Readonly<Record<string, Loaded>>
+  /** What to say when the index is empty. */
+  emptyText?: string
 }>()
 
 const emit = defineEmits<{ want: [filename: string] }>()
@@ -38,7 +40,7 @@ const keywords = computed(() => keywordList(currentSummary.value?.keywords))
     <nav class="lore__index" aria-label="Lore files">
       <p v-if="index.status === 'loading'" class="quiet">Opening the lore…</p>
       <p v-else-if="index.status === 'error'" class="quiet quiet--error" role="alert">{{ index.error }}</p>
-      <p v-else-if="entries.length === 0" class="quiet">No lore yet.</p>
+      <p v-else-if="entries.length === 0" class="quiet">{{ emptyText ?? 'No lore yet.' }}</p>
       <ul v-else class="lore__list">
         <li v-for="file in entries" :key="file.filename">
           <button
@@ -130,15 +132,15 @@ const keywords = computed(() => keywordList(currentSummary.value?.keywords))
 }
 
 .entry:hover .entry__name {
-  color: var(--bookmark-lore);
+  color: var(--tab-color);
 }
 
 .entry--chosen {
-  border-left-color: var(--bookmark-lore);
+  border-left-color: var(--tab-color);
 }
 
 .entry--chosen .entry__name {
-  color: var(--bookmark-lore);
+  color: var(--tab-color);
   font-weight: 600;
 }
 
@@ -171,7 +173,7 @@ const keywords = computed(() => keywordList(currentSummary.value?.keywords))
   font-size: var(--size-small);
   font-variant: small-caps;
   letter-spacing: 0.2em;
-  color: var(--bookmark-lore);
+  color: var(--tab-color);
 }
 
 .lore__keywords {

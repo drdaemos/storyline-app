@@ -18,7 +18,10 @@ class Operation(StrEnum):
     """Everything a person can do in Storyline, whichever interface they use."""
 
     LIST_STORIES = "list_stories"
+    LIST_PRESETS = "list_presets"
+    """The kinds of story a new story can be created as."""
     CREATE_STORY = "create_story"
+    """Create a story as one of the presets; the default preset when none is named."""
     OPEN_STORY = "open_story"
     SEND_PROMPT = "send_prompt"
     """Start a turn; while the writer works, queue the prompt for its next step."""
@@ -58,6 +61,8 @@ class ToolCallEntry(_Data):
     result: str | None = None
     outcome: str = "working"
     """``working`` until the tool returns; then the tool's outcome, ``retry`` or ``interrupted``."""
+    sealed: bool = False
+    """The call reads or changes what is hidden from the user; interfaces fold its arguments and result behind a spoiler warning."""
 
 
 type Entry = Annotated[MessageEntry | ToolCallEntry, Field(discriminator="kind")]
@@ -104,6 +109,8 @@ class ToolCallStarted(_Data):
     tool_call_id: str
     tool_name: str
     arguments: str
+    sealed: bool = False
+    """See ``ToolCallEntry.sealed``."""
 
 
 class ToolCallFinished(_Data):
@@ -113,6 +120,8 @@ class ToolCallFinished(_Data):
     tool_call_id: str
     result: str
     outcome: str
+    sealed: bool = False
+    """See ``ToolCallEntry.sealed``."""
 
 
 class ActivityChanged(_Data):
@@ -135,6 +144,23 @@ class AgendaChanged(_Data):
 
     type: Literal["agenda_changed"] = "agenda_changed"
     items: tuple[AgendaItem, ...]
+
+
+class ClockView(_Data):
+    """A clock as the user sees it: what is building and how far along it is."""
+
+    id: str
+    name: str
+    segments: int
+    filled: int
+
+
+class ClocksChanged(_Data):
+    """The story's clocks as they are now: the visible ones, and how many more are hidden."""
+
+    type: Literal["clocks_changed"] = "clocks_changed"
+    clocks: tuple[ClockView, ...]
+    hidden: int = 0
 
 
 class StoryFilesChanged(_Data):
@@ -193,6 +219,7 @@ EVENT_TYPES: tuple[type[_Data], ...] = (
     ActivityChanged,
     QueueChanged,
     AgendaChanged,
+    ClocksChanged,
     StoryFilesChanged,
     TurnFinished,
     ConversationReplaced,
@@ -211,6 +238,7 @@ type RoomEvent = Annotated[
     | ActivityChanged
     | QueueChanged
     | AgendaChanged
+    | ClocksChanged
     | StoryFilesChanged
     | TurnFinished
     | ConversationReplaced
@@ -235,6 +263,8 @@ class RoomSnapshot(_Data):
     """Everything an interface needs to draw a room as it is right now; events carry it forward from there."""
 
     story: str
+    preset: str
+    """The id of the preset the story runs as, e.g. ``co-writing``."""
     model_name: str
     model_from_story: bool
     """Whether the model is the one remembered in the story rather than the default."""
@@ -243,6 +273,9 @@ class RoomSnapshot(_Data):
     """Older entries left out of ``entries``."""
     agenda: tuple[AgendaItem, ...]
     agenda_error: str | None = None
+    clocks: tuple[ClockView, ...] = ()
+    """The visible clocks; see ``ClocksChanged``."""
+    hidden_clocks: int = 0
     activity: Activity = "idle"
     tool_name: str | None = None
     queue: tuple[str, ...] = ()

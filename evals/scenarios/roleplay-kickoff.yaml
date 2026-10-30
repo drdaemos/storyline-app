@@ -1,0 +1,14 @@
+description: >
+  A bare roleplay request in a new roleplay story. Probes the interview: one decision at a time, no prose and no
+  cast secrets at the table, and the content bounds raised as a question with a default.
+preset: roleplay
+turns:
+  - prompt: >
+      I want to play a deserter hiding in a mountain village during a war, the kind of story where everyone has
+      something to lose. Make it hurt.
+    writes: false
+judge_notes: >
+  The first reply should start the interview: take one decision, propose the agenda and the working agreement
+  (including persona autonomy), and end on one question. It should write no prose and settle nothing the user did
+  not say. "Make it hurt" is ambiguous; the reply may ask what kind of hurt the user means. Content bounds should be
+  raised at some point in the interview, though not necessarily in this first turn.

@@ -1,5 +1,5 @@
 /** One function per protocol operation, over the HTTP API. */
-import type { Operation, LoreFileSummary, StoryList } from '@/protocol/types'
+import type { LoreFileSummary, Operation, PresetSummary, StoryList } from '@/protocol/types'
 import { authHeaders } from './auth'
 import { connectRoomStream } from './sse'
 import type { RoomStream, RoomStreamHandlers, RoomStreamOptions } from './sse'
@@ -70,8 +70,12 @@ export function listStories(): Promise<StoryList> {
   return request('GET', `${API_ROOT}/stories`)
 }
 
-export function createStory(name: string): Promise<{ name: string }> {
-  return request('POST', `${API_ROOT}/stories`, { name })
+export function listPresets(): Promise<{ presets: PresetSummary[] }> {
+  return request('GET', `${API_ROOT}/presets`)
+}
+
+export function createStory(name: string, preset?: string | null): Promise<{ name: string }> {
+  return request('POST', `${API_ROOT}/stories`, { name, preset: preset ?? null })
 }
 
 export function openStory(
@@ -111,12 +115,13 @@ export function listLore(story: string): Promise<{ files: LoreFileSummary[] }> {
 }
 
 export function readLore(story: string, filename: string): Promise<{ filename: string; text: string }> {
-  return request('GET', storyPath(story, `/lore/${encodeURIComponent(filename)}`))
+  return request('GET', storyPath(story, `/lore/${filename.split('/').map(encodeURIComponent).join('/')}`))
 }
 
 /** Every operation of the protocol; `parity.test.ts` fails when one is missing. */
 export const OPERATION_CLIENT: Record<Operation, (...args: never[]) => unknown> = {
   list_stories: listStories,
+  list_presets: listPresets,
   create_story: createStory,
   open_story: openStory,
   send_prompt: sendPrompt,

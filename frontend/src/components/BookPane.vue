@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Activity } from '@/protocol/types'
 import { ROLE_FILES } from '@/room/useStoryFiles'
 import type { StoryFiles } from '@/room/useStoryFiles'
 import LorePage from './LorePage.vue'
 import RoleFilePage from './RoleFilePage.vue'
 import ScriptPage from './ScriptPage.vue'
+import SealedPage from './SealedPage.vue'
 
 const props = defineProps<{ files: StoryFiles; activity: Activity }>()
 
-const TABS = [
+const BASE_TABS = [
   { id: 'script', label: 'Script' },
   { id: 'lore', label: 'Lore' },
   { id: 'plan', label: 'Plan' },
@@ -17,7 +18,13 @@ const TABS = [
   { id: 'agreement', label: 'Agreement' },
 ] as const
 
-type TabId = (typeof TABS)[number]['id']
+type TabId = (typeof BASE_TABS)[number]['id'] | 'sealed'
+
+const sealedCount = computed(() => props.files.sealedLoreIndex.value.files.length)
+/** The sealed bookmark appears only while there is something sealed. */
+const TABS = computed<ReadonlyArray<{ id: TabId; label: string }>>(() =>
+  sealedCount.value > 0 ? [...BASE_TABS, { id: 'sealed', label: `Sealed (${sealedCount.value})` }] : BASE_TABS
+)
 
 const ROLE_PAGES = [
   { id: 'plan', title: 'Plan', filename: ROLE_FILES.plan, empty: 'No plan has been written yet.' },
@@ -31,16 +38,20 @@ const ROLE_PAGES = [
 ] as const
 
 const active = ref<TabId>('script')
+// If the seal goes away while it is open, fall back to the lore.
+watch(sealedCount, (count) => {
+  if (count === 0 && active.value === 'sealed') active.value = 'lore'
+})
 const tabButtons = ref<HTMLButtonElement[]>([])
 const writing = computed(() => props.activity === 'writing')
 
 function select(id: TabId, focus = false): void {
   active.value = id
-  if (focus) tabButtons.value[TABS.findIndex((tab) => tab.id === id)]?.focus()
+  if (focus) tabButtons.value[TABS.value.findIndex((tab) => tab.id === id)]?.focus()
 }
 
 function onTabKeydown(event: KeyboardEvent, index: number): void {
-  const last = TABS.length - 1
+  const last = TABS.value.length - 1
   const target: Record<string, number> = {
     ArrowRight: index === last ? 0 : index + 1,
     ArrowLeft: index === 0 ? last : index - 1,
@@ -50,7 +61,7 @@ function onTabKeydown(event: KeyboardEvent, index: number): void {
   const next = target[event.key]
   if (next === undefined) return
   event.preventDefault()
-  select(TABS[next]!.id, true)
+  select(TABS.value[next]!.id, true)
 }
 </script>
 
@@ -95,7 +106,23 @@ function onTabKeydown(event: KeyboardEvent, index: number): void {
           role="tabpanel"
           aria-labelledby="tab-lore"
         >
-          <LorePage :index="files.loreIndex.value" :files="files.loreFiles" @want="files.want" />
+          <LorePage :index="files.ownLoreIndex.value" :files="files.loreFiles" @want="files.want" />
+        </div>
+
+        <div
+          v-if="sealedCount > 0"
+          id="panel-sealed"
+          class="panel panel--sealed"
+          :class="{ 'panel--hidden': active !== 'sealed' }"
+          role="tabpanel"
+          aria-labelledby="tab-sealed"
+        >
+          <SealedPage
+            :index="files.sealedLoreIndex.value"
+            :files="files.loreFiles"
+            :shown="active === 'sealed'"
+            @want="files.want"
+          />
         </div>
 
         <div
@@ -188,6 +215,10 @@ function onTabKeydown(event: KeyboardEvent, index: number): void {
   --tab-color: var(--bookmark-agreement);
 }
 
+.bookmark--sealed {
+  --tab-color: var(--bookmark-sealed);
+}
+
 .bookmark:hover {
   height: 4.5rem;
   filter: brightness(0.95);
@@ -264,6 +295,10 @@ function onTabKeydown(event: KeyboardEvent, index: number): void {
 
 .panel--agreement {
   --tab-color: var(--bookmark-agreement);
+}
+
+.panel--sealed {
+  --tab-color: var(--bookmark-sealed);
 }
 
 @media (max-width: 760px) {

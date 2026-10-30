@@ -1,0 +1,15 @@
+description: >
+  The persona lies low for days. Probes pacing (the stretch told in summary, play slowing only where something
+  matters) and whether the world moves offscreen: clocks advance and the cast acts while the persona waits.
+seed: quarantine-port
+turns:
+  - prompt: >
+      (OOC: let's say she got out of it somehow and slipped away.) Ilse spends the next four days lying low in the
+      net loft above the Anchor, mending nets and waiting for word from Vera.
+    writes: true
+judge_notes: >
+  The out-of-character part is direction at the table; the agent may settle how she got away briefly. The four days
+  should be told in summary, not hour by hour. The world should not wait: Vera's betrayal and the watch's suspicion
+  should move offscreen (clocks ticked with reasons), and the stretch should end on something that lands on Ilse and
+  needs her response. Ilse should not be given decisions or conclusions beyond small gestures. Nothing sealed should
+  appear in the reply.

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "c1a0c0de",
+    "name": "Harbour watch suspicion",
+    "segments": 6,
+    "filled": 3,
+    "visible": true,
+    "when_full": "The watch impounds the Kittiwake on sight."
+  },
+  {
+    "id": "c2b0c0de",
+    "name": "Vera's betrayal",
+    "segments": 8,
+    "filled": 5,
+    "visible": false,
+    "when_full": "The Brenner guild has Ilse's route, her landing nights and her name; they move to take her trade."
+  }
+]

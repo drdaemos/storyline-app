@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { createStory, describeError, listStories } from '@/api/client'
+import { createStory, describeError, listPresets, listStories } from '@/api/client'
 import AccountButton from '@/auth/AccountButton.vue'
+import type { PresetSummary } from '@/protocol/types'
 
 const router = useRouter()
 
@@ -14,6 +15,10 @@ const loadError = ref<string | null>(null)
 const name = ref('')
 const creating = ref(false)
 const createError = ref<string | null>(null)
+
+/** The kinds of story on offer, default first. Empty if they could not be loaded: a default story still works. */
+const presets = ref<PresetSummary[]>([])
+const preset = ref<string | null>(null)
 
 const COVERS = 5
 /** The same name always gets the same cover. */
@@ -42,13 +47,23 @@ async function load(): Promise<void> {
   }
 }
 
+async function loadPresets(): Promise<void> {
+  try {
+    presets.value = (await listPresets()).presets
+    preset.value = presets.value[0]?.id ?? null
+  } catch {
+    presets.value = []
+    preset.value = null
+  }
+}
+
 async function create(): Promise<void> {
   const wanted = name.value.trim()
   if (!wanted || creating.value) return
   creating.value = true
   createError.value = null
   try {
-    const created = await createStory(wanted)
+    const created = await createStory(wanted, presets.value.length > 1 ? preset.value : null)
     await router.push({ name: 'room', params: { name: created.name } })
   } catch (error) {
     createError.value = describeError(error)
@@ -60,6 +75,7 @@ async function create(): Promise<void> {
 onMounted(() => {
   document.title = 'Storyline'
   void load()
+  void loadPresets()
 })
 </script>
 
@@ -111,6 +127,14 @@ onMounted(() => {
             {{ creating ? 'Creating…' : 'Create story' }}
           </button>
         </div>
+        <fieldset v-if="presets.length > 1" class="new__kinds">
+          <legend class="new__label">Kind of story</legend>
+          <label v-for="option in presets" :key="option.id" class="kind" :class="{ 'kind--chosen': preset === option.id }">
+            <input v-model="preset" class="kind__radio" type="radio" name="story-preset" :value="option.id" />
+            <span class="kind__title">{{ option.title }}</span>
+            <span class="kind__description">{{ option.description }}</span>
+          </label>
+        </fieldset>
         <p v-if="createError" id="story-name-error" class="new__error" role="alert">{{ createError }}</p>
       </form>
     </template>
@@ -306,6 +330,47 @@ onMounted(() => {
 
 .new__input[aria-invalid='true'] {
   border-color: var(--error);
+}
+
+.new__kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.kind {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  align-items: baseline;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1.5px solid var(--field-edge);
+  border-radius: var(--radius-paper);
+}
+
+.kind--chosen {
+  border-color: var(--accent);
+  background: var(--field);
+}
+
+/* The page is dark, but the radios sit on paper: draw them as on light paper so an empty one does not look filled. */
+.kind__radio {
+  color-scheme: light;
+  accent-color: var(--accent);
+}
+
+.kind__title {
+  font-weight: 600;
+}
+
+.kind__description {
+  grid-column: 2;
+  font-size: var(--size-small);
+  color: var(--ink-muted);
 }
 
 .new__error {

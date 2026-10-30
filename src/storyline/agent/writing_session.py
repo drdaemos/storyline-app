@@ -6,7 +6,7 @@ prompt, streams the run's events, saves the conversation as it grows, and takes 
 """
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
@@ -18,11 +18,15 @@ from pydantic_ai.messages import AgentStreamEvent, EnqueuedMessagesEvent, Handle
 from pydantic_ai.models import Model
 from pydantic_ai.usage import RunUsage
 
+from storyline.agent.assembly import RunAssembly, assemble
 from storyline.agent.history import actionable_history, without_last_turn
 from storyline.agent.models import resolve_model, validate_model_name
 from storyline.agent.story_context import turn_prompt
 from storyline.agent.writer import DEFAULT_MODEL_NAME
-from storyline.workspace import ConversationHistoryError, Story
+from storyline.agent.writer_tools import mechanic_toolset
+from storyline.mechanics import Mechanic, MechanicError, resolve_mechanics
+from storyline.presets import BUNDLED_PRESETS, PresetCatalog, PresetError
+from storyline.workspace import ConversationHistoryError, Story, StorySetup, StorySetupError
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,17 @@ class PromptDelivered:
 
     enqueue_id: str
 
+
+@dataclass(frozen=True)
+class RunSetup:
+    """What one turn runs with: the story's assembled preset and mechanics as they were when the turn started."""
+
+    assembly: RunAssembly
+    mechanics: tuple[Mechanic, ...]
+
+
+type SetupProvider = Callable[[], Awaitable[RunSetup]]
+"""Reads the story's setup afresh and returns what a turn runs with; raises ``StorySetupError`` when the setup cannot be used."""
 
 type TurnEvent = AgentStreamEvent | HandleResponseEvent | PromptDelivered
 
@@ -85,6 +100,8 @@ class WritingTurn:
         *,
         story: Story,
         agent: Agent[Story, str],
+        setup: SetupProvider,
+        registry: Mapping[str, Mechanic],
         history: SavedHistory,
         prompt: str,
         model_name: str,
@@ -92,6 +109,8 @@ class WritingTurn:
     ) -> None:
         self._story = story
         self._agent = agent
+        self._setup = setup
+        self._registry = registry
         self._history = history
         self._prompt = prompt
         self._model_name = model_name
@@ -166,11 +185,20 @@ class WritingTurn:
             if self._model_override is None:
                 await self._story.write_model_name(model_name=self._model_name)
             model = self._model_override if self._model_override is not None else resolve_model(self._model_name)
-            prompt = await turn_prompt(self._story, self._prompt)
+            setup = await self._setup()
+            prompt = await turn_prompt(self._story, self._prompt, setup.mechanics, registry=self._registry)
             previous = self._history.messages
             # The prompt is kept from the start, so a turn that dies before it saves anything still leaves what the user asked.
             await self._history.save([*previous, ModelRequest(parts=[UserPromptPart(content=prompt)])])
-            async with self._agent.iter(prompt, deps=self._story, message_history=previous, model=model) as run:
+            async with self._agent.iter(
+                prompt,
+                deps=self._story,
+                message_history=previous,
+                model=model,
+                instructions=setup.assembly.instructions,
+                capabilities=list(setup.assembly.capabilities),
+                toolsets=[mechanic_toolset(self._registry), *setup.assembly.toolsets],
+            ) as run:
                 self._run = run
                 for prompt in self._enqueued:
                     self._hand_over(prompt)
@@ -227,6 +255,10 @@ class WritingSession:
         *,
         story: Story,
         agent: Agent[Story, str],
+        setup: StorySetup,
+        run_setup: RunSetup,
+        presets: PresetCatalog,
+        registry: Mapping[str, Mechanic],
         history: SavedHistory,
         model_name: str,
         model_from_story: bool,
@@ -235,6 +267,10 @@ class WritingSession:
     ) -> None:
         self._story = story
         self._agent = agent
+        self._setup = setup
+        self._run_setup = run_setup
+        self._presets = presets
+        self._registry = registry
         self._history = history
         self._model_name = model_name
         self._model_override = model
@@ -251,11 +287,17 @@ class WritingSession:
         agent: Agent[Story, str],
         default_model_name: str = DEFAULT_MODEL_NAME,
         model: Model | str | None = None,
+        registry: Mapping[str, Mechanic],
+        presets: PresetCatalog = BUNDLED_PRESETS,
     ) -> Self:
         """Open a story's conversation, repairing or archiving saved history that a run could not continue from.
 
         ``model`` runs turns on that model instead of the one ``model_name`` names, and the story does not remember it.
+        Raise ``StorySetupError`` when the story's setup is unreadable or names a preset or mechanic that ``presets`` and
+        ``registry`` do not have.
         """
+        setup = await story.read_setup()
+        run_setup = _run_setup(setup, presets, registry)
         archived: ArchivedHistory | None = None
         try:
             saved = await story.read_message_history()
@@ -269,6 +311,10 @@ class WritingSession:
         return cls(
             story=story,
             agent=agent,
+            setup=setup,
+            run_setup=run_setup,
+            presets=presets,
+            registry=registry,
             history=history,
             model_name=remembered or default_model_name,
             model_from_story=remembered is not None,
@@ -279,6 +325,16 @@ class WritingSession:
     @property
     def story(self) -> Story:
         return self._story
+
+    @property
+    def preset_id(self) -> str:
+        """The preset the story runs as; it follows the story's setup from the turn that notices a change."""
+        return self._setup.preset
+
+    @property
+    def mechanics(self) -> tuple[Mechanic, ...]:
+        """The story's mechanics as of the last turn that started, in the order they are assembled."""
+        return self._run_setup.mechanics
 
     @property
     def model_name(self) -> str:
@@ -310,13 +366,41 @@ class WritingSession:
         await self._history.save(removed.history)
         return removed.prompt
 
+    async def refresh_setup(self) -> RunSetup:
+        """Read the story's setup and, if it changed since the last read, assemble it again; return what a turn runs with.
+
+        Raise ``StorySetupError`` when the setup is unreadable or names a preset or mechanic this version does not have.
+        """
+        setup = await self._story.read_setup()
+        if setup != self._setup:
+            self._run_setup = _run_setup(setup, self._presets, self._registry)
+            self._setup = setup
+        return self._run_setup
+
     def turn(self, prompt: str) -> WritingTurn:
-        """Prepare a turn on the current model and conversation; nothing runs until its events are consumed."""
+        """Prepare a turn on the current model and conversation; nothing runs until its events are consumed.
+
+        The turn reads the story's setup when it starts, so a mechanic enabled during one turn applies from the next.
+        """
         return WritingTurn(
             story=self._story,
             agent=self._agent,
+            setup=self.refresh_setup,
+            registry=self._registry,
             history=self._history,
             prompt=prompt,
             model_name=self._model_name,
             model=self._model_override,
         )
+
+
+def _run_setup(setup: StorySetup, presets: PresetCatalog, registry: Mapping[str, Mechanic]) -> RunSetup:
+    try:
+        preset = presets.get(setup.preset)
+    except PresetError as error:
+        raise StorySetupError(f"story.json names a preset this version does not have: {error}") from error
+    try:
+        mechanics = resolve_mechanics(setup.mechanics, registry)
+    except MechanicError as error:
+        raise StorySetupError(f"story.json names a mechanic this version does not have: {error}") from error
+    return RunSetup(assembly=assemble(preset, mechanics), mechanics=mechanics)
