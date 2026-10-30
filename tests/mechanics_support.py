@@ -33,11 +33,11 @@ def user_prompts(messages: list[ModelMessage]) -> list[str]:
 def writer_calling(*calls: ToolCall, outputs: Callable[[list[ModelMessage], AgentInfo], ModelResponse] | None = None) -> FunctionModel:
     """A writer that makes the given tool calls in order, one per request, then says it is done.
 
-    A request that asks for structured output (a reviewer sharing this model) goes to ``outputs`` when given.
+    A request without the writer's request_review tool (a reviewer sharing this model) goes to ``outputs`` when given.
     """
 
     def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        if info.output_tools and outputs is not None:
+        if outputs is not None and not any(tool.name == "request_review" for tool in info.function_tools):
             return outputs(messages, info)
         made = len(tool_returns(messages))
         if made < len(calls):

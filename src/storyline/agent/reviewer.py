@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from pydantic_ai import Agent, FunctionToolset, RunContext
+from pydantic_ai import Agent, FunctionToolset, PromptedOutput, RunContext
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.models import Model
 
@@ -41,8 +41,19 @@ def reviewer_instructions(checklist: str | None) -> str:
 
 
 def create_reviewer_agent(model: Model | str, *, checklist: str | None) -> Agent[Story, Verdict]:
-    """Create the reviewer: it reads the story through read-only tools and answers with a verdict."""
-    return Agent(model, name="storyline_reviewer", deps_type=Story, output_type=Verdict, instructions=reviewer_instructions(checklist), toolsets=[reviewer_toolset()])
+    """Create the reviewer: it reads the story through read-only tools and answers with a verdict.
+
+    The verdict comes back as JSON text described in the prompt rather than through a forced output tool call, which
+    some providers refuse (they accept only ``tool_choice: "auto"``), so any model can review.
+    """
+    return Agent(
+        model,
+        name="storyline_reviewer",
+        deps_type=Story,
+        output_type=PromptedOutput(Verdict),
+        instructions=reviewer_instructions(checklist),
+        toolsets=[reviewer_toolset()],
+    )
 
 
 def latest_user_message(ctx: RunContext[Story]) -> str | None:
